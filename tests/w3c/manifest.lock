@@ -1,0 +1,12 @@
+repository = "https://github.com/w3c/rdf-tests.git"
+commit = "369a90d1a60c021b746df2e411da0ff36258a758"
+date = "2026-09-21"
+
+manifests = [
+  "rdf/rdf11/rdf-n-triples/manifest.ttl",
+  "rdf/rdf11/rdf-n-quads/manifest.ttl",
+  "rdf/rdf11/rdf-turtle/manifest.ttl",
+  "rdf/rdf11/rdf-trig/manifest.ttl",
+]
+
+excluded = []

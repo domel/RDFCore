@@ -1,0 +1,13 @@
+repository = "https://github.com/RDFLib/rdflib"
+release = "7.6.0"
+commit = "8b32146a0f9cb748c2068662e50d02b42fc86dfd"
+
+[blobs]
+"plugins/parsers/notation3.py" = "ae184e8557adc00cb6efe53846d916e1937bc783"
+"plugins/parsers/ntriples.py" = "b330256492944a45fac7a50bfa6a8f69eec6ad1f"
+"plugins/parsers/nquads.py" = "75dfd366c09309cde8709c08d57e5a9355a7cdfc"
+"plugins/parsers/trig.py" = "9ed6e8bbcfb090565b53622d9845d6757f3dbcd3"
+"plugins/serializers/turtle.py" = "5a76992fb957afccd1f2d4b8805f6574f8558e60"
+"plugins/serializers/nt.py" = "57fdb0c6069163c6f88ad9a4e5634ccf2a15c13f"
+"plugins/serializers/nquads.py" = "c7c68f66ead0625e7d65b9cc95ae9906537e74fc"
+"plugins/serializers/trig.py" = "2c3fe2be1651dcf0933ce87250672d523e37f4d2"

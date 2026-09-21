@@ -17,17 +17,53 @@ class Dataset(Graph):
         self.default_graph = self
         self._graphs = {DATASET_DEFAULT_GRAPH_ID: self}
 
-    def graph(self, identifier=None):
-        identifier = DATASET_DEFAULT_GRAPH_ID if identifier is None else identifier
+    def graph(self, identifier=None, base=None):
+        source_graph = identifier if isinstance(identifier, Graph) and not isinstance(identifier, Dataset) else None
+        identifier = BNode().skolemize() if identifier is None else identifier
+        identifier = getattr(identifier, "identifier", identifier)
+        if isinstance(identifier, str) and not isinstance(identifier, (URIRef, BNode)):
+            identifier = URIRef(identifier)
         if not isinstance(identifier, (URIRef, BNode)):
             raise TypeError("graph identifier must be a URIRef or BNode")
         if identifier == DATASET_DEFAULT_GRAPH_ID:
             return self
         graph = self._graphs.get(identifier)
         if graph is None:
-            graph = Graph(store=self.store, identifier=identifier, namespace_manager=self.namespace_manager)
+            graph = Graph(store=self.store, identifier=identifier, namespace_manager=self.namespace_manager, base=base)
             self._graphs[identifier] = graph
+        else:
+            graph.base = base
+        if source_graph is not None:
+            for triple in source_graph:
+                graph.add(triple)
         return graph
+
+    def get_graph(self, identifier):
+        """Return an existing graph, or ``None`` if it is not present."""
+        identifier = getattr(identifier, "identifier", identifier)
+        if isinstance(identifier, str) and not isinstance(identifier, (URIRef, BNode)):
+            identifier = URIRef(identifier)
+        if identifier in self._graphs:
+            return self._graphs[identifier]
+        for context in self.store.contexts():
+            if context == identifier:
+                return self.graph(identifier)
+        return None
+
+    def get_context(self, identifier, quoted=False, base=None):
+        """Return the graph view for an identifier, creating the view if needed."""
+        if identifier is None:
+            return Graph(store=self.store, identifier=BNode(), namespace_manager=self.namespace_manager, base=base)
+        return self.graph(identifier)
+
+    def add_graph(self, graph):
+        """Compatibility alias for :meth:`graph`."""
+        return self.graph(graph)
+
+    def context_id(self, uri, context_id=None):
+        """Return a context URI using RDFLib's ``URI#context`` convention."""
+        uri = str(uri).split("#", 1)[0]
+        return URIRef(context_id or "#context", base=uri)
 
     def add(self, triple):
         if len(triple) == 4:

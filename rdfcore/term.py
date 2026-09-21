@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from decimal import Decimal
-from urllib.parse import urljoin
+from base64 import b64decode
+from binascii import Error as BinasciiError, unhexlify
+import json
+from urllib.parse import urljoin, urlparse
 from uuid import uuid4
 
 NORMALIZE_LITERALS = True
 
 _XSD = "http://www.w3.org/2001/XMLSchema#"
 _RDF_LANG_STRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString"
+_RDF_JSON = "http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON"
 
 
 class Node(str):
@@ -38,6 +42,19 @@ class URIRef(IdentifiedNode):
                 pass
         return f"<{_escape_iri(str(self))}>"
 
+    def de_skolemize(self):
+        """Convert an RDF 1.1 skolem URI back to a blank node."""
+        path = urlparse(str(self)).path
+        marker = "/.well-known/genid/"
+        if not path.startswith(marker):
+            raise Exception(f"<{self}> is not a skolem URI")
+        value = path.split(marker, 1)[1]
+        if value.startswith("rdflib/"):
+            value = value[len("rdflib/"):]
+        if not value:
+            raise Exception(f"<{self}> is not a skolem URI")
+        return BNode(value=value)
+
 
 class BNode(IdentifiedNode):
     def __new__(cls, value: str | None = None):
@@ -45,6 +62,12 @@ class BNode(IdentifiedNode):
 
     def n3(self, namespace_manager=None) -> str:
         return f"_:{self}"
+
+    def skolemize(self, authority=None, basepath=None):
+        """Create a deterministic RDF 1.1 skolem URI for this blank node."""
+        authority = "https://rdflib.github.io" if authority is None else authority
+        basepath = "/.well-known/genid/rdflib/" if basepath is None else basepath
+        return URIRef(urljoin(authority, str(basepath) + str(self)))
 
 
 class Variable(Identifier):
@@ -136,15 +159,23 @@ class Literal(Identifier):
         datatype = URIRef(datatype) if datatype is not None else inferred
         if normalize is None:
             normalize = NORMALIZE_LITERALS
-        ill_typed = False
+        ill_typed = None
         if datatype is not None:
             try:
                 value = _python_value(lexical, datatype)
+                if (
+                    (
+                        isinstance(lexical_or_value, str)
+                        or isinstance(lexical_or_value, Literal)
+                    )
+                    and str(datatype) in _VALIDATED_DATATYPES
+                ):
+                    ill_typed = False
                 if normalize:
                     lexical = _normalize_lexical(lexical, datatype)
             except (ValueError, ArithmeticError):
                 ill_typed = True
-                value = lexical
+                value = None
         obj = str.__new__(cls, lexical)
         obj.language = lang
         obj.direction = direction
@@ -215,7 +246,7 @@ def _literal_parts(value):
 
 
 def _normalize_lexical(lexical, datatype):
-    if str(datatype) == _XSD + "integer":
+    if str(datatype) in _INTEGER_DATATYPES:
         return str(int(lexical))
     if str(datatype) == _XSD + "boolean":
         return "true" if lexical in ("true", "1") else "false" if lexical in ("false", "0") else lexical
@@ -225,7 +256,25 @@ def _normalize_lexical(lexical, datatype):
 def _python_value(lexical, datatype):
     name = str(datatype)
     try:
-        if name == _XSD + "integer": return int(lexical)
+        if name in _STRING_DATATYPES: return lexical
+        if name == _RDF_JSON:
+            value = json.loads(
+                lexical,
+                parse_int=float,
+                parse_float=float,
+                parse_constant=_reject_json_constant,
+                object_pairs_hook=_json_object,
+            )
+            _reject_surrogates(value)
+            return value
+        if name in _INTEGER_DATATYPES:
+            value = int(lexical)
+            lower, upper = _INTEGER_BOUNDS.get(name, (None, None))
+            if lower is not None and value < lower:
+                raise ValueError(lexical)
+            if upper is not None and value > upper:
+                raise ValueError(lexical)
+            return value
         if name == _XSD + "boolean":
             if lexical not in ("true", "false", "1", "0"):
                 raise ValueError(lexical)
@@ -235,9 +284,78 @@ def _python_value(lexical, datatype):
         if name == _XSD + "dateTime": return datetime.fromisoformat(lexical.replace("Z", "+00:00"))
         if name == _XSD + "date": return date.fromisoformat(lexical)
         if name == _XSD + "time": return time.fromisoformat(lexical.replace("Z", "+00:00"))
-    except (ValueError, ArithmeticError):
+        if name == _XSD + "hexBinary": return unhexlify(lexical)
+        if name == _XSD + "base64Binary": return b64decode(lexical, validate=True)
+    except (ValueError, ArithmeticError, BinasciiError):
         raise
     return lexical
+
+
+_STRING_DATATYPES = {
+    _XSD + name for name in (
+        "string", "normalizedString", "token", "language", "Name", "NCName",
+        "NMTOKEN", "anyURI",
+    )
+}
+_INTEGER_DATATYPES = {
+    _XSD + name for name in (
+        "integer", "long", "int", "short", "byte", "nonPositiveInteger",
+        "negativeInteger", "nonNegativeInteger", "positiveInteger",
+        "unsignedLong", "unsignedInt", "unsignedShort", "unsignedByte",
+    )
+}
+_INTEGER_BOUNDS = {
+    _XSD + "long": (-(2**63), 2**63 - 1),
+    _XSD + "int": (-(2**31), 2**31 - 1),
+    _XSD + "short": (-(2**15), 2**15 - 1),
+    _XSD + "byte": (-(2**7), 2**7 - 1),
+    _XSD + "nonPositiveInteger": (None, 0),
+    _XSD + "negativeInteger": (None, -1),
+    _XSD + "nonNegativeInteger": (0, None),
+    _XSD + "positiveInteger": (1, None),
+    _XSD + "unsignedLong": (0, 2**64 - 1),
+    _XSD + "unsignedInt": (0, 2**32 - 1),
+    _XSD + "unsignedShort": (0, 2**16 - 1),
+    _XSD + "unsignedByte": (0, 2**8 - 1),
+}
+_VALIDATED_DATATYPES = _STRING_DATATYPES | _INTEGER_DATATYPES | {
+    _XSD + "boolean",
+    _XSD + "double",
+    _XSD + "float",
+    _XSD + "decimal",
+    _XSD + "dateTime",
+    _XSD + "date",
+    _XSD + "time",
+    _XSD + "hexBinary",
+    _XSD + "base64Binary",
+    _RDF_JSON,
+}
+
+
+def _reject_json_constant(value):
+    raise ValueError(value)
+
+
+def _json_object(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON object member: {key!r}")
+        value[key] = item
+    return value
+
+
+def _reject_surrogates(value):
+    if isinstance(value, str):
+        if any(0xD800 <= ord(char) <= 0xDFFF for char in value):
+            raise ValueError("JSON strings must not contain surrogate code points")
+    elif isinstance(value, list):
+        for item in value:
+            _reject_surrogates(item)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            _reject_surrogates(key)
+            _reject_surrogates(item)
 
 
 def _escape_literal(value):

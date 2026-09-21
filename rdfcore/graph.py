@@ -81,6 +81,152 @@ class Graph:
                 seen.add(obj)
                 yield obj
 
+    def items(self, list):
+        """Yield the members of an RDF collection."""
+        current = list
+        seen = set()
+        while current and current != RDF.nil:
+            if current in seen:
+                raise ValueError("List contains a recursive rdf:rest reference")
+            seen.add(current)
+            item = self.value(current, RDF.first)
+            if item is not None:
+                yield item
+            current = self.value(current, RDF.rest)
+
+    def transitiveClosure(self, func, arg, seen=None):
+        """Yield the depth-first transitive closure of a user function."""
+        if seen is None:
+            seen = {}
+        elif arg in seen:
+            return
+        seen[arg] = 1
+        for result in func(arg, self):
+            yield result
+            yield from self.transitiveClosure(func, result, seen)
+
+    def transitive_objects(self, subject, predicate, remember=None):
+        """Yield ``subject`` and all objects reachable through ``predicate``."""
+        if remember is None:
+            remember = {}
+        if subject in remember:
+            return
+        remember[subject] = 1
+        yield subject
+        for obj in self.objects(subject, predicate):
+            yield from self.transitive_objects(obj, predicate, remember)
+
+    def transitive_subjects(self, predicate, object, remember=None):
+        """Yield ``object`` and all subjects reaching it through ``predicate``."""
+        if remember is None:
+            remember = {}
+        if object in remember:
+            return
+        remember[object] = 1
+        yield object
+        for subject in self.subjects(predicate, object):
+            yield from self.transitive_subjects(predicate, subject, remember)
+
+    def all_nodes(self):
+        nodes = set(self.objects())
+        nodes.update(self.subjects())
+        return nodes
+
+    def connected(self):
+        """Return whether all graph nodes belong to one undirected component."""
+        nodes = self.all_nodes()
+        if not nodes:
+            return False
+        start = next(iter(nodes))
+        visited = set()
+        pending = [start]
+        while pending:
+            node = pending.pop()
+            if node in visited:
+                continue
+            visited.add(node)
+            pending.extend(self.objects(subject=node))
+            pending.extend(self.subjects(object=node))
+        return visited == nodes
+
+    def isomorphic(self, other):
+        """Compare this graph with another graph up to blank-node names."""
+        from .compare import isomorphic
+
+        return isomorphic(self, other)
+
+    def triples_choices(self, triple, context=None):
+        """Yield triples matching scalar or list choices in a pattern."""
+        subject, predicate, object = triple
+        choices = [
+            value if isinstance(value, (list, tuple, set, frozenset)) else (value,)
+            for value in (subject, predicate, object)
+        ]
+        seen = set()
+        for chosen_subject in choices[0]:
+            for chosen_predicate in choices[1]:
+                for chosen_object in choices[2]:
+                    for result in self.triples((chosen_subject, chosen_predicate, chosen_object)):
+                        if result not in seen:
+                            seen.add(result)
+                            yield result
+
+    @staticmethod
+    def _map_skolem_term(term, *, to_skolem, authority=None, basepath=None):
+        if isinstance(term, BNode) and to_skolem:
+            return term.skolemize(authority=authority, basepath=basepath)
+        if isinstance(term, URIRef) and not to_skolem:
+            try:
+                return term.de_skolemize()
+            except Exception:
+                return term
+        if isinstance(term, TripleTerm):
+            return TripleTerm(
+                Graph._map_skolem_term(term.subject, to_skolem=to_skolem, authority=authority, basepath=basepath),
+                Graph._map_skolem_term(term.predicate, to_skolem=to_skolem, authority=authority, basepath=basepath),
+                Graph._map_skolem_term(term.object, to_skolem=to_skolem, authority=authority, basepath=basepath),
+            )
+        return term
+
+    def skolemize(self, new_graph=None, bnode=None, authority=None, basepath=None):
+        result = Graph() if new_graph is None else new_graph
+        for subject, predicate, obj in self:
+            if bnode is None:
+                mapper = lambda value: self._map_skolem_term(
+                    value, to_skolem=True, authority=authority, basepath=basepath
+                )
+            else:
+                mapper = lambda value: self._map_selected_skolem_term(
+                    value, bnode, to_skolem=True, authority=authority, basepath=basepath
+                )
+            result.add((mapper(subject), mapper(predicate), mapper(obj)))
+        return result
+
+    def de_skolemize(self, new_graph=None, uriref=None):
+        result = Graph() if new_graph is None else new_graph
+        for subject, predicate, obj in self:
+            def mapper(value):
+                if uriref is None:
+                    return self._map_skolem_term(value, to_skolem=False)
+                return self._map_selected_skolem_term(value, uriref, to_skolem=False)
+            result.add((mapper(subject), mapper(predicate), mapper(obj)))
+        return result
+
+    @staticmethod
+    def _map_selected_skolem_term(term, selected, *, to_skolem, authority=None, basepath=None):
+        if term == selected:
+            return (
+                term.skolemize(authority=authority, basepath=basepath)
+                if to_skolem else term.de_skolemize()
+            )
+        if isinstance(term, TripleTerm):
+            return TripleTerm(
+                Graph._map_selected_skolem_term(term.subject, selected, to_skolem=to_skolem, authority=authority, basepath=basepath),
+                Graph._map_selected_skolem_term(term.predicate, selected, to_skolem=to_skolem, authority=authority, basepath=basepath),
+                Graph._map_selected_skolem_term(term.object, selected, to_skolem=to_skolem, authority=authority, basepath=basepath),
+            )
+        return term
+
     def subject_predicates(self, object=None, unique=False):
         seen = set()
         for subject, predicate, _ in self.triples((None, None, object)):
@@ -141,6 +287,20 @@ class Graph:
 
     def absolutize(self, uri, defrag=1):
         return self.namespace_manager.absolutize(uri)
+
+    def n3(self, namespace_manager=None):
+        """Return the graph identifier in RDFLib-compatible N3 form."""
+        return "[" + self.identifier.n3(namespace_manager=namespace_manager) + "]"
+
+    def collection(self, identifier):
+        from .collection import Collection
+        return Collection(self, identifier)
+
+    def resource(self, identifier):
+        from .resource import Resource
+        if not isinstance(identifier, (URIRef, BNode)):
+            identifier = URIRef(identifier)
+        return Resource(self, identifier)
 
     def close(self, commit_pending_transaction=False):
         return self.store.close(commit_pending_transaction)

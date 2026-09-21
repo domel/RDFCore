@@ -17,6 +17,8 @@ from .term import BNode, Identifier, IdentifiedNode, Literal, Node, TripleTerm, 
 from .rdf_version import required_rdf_version, validate_rdf_version, version_allows
 from .namespace import ClosedNamespace, DC, DCTERMS, DefinedNamespace, FOAF, Namespace, NamespaceManager, OWL, RDF, RDFS, SKOS, XSD
 from .store import Memory, SQLiteStore, Store
+from .collection import Collection
+from .resource import Resource
 from .graph import Graph
 from .dataset import ConjunctiveGraph, DATASET_DEFAULT_GRAPH_ID, Dataset
 from .parser import InputSource, Parser, create_input_source
@@ -112,6 +114,8 @@ __all__ = [
     "Store",
     "Memory",
     "SQLiteStore",
+    "Collection",
+    "Resource",
     "Graph",
     "Dataset",
     "ConjunctiveGraph",

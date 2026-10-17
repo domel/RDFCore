@@ -58,3 +58,28 @@ def test_benchmark_reports_streaming_metrics():
     assert result["statements"] == 1
     assert result["statements_per_second"] > 0
     assert "peak_rss_bytes" in result
+
+
+@pytest.mark.parametrize('format', ['nt', 'nquads'])
+def test_short_record_streaming_rss_does_not_scale_with_input(tmp_path, format):
+    import json
+    import subprocess
+    import sys
+    pytest.importorskip('resource')
+    records = []
+    line = DATA if format == 'nt' else b'<urn:s> <urn:p> "o" <urn:g> .\n'
+    for size in (10000, 100000):
+        path = tmp_path / f'{size}.rdf'
+        with path.open('wb') as handle:
+            for _ in range(size):
+                handle.write(line)
+        result = subprocess.run([sys.executable, '-m', 'tests.streaming.memory_probe', str(path), format],
+                                check=True, capture_output=True, text=True, timeout=30)
+        record = json.loads(result.stdout)
+        assert record['statements'] == size
+        assert record['unit'] == 'bytes'
+        assert record['peak_rss_bytes'] > 0
+        records.append(record)
+    # Fresh interpreters have different startup peaks. 16 MiB allows that
+    # noise but rejects retaining 100k newly parsed statements in a list.
+    assert records[1]['peak_rss_bytes'] - records[0]['peak_rss_bytes'] < 16 * 1024 * 1024, records

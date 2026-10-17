@@ -331,8 +331,8 @@ def parse_stream(source=None, format=None, sink=None, **kwargs):
 
     def push(target):
         input_source = create_input_source(source, format=format, **kwargs)
-        parser_class = get_plugin(format, Parser).getClass()
         try:
+            parser_class = get_plugin(format, Parser).getClass()
             parser_class().parse(input_source, target, **kwargs)
         finally:
             input_source.close()
@@ -354,17 +354,21 @@ def parse_stream(source=None, format=None, sink=None, **kwargs):
         class StopStreaming(Exception):
             pass
 
+        def publish(item):
+            while not stopped.is_set():
+                try:
+                    queue.put(item, timeout=0.05)
+                    return True
+                except Full:
+                    pass
+            return False
+
         class QueueSink:
             def add(self, statement):
                 if len(statement) == 3:
                     statement = (*statement, None)
-                while not stopped.is_set():
-                    try:
-                        queue.put(statement, timeout=0.05)
-                        return
-                    except Full:
-                        pass
-                raise StopStreaming
+                if not publish(statement):
+                    raise StopStreaming
 
         def run():
             try:
@@ -372,13 +376,12 @@ def parse_stream(source=None, format=None, sink=None, **kwargs):
             except StopStreaming:
                 pass
             except BaseException as error:
-                if not stopped.is_set():
-                    queue.put(error)
+                publish(error)
             finally:
-                if not stopped.is_set():
-                    queue.put(end)
+                publish(end)
 
-        Thread(target=run, daemon=True).start()
+        worker = Thread(target=run, daemon=True)
+        worker.start()
         try:
             while True:
                 item = queue.get()
@@ -389,5 +392,8 @@ def parse_stream(source=None, format=None, sink=None, **kwargs):
                 yield item
         finally:
             stopped.set()
+            # Queue waits are cancellable; arbitrary source.read() calls are
+            # not. Do not wait indefinitely on a caller's blocking source.
+            worker.join(timeout=1)
 
     return statements()

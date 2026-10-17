@@ -160,6 +160,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | Component | Purpose |
 |---|---|
 | `parse_stream()` | Push/iterator parser |
+| Iterator resource cleanup | Cancellable queue delivery; bounded worker join on early close; caller-owned streams remain open |
 | `convert()` | Streaming NT/NQ conversion |
 | `count()` | Streaming count |
 | `validate()` | Streaming validation |

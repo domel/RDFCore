@@ -47,3 +47,19 @@ def test_external_sort_limits_open_runs_during_multi_pass_merge(tmp_path):
     result = list(external_sort(values, memory_budget=1, temp_dir=tmp_path, max_open_runs=2))
     assert result == sorted(values, key=statement_key)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_external_sort_cleans_runs_after_source_failure(tmp_path):
+    def broken():
+        for i in range(5):
+            yield triple(i)
+        raise RuntimeError('source failed')
+    with pytest.raises(RuntimeError, match='source failed'):
+        list(external_sort(broken(), memory_budget=1, temp_dir=tmp_path))
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_external_sort_close_before_start_creates_no_files(tmp_path):
+    iterator = external_sort([triple(1)], memory_budget=1, temp_dir=tmp_path)
+    iterator.close()
+    assert list(tmp_path.iterdir()) == []

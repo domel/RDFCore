@@ -227,6 +227,19 @@ is_valid = validate("large.nt", "nt")
 ```
 
 `parse_stream()` and `convert()` are streamable for N-Triples and N-Quads.
+Bounded reads do not impose a fixed bound on total memory. A parser may
+buffer a whole record or token; its blank-node label map grows with the
+number of distinct labels in the document. Nested terms also consume parser
+state. External sorting budgets approximate run size, not total process
+RSS, and a single oversized statement may exceed a run budget. RDF/XML
+parsing builds a document tree.
+
+The iterator form of `parse_stream()` uses a worker and a one-item queue.
+Call `close()` when abandoning the iterator. Queue waits are cancellable,
+but an arbitrary caller-provided source blocked inside `read()` cannot be
+forcibly interrupted; close waits at most one second for that worker.
+The push form with a sink does not create a worker.
+
 Turtle and TriG parsers consume bounded readers, and their RDF 1.2 streaming
 serializers are available with `mode="stream"`:
 

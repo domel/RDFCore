@@ -32,3 +32,19 @@ def test_bounded_writer_limits_each_underlying_write():
     writer = BoundedWriteStream(target, chunk_size=2)
     writer.write(b"abcdef")
     assert target.writes == [b"ab", b"cd", b"ef"]
+
+
+def test_gzip_header_filling_keeps_underlying_reads_bounded():
+    payload = b'<urn:s> <urn:p> "o" .\n'
+    class ShortReader(BytesIO):
+        def read(self, size=-1):
+            assert 0 <= size <= 1
+            return super().read(size)
+    raw = ShortReader(gzip.compress(payload))
+    reader, owns = open_input(raw, compression='gz', buffer_size=1)
+    try:
+        assert reader.read() == payload
+        assert not owns
+    finally:
+        reader.close()
+    assert not raw.closed

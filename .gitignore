@@ -10,6 +10,9 @@ venv/
 dist/
 build/
 .w3c/
+/AGENTS.md
+/conformance-results.json
+/benchmark-results.json
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

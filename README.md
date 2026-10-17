@@ -396,14 +396,8 @@ distribution. README Python examples are executed against small local files.
 
 ### Official W3C tests
 
-[The coverage matrix](docs/rdf12-coverage.md) records selected specification
-versions and remaining requirements across all eleven RDF 1.2 documents.
-[The latest checked-in report](docs/conformance-results.json) lists every
-passed, failed, unsupported and operationally erroneous test separately.
 RDF 1.2 support remains partial; a green local pytest run is not a conformance
 certificate.
-The [verification record](docs/verification.md) summarizes local checks,
-official results and acceptance work still open in each area.
 
 Run the official suites against a clean local checkout at the revision in
 `tests/w3c/manifest.lock`:
@@ -414,6 +408,7 @@ python -m tests.w3c.official /path/to/rdf-tests --output conformance-results.jso
 
 The command returns a nonzero status for any failed or unsupported case.
 The separate **W3C conformance** workflow runs weekly and can be started
-manually. It fetches the pinned snapshot and uploads its report even when
-tests fail. It is expected to remain red while documented gaps are open;
+manually. It fetches the pinned snapshot and uploads a JSON artifact listing
+passed, failed, unsupported and operationally erroneous tests. It is expected
+to remain red while conformance gaps are open;
 failures are not suppressed to obtain a green badge.

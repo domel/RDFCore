@@ -239,6 +239,10 @@ Call `close()` when abandoning the iterator. Queue waits are cancellable,
 but an arbitrary caller-provided source blocked inside `read()` cannot be
 forcibly interrupted; close waits at most one second for that worker.
 The push form with a sink does not create a worker.
+An experimental zero-thread RDF 1.1 NT/NQ iterator is measured by
+`benchmarks/line_iterator.py`. It reuses the line parsers but changes
+read-ahead and producer-thread behavior. It is not enabled in `parse_stream()`
+and is not a public library API.
 
 Turtle and TriG parsers consume bounded readers, and their RDF 1.2 streaming
 serializers are available with `mode="stream"`:

@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-17T16:11:12.347455+00:00",
+  "generated_at": "2026-10-17T16:19:21.420726+00:00",
   "snapshot": "369a90d1a60c021b746df2e411da0ff36258a758",
   "python": "3.10.12",
   "rdflib": "7.6.0",
-  "rdfcore_revision": "f5f4d0606f3fb07b6d573c265cbd83acd112ab0c",
-  "worktree_status": "M rdfcore/__init__.py\n M tests/integration/test_api_integration.py\n M tests/w3c/manifest.lock\n M tests/w3c/runner.py\n M tests/w3c/test_format_runners.py\n?? AGENTS.md\n?? docs/\n?? rdfcore/plugins/parsers/rdfxml.py\n?? rdfcore/plugins/serializers/rdfxml.py\n?? rdfcore/semantics.py\n?? tests/formats/test_rdfxml.py\n?? tests/integration/test_readme_examples.py\n?? tests/integration/test_semantics.py\n?? tests/w3c/official.py\n?? tests/w3c/test_official_reporting.py",
-  "tracked_diff_sha256": "7bdce99025d5130ce7c62c61143a2408f4e7ff886b552d7d3884fb48038826e1",
+  "rdfcore_revision": "1536734d4c2a77db7204c97e7d7878a3aea0d447",
+  "worktree_status": "M .github/workflows/ci.yml\n M .gitignore\n M README.md\n M benchmarks/compare_rdflib_rdfcore.py\n M docs/conformance-results.json\n M docs/rdf12-coverage.md\n M pyproject.toml\n M tests/w3c/official.py\n M tests/w3c/runner.py\n M tests/w3c/test_format_runners.py\n?? .github/workflows/conformance.yml\n?? AGENTS.md\n?? docs/benchmark-results.json\n?? tests/integration/test_comparison_benchmark.py\n?? tests/integration/test_readme_examples.py",
+  "tracked_diff_sha256": "4092dadd97f313688a8e732eefc5bbad5bb4f8a8a99bf56aaca6890828ab457a",
   "limitations": [
     "Passed means the selected test passed, not a complete conformance certification.",
-    "Canonical syntax tests compare UTF-8 output against original expected bytes; this is not RDFC-1.0.",
+    "Canonical syntax tests compare original UTF-8 statement bytes, ignoring only statement order; this is not RDFC-1.0.",
     "Unsupported and suite errors never count as success; no skipped test counts as passed.",
     "Suite includes may repeat RDF 1.1 cases; totals across suites are executions, not unique tests.",
     "Snapshot predates October 2026 publications; passing it cannot verify later changes."
@@ -2244,8 +2244,8 @@
       "format": "xml",
       "total": 166,
       "counts": {
-        "passed": 163,
-        "failed": 3,
+        "passed": 164,
+        "failed": 2,
         "unsupported": 0,
         "error": 0
       },
@@ -4557,8 +4557,8 @@
           "regime": "simple",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf11/rdf-xml/manifest.ttl",
-          "status": "failed",
-          "reason": "existing runner returned False"
+          "status": "passed",
+          "reason": "existing runner returned True"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf11/rdf-xml/manifest.ttl#xmlbase-test014",
@@ -13987,9 +13987,9 @@
       "format": "semantics",
       "total": 48,
       "counts": {
-        "passed": 10,
+        "passed": 13,
         "failed": 0,
-        "unsupported": 38,
+        "unsupported": 35,
         "error": 0
       },
       "tests": [
@@ -14236,8 +14236,8 @@
           "regime": "rdfs",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf11/rdf-mt/manifest.ttl",
-          "status": "unsupported",
-          "reason": "rdfs proof not found: datatype, axiomatic, proposition and inconsistency reasoning are incomplete; non-entailment is unknown"
+          "status": "passed",
+          "reason": "entailment result matches manifest"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf11/rdf-mt/manifest.ttl#rdfms-seq-representation-test003",
@@ -14250,8 +14250,8 @@
           "regime": "rdfs",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf11/rdf-mt/manifest.ttl",
-          "status": "unsupported",
-          "reason": "rdfs proof not found: datatype, axiomatic, proposition and inconsistency reasoning are incomplete; non-entailment is unknown"
+          "status": "passed",
+          "reason": "entailment result matches manifest"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf11/rdf-mt/manifest.ttl#rdfms-seq-representation-test004",
@@ -14264,8 +14264,8 @@
           "regime": "rdfs",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf11/rdf-mt/manifest.ttl",
-          "status": "unsupported",
-          "reason": "rdfs proof not found: datatype, axiomatic, proposition and inconsistency reasoning are incomplete; non-entailment is unknown"
+          "status": "passed",
+          "reason": "entailment result matches manifest"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf11/rdf-mt/manifest.ttl#rdfms-xmllang-test007a",
@@ -14723,8 +14723,8 @@
       "format": "nt12",
       "total": 140,
       "counts": {
-        "passed": 137,
-        "failed": 3,
+        "passed": 140,
+        "failed": 0,
         "unsupported": 0,
         "error": 0
       },
@@ -14866,8 +14866,8 @@
           "regime": "simple",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf12/rdf-n-triples/c14n/manifest.ttl",
-          "status": "failed",
-          "reason": "existing runner returned False"
+          "status": "passed",
+          "reason": "existing runner returned True"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf12/rdf-n-triples/c14n#literal_with_2_dquotes",
@@ -15286,8 +15286,8 @@
           "regime": "simple",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf12/rdf-n-triples/c14n/manifest.ttl",
-          "status": "failed",
-          "reason": "existing runner returned False"
+          "status": "passed",
+          "reason": "existing runner returned True"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf12/rdf-n-triples/c14n#literal_needing_uchar_escaping-02",
@@ -15300,8 +15300,8 @@
           "regime": "simple",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf12/rdf-n-triples/c14n/manifest.ttl",
-          "status": "failed",
-          "reason": "existing runner returned False"
+          "status": "passed",
+          "reason": "existing runner returned True"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf12/rdf-n-triples/syntax#ntriples12-01",
@@ -16696,8 +16696,8 @@
       "format": "nq12",
       "total": 155,
       "counts": {
-        "passed": 152,
-        "failed": 3,
+        "passed": 155,
+        "failed": 0,
         "unsupported": 0,
         "error": 0
       },
@@ -16839,8 +16839,8 @@
           "regime": "simple",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf12/rdf-n-quads/c14n/manifest.ttl",
-          "status": "failed",
-          "reason": "existing runner returned False"
+          "status": "passed",
+          "reason": "existing runner returned True"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf12/rdf-n-quads/c14n#literal_with_2_dquotes",
@@ -17259,8 +17259,8 @@
           "regime": "simple",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf12/rdf-n-quads/c14n/manifest.ttl",
-          "status": "failed",
-          "reason": "existing runner returned False"
+          "status": "passed",
+          "reason": "existing runner returned True"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf12/rdf-n-quads/c14n#literal_needing_uchar_escaping-02",
@@ -17273,8 +17273,8 @@
           "regime": "simple",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf12/rdf-n-quads/c14n/manifest.ttl",
-          "status": "failed",
-          "reason": "existing runner returned False"
+          "status": "passed",
+          "reason": "existing runner returned True"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf12/rdf-n-quads/syntax#nquads12-01",
@@ -18879,8 +18879,8 @@
       "format": "xml12",
       "total": 197,
       "counts": {
-        "passed": 175,
-        "failed": 22,
+        "passed": 176,
+        "failed": 21,
         "unsupported": 0,
         "error": 0
       },
@@ -21626,8 +21626,8 @@
           "regime": "simple",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf11/rdf-xml/manifest.ttl",
-          "status": "failed",
-          "reason": "existing runner returned False"
+          "status": "passed",
+          "reason": "existing runner returned True"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf11/rdf-xml/manifest.ttl#xmlbase-test014",
@@ -33394,9 +33394,9 @@
       "format": "semantics",
       "total": 77,
       "counts": {
-        "passed": 29,
+        "passed": 33,
         "failed": 0,
-        "unsupported": 48,
+        "unsupported": 44,
         "error": 0
       },
       "tests": [
@@ -33821,8 +33821,8 @@
           "regime": "rdfs",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf12/rdf-semantics/manifest.ttl",
-          "status": "unsupported",
-          "reason": "rdfs proof not found: datatype, axiomatic, proposition and inconsistency reasoning are incomplete; non-entailment is unknown"
+          "status": "passed",
+          "reason": "entailment result matches manifest"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf11/rdf-mt/manifest.ttl#datatypes-intensional-xsd-integer-decimal-compatible",
@@ -34067,8 +34067,8 @@
           "regime": "rdfs",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf11/rdf-mt/manifest.ttl",
-          "status": "unsupported",
-          "reason": "rdfs proof not found: datatype, axiomatic, proposition and inconsistency reasoning are incomplete; non-entailment is unknown"
+          "status": "passed",
+          "reason": "entailment result matches manifest"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf11/rdf-mt/manifest.ttl#rdfms-seq-representation-test003",
@@ -34081,8 +34081,8 @@
           "regime": "rdfs",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf11/rdf-mt/manifest.ttl",
-          "status": "unsupported",
-          "reason": "rdfs proof not found: datatype, axiomatic, proposition and inconsistency reasoning are incomplete; non-entailment is unknown"
+          "status": "passed",
+          "reason": "entailment result matches manifest"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf11/rdf-mt/manifest.ttl#rdfms-seq-representation-test004",
@@ -34095,8 +34095,8 @@
           "regime": "rdfs",
           "recognized_datatypes": [],
           "manifest": "rdf/rdf11/rdf-mt/manifest.ttl",
-          "status": "unsupported",
-          "reason": "rdfs proof not found: datatype, axiomatic, proposition and inconsistency reasoning are incomplete; non-entailment is unknown"
+          "status": "passed",
+          "reason": "entailment result matches manifest"
         },
         {
           "id": "https://w3c.github.io/rdf-tests/rdf/rdf11/rdf-mt/manifest.ttl#rdfms-xmllang-test007a",

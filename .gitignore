@@ -9,6 +9,7 @@ htmlcov/
 venv/
 dist/
 build/
+.w3c/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

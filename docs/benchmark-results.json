@@ -1,0 +1,593 @@
+{
+  "python": "3.10.12",
+  "platform": "Linux-6.8.0-107-generic-x86_64-with-glibc2.35",
+  "rdfcore_revision": "1536734d4c2a77db7204c97e7d7878a3aea0d447",
+  "worktree_dirty": true,
+  "rdflib": "7.6.0",
+  "rdfcore": "0.1.0.dev0",
+  "measurement": "single run; tracemalloc Python allocations, not RSS; correctness checked outside timings",
+  "results": [
+    [
+      "nq",
+      1000,
+      {
+        "test": "rdflib.parse.nq",
+        "seconds": 0.04812178099996345,
+        "peak_python_bytes": 1984640,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      1000,
+      {
+        "test": "rdfcore.parse.nq",
+        "seconds": 0.066976355999941,
+        "peak_python_bytes": 1622097,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      1000,
+      {
+        "test": "rdfcore.parse.nq.streaming",
+        "seconds": 0.0542347420000624,
+        "peak_python_bytes": 106596,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      1000,
+      {
+        "test": "rdflib.serialize.nq",
+        "seconds": 0.00946838899994873,
+        "peak_python_bytes": 129051,
+        "result": {
+          "type": "str",
+          "bytes": 42210
+        },
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      1000,
+      {
+        "test": "rdfcore.serialize.nq",
+        "seconds": 0.014808247000019037,
+        "peak_python_bytes": 160843,
+        "result": {
+          "type": "str",
+          "bytes": 42209
+        },
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      1000,
+      {
+        "test": "rdfcore.serialize.nq.stream",
+        "seconds": 0.011839451000014378,
+        "peak_python_bytes": 144859,
+        "result": {
+          "type": "str",
+          "bytes": 42209
+        },
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      1000,
+      {
+        "test": "rdfcore.external_sort.unique",
+        "seconds": 0.15560806599978605,
+        "peak_python_bytes": 544846,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      1000,
+      {
+        "test": "rdfcore.sqlite_store.nq.ingest",
+        "seconds": 0.12157279999996717,
+        "peak_python_bytes": 182253,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      1000,
+      {
+        "test": "rdflib.parse.ttl",
+        "seconds": 0.08404320799991183,
+        "peak_python_bytes": 1810063,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      1000,
+      {
+        "test": "rdfcore.parse.ttl",
+        "seconds": 0.12329958000009356,
+        "peak_python_bytes": 1637479,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      1000,
+      {
+        "test": "rdfcore.parse.ttl.streaming",
+        "seconds": 0.11261303400010547,
+        "peak_python_bytes": 83647,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      1000,
+      {
+        "test": "rdflib.serialize.ttl",
+        "seconds": 0.05228364300000976,
+        "peak_python_bytes": 224783,
+        "result": {
+          "type": "str",
+          "bytes": 23615
+        },
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      1000,
+      {
+        "test": "rdfcore.serialize.ttl",
+        "seconds": 0.015967021000051318,
+        "peak_python_bytes": 262561,
+        "result": {
+          "type": "str",
+          "bytes": 33426
+        },
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      1000,
+      {
+        "test": "rdfcore.serialize.ttl.stream",
+        "seconds": 0.013197772000012264,
+        "peak_python_bytes": 131996,
+        "result": {
+          "type": "str",
+          "bytes": 33209
+        },
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      1000,
+      {
+        "test": "rdfcore.sqlite_store.ttl.ingest",
+        "seconds": 0.1795325909999974,
+        "peak_python_bytes": 193377,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      1000,
+      {
+        "test": "rdflib.parse.trig",
+        "seconds": 0.11009193700010655,
+        "peak_python_bytes": 1938414,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      1000,
+      {
+        "test": "rdfcore.parse.trig",
+        "seconds": 0.17884961400000066,
+        "peak_python_bytes": 1631987,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      1000,
+      {
+        "test": "rdfcore.parse.trig.streaming",
+        "seconds": 0.16998438100017665,
+        "peak_python_bytes": 109561,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      1000,
+      {
+        "test": "rdflib.serialize.trig",
+        "seconds": 0.07917512399990301,
+        "peak_python_bytes": 363137,
+        "result": {
+          "type": "str",
+          "bytes": 28836
+        },
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      1000,
+      {
+        "test": "rdfcore.serialize.trig",
+        "seconds": 0.017449754999915967,
+        "peak_python_bytes": 222077,
+        "result": {
+          "type": "str",
+          "bytes": 35491
+        },
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      1000,
+      {
+        "test": "rdfcore.serialize.trig.stream",
+        "seconds": 0.015054353999857994,
+        "peak_python_bytes": 134520,
+        "result": {
+          "type": "str",
+          "bytes": 35274
+        },
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      1000,
+      {
+        "test": "rdfcore.sqlite_store.trig.ingest",
+        "seconds": 0.24595962099988355,
+        "peak_python_bytes": 207282,
+        "result": 1000,
+        "statements": 1000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      10000,
+      {
+        "test": "rdflib.parse.nq",
+        "seconds": 0.4104981970001518,
+        "peak_python_bytes": 18837739,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      10000,
+      {
+        "test": "rdfcore.parse.nq",
+        "seconds": 0.6736863430000994,
+        "peak_python_bytes": 16137554,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      10000,
+      {
+        "test": "rdfcore.parse.nq.streaming",
+        "seconds": 0.5622207460000936,
+        "peak_python_bytes": 143586,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      10000,
+      {
+        "test": "rdflib.serialize.nq",
+        "seconds": 0.0831481170000643,
+        "peak_python_bytes": 886936,
+        "result": {
+          "type": "str",
+          "bytes": 441916
+        },
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      10000,
+      {
+        "test": "rdfcore.serialize.nq",
+        "seconds": 0.1464064659999167,
+        "peak_python_bytes": 1541898,
+        "result": {
+          "type": "str",
+          "bytes": 441915
+        },
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      10000,
+      {
+        "test": "rdfcore.serialize.nq.stream",
+        "seconds": 0.11990423100019143,
+        "peak_python_bytes": 1460865,
+        "result": {
+          "type": "str",
+          "bytes": 441915
+        },
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      10000,
+      {
+        "test": "rdfcore.external_sort.unique",
+        "seconds": 1.7032536690001052,
+        "peak_python_bytes": 1932256,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "nq",
+      10000,
+      {
+        "test": "rdfcore.sqlite_store.nq.ingest",
+        "seconds": 1.2185410319998482,
+        "peak_python_bytes": 264088,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      10000,
+      {
+        "test": "rdflib.parse.ttl",
+        "seconds": 0.748489058999894,
+        "peak_python_bytes": 16328552,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      10000,
+      {
+        "test": "rdfcore.parse.ttl",
+        "seconds": 1.224994919999972,
+        "peak_python_bytes": 16018538,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      10000,
+      {
+        "test": "rdfcore.parse.ttl.streaming",
+        "seconds": 1.1515502549998473,
+        "peak_python_bytes": 269221,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      10000,
+      {
+        "test": "rdflib.serialize.ttl",
+        "seconds": 0.48341417400001774,
+        "peak_python_bytes": 1515540,
+        "result": {
+          "type": "str",
+          "bytes": 246922
+        },
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      10000,
+      {
+        "test": "rdfcore.serialize.ttl",
+        "seconds": 0.15567820299997948,
+        "peak_python_bytes": 2592704,
+        "result": {
+          "type": "str",
+          "bytes": 352132
+        },
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      10000,
+      {
+        "test": "rdfcore.serialize.ttl.stream",
+        "seconds": 0.12354731200002789,
+        "peak_python_bytes": 1282386,
+        "result": {
+          "type": "str",
+          "bytes": 351915
+        },
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "ttl",
+      10000,
+      {
+        "test": "rdfcore.sqlite_store.ttl.ingest",
+        "seconds": 1.892752402999804,
+        "peak_python_bytes": 513809,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      10000,
+      {
+        "test": "rdflib.parse.trig",
+        "seconds": 1.114217368000027,
+        "peak_python_bytes": 19202828,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      10000,
+      {
+        "test": "rdfcore.parse.trig",
+        "seconds": 1.9347000350001053,
+        "peak_python_bytes": 16201246,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      10000,
+      {
+        "test": "rdfcore.parse.trig.streaming",
+        "seconds": 1.8238343330001499,
+        "peak_python_bytes": 269350,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      10000,
+      {
+        "test": "rdflib.serialize.trig",
+        "seconds": 1.1732654070001445,
+        "peak_python_bytes": 2884599,
+        "result": {
+          "type": "str",
+          "bytes": 302547
+        },
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      10000,
+      {
+        "test": "rdfcore.serialize.trig",
+        "seconds": 0.17767442400008804,
+        "peak_python_bytes": 1759000,
+        "result": {
+          "type": "str",
+          "bytes": 372197
+        },
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      10000,
+      {
+        "test": "rdfcore.serialize.trig.stream",
+        "seconds": 0.15252503900001102,
+        "peak_python_bytes": 1323952,
+        "result": {
+          "type": "str",
+          "bytes": 371980
+        },
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ],
+    [
+      "trig",
+      10000,
+      {
+        "test": "rdfcore.sqlite_store.trig.ingest",
+        "seconds": 3.237323569999944,
+        "peak_python_bytes": 517196,
+        "result": 10000,
+        "statements": 10000,
+        "correctness_verified": true
+      }
+    ]
+  ]
+}

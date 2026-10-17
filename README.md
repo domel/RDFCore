@@ -56,7 +56,9 @@ transitive graph helpers, skolemization, and graph comparison.
 
 The compatibility scope is documented in
 [Compare_with_rdflib.md](Compare_with_rdflib.md). The table also lists areas
-that are not implemented, such as SPARQL, RDF/XML, and JSON-LD.
+that are not implemented, such as SPARQL and JSON-LD. RDF/XML is available,
+with the limitations listed below. Differential tests use RDFLib 7.6.0;
+support for a method does not establish parity for every possible input.
 
 RDFCore is not a drop-in replacement for every RDFLib plugin. Code that uses
 the common graph and term APIs can usually be migrated with small changes.
@@ -71,6 +73,7 @@ RDF 1.1 formats use the usual names:
 | N-Quads | `nquads` |
 | Turtle | `turtle`, `ttl` |
 | TriG | `trig` |
+| RDF/XML | `xml`, `rdfxml`, `application/rdf+xml` |
 
 RDF 1.2 formats have explicit names:
 
@@ -80,6 +83,7 @@ RDF 1.2 formats have explicit names:
 | N-Quads 1.2 | `nq12` |
 | Turtle 1.2 | `turtle12` |
 | TriG 1.2 | `trig12` |
+| RDF/XML 1.2 | `xml12` |
 
 Example with an RDF 1.2 triple term:
 
@@ -103,6 +107,49 @@ from rdfcore import Literal, RDF
 json_value = Literal('{"items":[1,true,null]}', datatype=RDF.JSON)
 assert json_value.ill_typed is False
 assert json_value.value == {"items": [1.0, True, None]}
+```
+
+### RDF/XML
+
+Use `xml12` explicitly for RDF 1.2. Its serializer writes
+`rdf:version="1.2"` on `rdf:RDF`, including for an empty graph. The parser
+requires an in-scope version announcement for RDF 1.2-only constructs.
+The legacy `xml` serializer does not add this announcement.
+
+```python
+from rdfcore import Graph, TripleTerm, URIRef
+
+graph = Graph().add((
+    URIRef("urn:statement"), URIRef("urn:describes"),
+    TripleTerm(URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")),
+))
+xml = graph.serialize(format="xml12")
+assert 'rdf:version="1.2"' in xml
+assert graph.isomorphic(Graph().parse(data=xml, format="xml12"))
+```
+
+Both XML parsers reject DTD declarations and external entities. This is a
+deliberate security restriction compared with RDFLib. XML parsing builds a
+document tree and is not a bounded-memory streaming operation. Files ending
+in `.rdf` or `.xml` select the RDF 1.1 parser unless a format is supplied.
+
+### Optional entailment
+
+`rdfcore.semantics.entails()` decides simple graph entailment, including
+blank nodes inside triple terms. The `rdf` and `rdfs` regimes can prove a
+subset of entailments using finite vocabulary axioms and forward rules.
+When they cannot prove a conclusion, they raise `UnsupportedEntailment`;
+this does not mean the conclusion is false. Datatype reasoning and
+inconsistency detection are not implemented. Graph operations never infer
+additional triples automatically.
+
+```python
+from rdfcore import Graph, RDF, URIRef
+from rdfcore.semantics import entails
+
+premise = Graph().add((URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")))
+conclusion = [(URIRef("urn:p"), RDF.type, RDF.Property)]
+assert entails(premise, conclusion, regime="rdf")
 ```
 
 ## Graphs and datasets
@@ -299,7 +346,7 @@ Choose the processing path based on the data size and required operation:
 | Large N-Triples or N-Quads conversion | `convert()` |
 | Large input with custom filtering | `parse_stream()` with `FilterSink` |
 | Data larger than available memory | `SQLiteStore` or `external_sort()` |
-| Reproducible output order | `canonical=True` where supported |
+| Canonical NT/NQ lexical layout | `canonical=True`; does not rename blank nodes or implement RDFC-1.0 |
 | Compressed input or output | `.gz`, `.bz2`, or `.xz` paths |
 | Smaller I/O calls | Set `buffer_size` explicitly |
 
@@ -328,7 +375,10 @@ python benchmarks/compare_rdflib_rdfcore.py --statements 1000 10000
 ```
 
 The benchmark covers N-Quads, Turtle, and TriG in standard, streaming, and
-SQLite-backed paths where applicable.
+SQLite-backed paths where applicable. Serialization timings exclude parsing.
+Correctness checks run outside timed sections. Reports record Python,
+RDFLib, the RDFCore revision and whether the worktree was dirty. Memory
+figures from this script are traced Python allocations, not process RSS.
 
 ## Tests
 
@@ -340,3 +390,30 @@ python -m pytest -q
 
 The suite includes format tests, RDF 1.2 tests, streaming tests, compatibility
 tests, and differential checks against RDFLib 7.6.0.
+
+CI tests Python 3.10 through 3.14 and builds an installable wheel and source
+distribution. README Python examples are executed against small local files.
+
+### Official W3C tests
+
+[The coverage matrix](docs/rdf12-coverage.md) records selected specification
+versions and remaining requirements across all eleven RDF 1.2 documents.
+[The latest checked-in report](docs/conformance-results.json) lists every
+passed, failed, unsupported and operationally erroneous test separately.
+RDF 1.2 support remains partial; a green local pytest run is not a conformance
+certificate.
+The [verification record](docs/verification.md) summarizes local checks,
+official results and acceptance work still open in each area.
+
+Run the official suites against a clean local checkout at the revision in
+`tests/w3c/manifest.lock`:
+
+```bash
+python -m tests.w3c.official /path/to/rdf-tests --output conformance-results.json
+```
+
+The command returns a nonzero status for any failed or unsupported case.
+The separate **W3C conformance** workflow runs weekly and can be started
+manually. It fetches the pinned snapshot and uploads its report even when
+tests fail. It is expected to remain red while documented gaps are open;
+failures are not suppressed to obtain a green badge.

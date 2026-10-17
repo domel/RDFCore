@@ -77,6 +77,8 @@ def _uri_path(value, base):
 def _expect_success(path, format):
     try:
         _parse(path, format)
+    except OSError:
+        raise
     except Exception:
         return False
     return True
@@ -105,6 +107,8 @@ def _expect_eval(path, expected, format, result_suffix):
             result_format = {'nt': 'nt12', 'nquads': 'nq12', 'turtle': 'turtle12', 'trig': 'trig12', 'xml': 'xml12'}.get(result_format, result_format)
         target = _parse(expected, result_format)
         return isomorphic(actual, target)
+    except OSError:
+        raise
     except Exception:
         return False
 
@@ -114,7 +118,12 @@ def _expect_c14n(path, expected, format):
         actual = _parse(path, format)
         # The expected fixture is already canonical. Parsing and serializing it
         # would hide precisely the lexical errors this test is meant to detect.
-        return _canonical(actual, format).encode('utf-8') == Path(expected).read_bytes()
+        # Canonical NT/NQ specifies each statement's bytes, not graph iteration
+        # order. Compare whole lines without changing escapes or whitespace.
+        return sorted(_canonical(actual, format).encode('utf-8').splitlines(keepends=True)) == sorted(
+            Path(expected).read_bytes().splitlines(keepends=True))
+    except OSError:
+        raise
     except Exception:
         return False
 

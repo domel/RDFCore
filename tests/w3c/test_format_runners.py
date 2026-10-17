@@ -14,9 +14,33 @@ def test_canonical_result_is_not_recanonicalized(tmp_path):
     assert not _expect_c14n(source, expected, 'nt12')
 
 
+def test_canonical_statement_order_is_not_a_lexical_requirement(tmp_path):
+    from tests.w3c.runner import _expect_c14n
+    source = tmp_path / 'input.nt'
+    expected = tmp_path / 'expected.nt'
+    lines = ['<urn:s> <urn:p> "a" .\n', '<urn:s> <urn:p> "b" .\n']
+    source.write_text(''.join(lines))
+    for order in (lines, list(reversed(lines))):
+        expected.write_text(''.join(order))
+        assert _expect_c14n(source, expected, 'nt12')
+
+
 def test_missing_negative_fixture_is_an_operational_error(tmp_path):
     with pytest.raises(FileNotFoundError):
         _expect_failure(tmp_path / 'missing.nt', 'nt')
+
+
+def test_missing_positive_or_expected_fixture_is_an_operational_error(tmp_path):
+    from tests.w3c.runner import _expect_success, _expect_eval, _expect_c14n
+    missing = tmp_path / 'missing.nt'
+    valid = tmp_path / 'input.nt'
+    valid.write_text('<urn:s> <urn:p> "x" .\n')
+    with pytest.raises(FileNotFoundError):
+        _expect_success(missing, 'nt12')
+    with pytest.raises(FileNotFoundError):
+        _expect_eval(valid, missing, 'nt12', '.nt')
+    with pytest.raises(FileNotFoundError):
+        _expect_c14n(valid, missing, 'nt12')
 
 
 def test_rdf12_trig_eval_reads_nquads_result(tmp_path):

@@ -1,0 +1,35 @@
+name: W3C conformance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  official-suites:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install '.[test]'
+      - name: Read the reproducible W3C revision
+        id: snapshot
+        run: python -c "import tomllib; print('revision=' + tomllib.load(open('tests/w3c/manifest.lock', 'rb'))['commit'])" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: w3c/rdf-tests
+          ref: ${{ steps.snapshot.outputs.revision }}
+          path: .w3c/rdf-tests
+      - name: Run all accounted suites
+        run: python -m tests.w3c.official .w3c/rdf-tests --output conformance-results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: w3c-conformance-results
+          path: conformance-results.json
+          if-no-files-found: error

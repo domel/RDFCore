@@ -166,7 +166,7 @@ def build_report(checkout):
             "rdfcore_revision": git(ROOT, "rev-parse", "HEAD"), "worktree_status": changed,
             "tracked_diff_sha256": hashlib.sha256(tracked_diff).hexdigest(),
             "limitations": ["Passed means the selected test passed, not a complete conformance certification.",
-                "Canonical syntax tests compare UTF-8 output against original expected bytes; this is not RDFC-1.0.",
+                "Canonical syntax tests compare original UTF-8 statement bytes, ignoring only statement order; this is not RDFC-1.0.",
                 "Unsupported and suite errors never count as success; no skipped test counts as passed.",
                 "Suite includes may repeat RDF 1.1 cases; totals across suites are executions, not unique tests.",
                 "Snapshot predates October 2026 publications; passing it cannot verify later changes."],

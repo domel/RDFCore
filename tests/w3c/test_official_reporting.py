@@ -87,7 +87,7 @@ def test_staged_changes_are_in_report_fingerprint(tmp_path, monkeypatch):
     git('add', 'changed.py')
     monkeypatch.setattr(official, 'ROOT', tmp_path)
     monkeypatch.setattr(official, 'verify_checkout', lambda path: 'a' * 40)
-    monkeypatch.setattr(official, 'report_suite', lambda *args: {'counts': {}, 'tests': []})
+    monkeypatch.setattr(official, 'report_suite', lambda *args, **kwargs: {'counts': {}, 'tests': []})
     report = official.build_report(tmp_path)
     expected = hashlib.sha256(git('diff', '--binary', 'HEAD')).hexdigest()
     assert report['tracked_diff_sha256'] == expected
@@ -95,6 +95,24 @@ def test_staged_changes_are_in_report_fingerprint(tmp_path, monkeypatch):
     assert len(report['suites']) == 12
     assert all(suite['reference_document'].startswith('https://www.w3.org/TR/') for suite in report['suites'])
     assert {suite['category'] for suite in report['suites']} == {'syntax', 'entailment'}
+    assert report['execution_profile'] == 'default'
+    assert report['parser_options'] == {}
+    legacy = official.build_report(tmp_path, legacy_w3c=True)
+    assert legacy['execution_profile'] == 'legacy-w3c-xml'
+    assert legacy['parser_options'] == {'legacy_w3c': True}
+
+
+def test_xml_recovery_report_does_not_rewrite_expected_results(tmp_path):
+    path = manifest(tmp_path, '<#x>', '<#x> a rt:TestXMLEval ; mf:action <x.rdf> ; mf:result <x.nt> .')
+    (tmp_path / 'x.rdf').write_text('''<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:e="urn:e:">
+    <rdf:Description rdf:about="urn:s"><e:p rdf:parseType="Literal"><br/></e:p></rdf:Description></rdf:RDF>''')
+    expected = '<urn:s> <urn:e:p> "<br></br>"^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral> .'
+    (tmp_path / 'x.nt').write_text(expected)
+    assert report_suite(path, 'xml')['counts']['failed'] == 1
+    assert report_suite(path, 'xml', legacy_w3c=True)['counts']['passed'] == 1
+    assert (tmp_path / 'x.nt').read_text() == expected
+    (tmp_path / 'x.nt').write_text('')
+    assert report_suite(path, 'xml', legacy_w3c=True)['counts']['failed'] == 1
 
 
 def test_invalid_pin_has_explicit_error(tmp_path, monkeypatch):

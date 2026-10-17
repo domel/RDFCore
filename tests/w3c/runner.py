@@ -20,7 +20,7 @@ RDFT = "http://www.w3.org/ns/rdftest#"
 
 
 def run_manifest(manifest: str | Path, format: str, mode: str = "auto", *, key_by_id: bool = False,
-                 diagnostics=None) -> dict[str, bool]:
+                 diagnostics=None, legacy_w3c=False) -> dict[str, bool]:
     manifest = Path(manifest).resolve()
     graph = Graph().parse(manifest, publicID=manifest.as_uri(), format="turtle")
     entries = _manifest_entries(graph, manifest.parent)
@@ -35,13 +35,13 @@ def run_manifest(manifest: str | Path, format: str, mode: str = "auto", *, key_b
         type_names = tuple(str(test_type) for test_type in test_types)
         detail = {}
         if any("NegativeSyntax" in name for name in type_names):
-            results[name] = _expect_failure(action_path, format, detail)
+            results[name] = _expect_failure(action_path, format, detail, legacy_w3c=legacy_w3c)
         elif any("PositiveSyntax" in name for name in type_names):
-            results[name] = _expect_success(action_path, format, detail)
+            results[name] = _expect_success(action_path, format, detail, legacy_w3c=legacy_w3c)
         elif any("Eval" in name for name in type_names):
             result = source_graph.value(entry, URIRef(MF + "result"))
             result_path = _uri_path(result, source_base)
-            results[name] = _expect_eval(action_path, result_path, format, result_path.suffix.lower(), detail)
+            results[name] = _expect_eval(action_path, result_path, format, result_path.suffix.lower(), detail, legacy_w3c=legacy_w3c)
         elif any("C14N" in name for name in type_names) or mode == "c14n":
             result = source_graph.value(entry, URIRef(MF + "result"))
             results[name] = _expect_c14n(action_path, _uri_path(result, source_base), format, detail)
@@ -78,9 +78,9 @@ def _uri_path(value, base):
     return (base / str(value)).resolve()
 
 
-def _expect_success(path, format, detail=None):
+def _expect_success(path, format, detail=None, *, legacy_w3c=False):
     try:
-        _parse(path, format)
+        _parse(path, format, legacy_w3c=legacy_w3c)
     except OSError:
         raise
     except Exception as error:
@@ -90,9 +90,9 @@ def _expect_success(path, format, detail=None):
     return True
 
 
-def _expect_failure(path, format, detail=None):
+def _expect_failure(path, format, detail=None, *, legacy_w3c=False):
     try:
-        _parse(path, format)
+        _parse(path, format, legacy_w3c=legacy_w3c)
     except (BadSyntax, ParserError, ValueError, AssertionError, IndexError, SAXParseException):
         return True
     except TypeError as error:
@@ -105,15 +105,15 @@ def _expect_failure(path, format, detail=None):
     return False
 
 
-def _expect_eval(path, expected, format, result_suffix, detail=None):
+def _expect_eval(path, expected, format, result_suffix, detail=None, *, legacy_w3c=False):
     try:
-        actual = _parse(path, format)
+        actual = _parse(path, format, legacy_w3c=legacy_w3c)
         result_format = {
             ".nt": "nt", ".nq": "nquads", ".ttl": "turtle", ".trig": "trig", '.rdf': 'xml',
         }.get(result_suffix, format)
         if format.endswith('12'):
             result_format = {'nt': 'nt12', 'nquads': 'nq12', 'turtle': 'turtle12', 'trig': 'trig12', 'xml': 'xml12'}.get(result_format, result_format)
-        target = _parse(expected, result_format)
+        target = _parse(expected, result_format, legacy_w3c=legacy_w3c)
         equivalent = isomorphic(actual, target)
         if not equivalent and detail is not None:
             detail['reason'] = 'parsed graph/dataset is not isomorphic to the expected result'
@@ -157,12 +157,13 @@ def _canonical(value, format):
     return text
 
 
-def _parse(path, format):
+def _parse(path, format, *, legacy_w3c=False):
     public_id = _canonical_public_id(path)
     if format in ("nquads", "nq12"):
         return Dataset().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True)
     if format in ("nt", "nt12", 'xml', 'xml12'):
-        return Graph().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True)
+        options = {'legacy_w3c': True} if legacy_w3c and format in ('xml', 'xml12') else {}
+        return Graph().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True, **options)
     if format in ("turtle", "turtle12"):
         return Graph().parse(path, publicID=public_id, format=format, strict=True)
     if format in ("trig", "trig12"):

@@ -115,6 +115,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | TriG 1.2 | ❌ | ✅ `trig12` |
 | RDF/XML 1.1 | ✅ `xml`, `rdfxml` | ⚠️ `xml`, `rdfxml`; secure tree parser, no DTDs |
 | RDF/XML 1.2 | ❌ | ⚠️ `xml12`; explicit version, triple terms, annotations and direction; full conformance not established |
+| Archived W3C XML recovery | ❌ | ⚠️ Explicit `legacy_w3c=True`; missing-version recovery in `xml12`, empty XMLLiteral element expansion in `xml`/`xml12`; not current-spec conformance |
 | JSON-LD | ✅ plugin | ❌ |
 | RDFa | ⚠️ | ❌ |
 

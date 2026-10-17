@@ -65,6 +65,9 @@ class RDFXMLParser(Parser):
     rdf_version = '1.1'
 
     def parse(self, source, sink, **kwargs):
+        self.legacy_w3c = kwargs.get('legacy_w3c', False)
+        if type(self.legacy_w3c) is not bool:
+            raise ValueError('legacy_w3c must be a boolean')
         stream = source.getCharacterStream()
         if stream is None:
             stream = source.getByteStream()
@@ -106,7 +109,10 @@ class RDFXMLParser(Parser):
         base = getattr(source, 'publicID', None) or getattr(source, 'location', None) or ''
         if base and not str(base).split(':', 1)[0] in ('http', 'https', 'urn', 'file'):
             base = Path(base).absolute().as_uri()
-        context = (str(base), None, None, '1.1')
+        # Explicit recovery for pre-version-announcement W3C fixtures. An
+        # actual declaration still overrides this fallback, including 1.1.
+        version = '1.2' if self.legacy_w3c and self.rdf_version == '1.2' else '1.1'
+        context = (str(base), None, None, version)
         try:
             root = dom.documentElement
             for element in dom.getElementsByTagName('*'):
@@ -302,6 +308,10 @@ class RDFXMLParser(Parser):
                         scope[prefix] = ns
             for child in node.childNodes:
                 result.appendChild(clone(child, scope))
+            if self.legacy_w3c and node.nodeType == Node.ELEMENT_NODE and not node.childNodes:
+                # DOM serialization, not a regex over markup or attribute data.
+                # This is empty-element expansion, not a general C14N engine.
+                result.appendChild(node.ownerDocument.createTextNode(''))
             return result
         return ''.join(clone(c, {'xml': XML}).toxml() for c in element.childNodes)
 

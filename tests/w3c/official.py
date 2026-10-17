@@ -101,7 +101,7 @@ def inventory(manifest, ancestors=()):
     return records
 
 
-def report_suite(manifest, format):
+def report_suite(manifest, format, *, legacy_w3c=False):
     report = {"manifest": str(manifest), "format": format, "total": 0,
               "counts": dict.fromkeys(("passed", "failed", "unsupported", "error"), 0), "tests": []}
     try:
@@ -116,7 +116,8 @@ def report_suite(manifest, format):
         if format is not None and format != 'semantics':
             try:
                 diagnostics[leaf] = {}
-                results[leaf] = run_manifest(leaf, format, key_by_id=True, diagnostics=diagnostics[leaf])
+                options = {'legacy_w3c': True} if legacy_w3c else {}
+                results[leaf] = run_manifest(leaf, format, key_by_id=True, diagnostics=diagnostics[leaf], **options)
             except Exception as exc:
                 errors[leaf] = f"{type(exc).__name__}: {exc}"
     for entry in entries:
@@ -168,13 +169,14 @@ def semantic_result(entry):
     return ('passed', 'entailment result matches manifest') if actual is expected else ('failed', 'entailment result differs from manifest')
 
 
-def build_report(checkout):
+def build_report(checkout, *, legacy_w3c=False):
     checkout = Path(checkout).resolve()
     pin = verify_checkout(checkout)
     suites = []
     for version, index in (("rdf11", 0), ("rdf12", 1)):
         for directory, formats in FORMATS.items():
-            suite = report_suite(checkout / "rdf" / version / directory / "manifest.ttl", formats[index])
+            options = {'legacy_w3c': True} if legacy_w3c else {}
+            suite = report_suite(checkout / "rdf" / version / directory / "manifest.ttl", formats[index], **options)
             suite.update(reference_document=REFERENCES[formats[index]], rdf_version=version,
                          category='syntax', reference_reviewed='2026-10-17')
             suites.append(suite)
@@ -192,6 +194,8 @@ def build_report(checkout):
               for status in ('passed', 'failed', 'unsupported', 'error')}
     return {"schema_version": 1, "generated_at": datetime.now(timezone.utc).isoformat(),
             "snapshot": pin, "python": platform.python_version(), "rdflib": rdflib.__version__,
+            "execution_profile": 'legacy-w3c-xml' if legacy_w3c else 'default',
+            "parser_options": {'legacy_w3c': True} if legacy_w3c else {},
             "rdfcore_revision": git(ROOT, "rev-parse", "HEAD"), "worktree_status": changed,
             "tracked_diff_sha256": hashlib.sha256(tracked_diff).hexdigest(),
             "totals": totals, "test_executions": sum(suite.get('total', 0) for suite in suites),
@@ -201,7 +205,8 @@ def build_report(checkout):
                 "Unsupported and suite errors never count as success; no skipped test counts as passed.",
                 "Suite includes may repeat RDF 1.1 cases; totals across suites are executions, not unique tests.",
                 "Published reference_document metadata does not mean the older snapshot covers that revision.",
-                "Snapshot predates October 2026 publications; passing it cannot verify later changes."],
+                "Snapshot predates October 2026 publications; passing it cannot verify later changes.",
+                "The legacy-w3c-xml profile accepts unannounced XML 1.2 and expands empty XMLLiteral elements; it is not current-spec conformance."],
             "suites": json.loads(encoded)}
 
 
@@ -209,9 +214,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("checkout", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument('--legacy-w3c-xml', action='store_true', help='explicit recovery for old XML fixtures, not current-spec conformance')
     args = parser.parse_args(argv)
     try:
-        report = build_report(args.checkout)
+        report = build_report(args.checkout, **({'legacy_w3c': True} if args.legacy_w3c_xml else {}))
     except ValueError as exc:
         parser.error(str(exc))
     rendered = json.dumps(report, indent=2, ensure_ascii=False) + "\n"

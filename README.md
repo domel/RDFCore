@@ -458,6 +458,41 @@ lexical-form expectations) and unsupported datatype/inconsistency reasoning
 cases. These remain visible failures or unsupported results, not successful
 conformance checks. The RDFLib-compatible XMLLiteral behavior has separate
 differential tests; expected W3C fixtures are not rewritten to hide the gap.
+
+For archived XML fixtures only, opt into `legacy_w3c=True`:
+
+```python
+archived_xml = '''<rdf:RDF
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  xmlns:e="urn:e:">
+  <rdf:Description rdf:about="urn:s">
+    <e:p rdf:annotation="urn:reifier">value</e:p>
+  </rdf:Description>
+</rdf:RDF>'''
+graph = Graph().parse(data=archived_xml, format="xml12", legacy_w3c=True)
+```
+
+This recovery mode assumes RDF 1.2 when no version is announced in `xml12`
+and expands empty elements inside XML literals (`<br/>` becomes `<br></br>`).
+Explicit version declarations still take precedence. In `xml`, only the
+XML-literal expansion applies. Default parsing and serializers are unchanged;
+this option is not a general XML canonicalization implementation. DTD rejection
+and other validation remain active.
+
+To report this mode separately, run:
+
+```bash
+python -m tests.w3c.official /path/to/rdf-tests --legacy-w3c-xml --output legacy-results.json
+```
+
+The JSON records `execution_profile="legacy-w3c-xml"` and the parser option.
+On snapshot `369a90d`, this resolves 21 of the 23 default-profile failures.
+Two XML 1.2 failures remain: `rdf12-xml-tt-01` has an empty expected file,
+and `rdf12-xml-dir-02` expects a literal without the input's direction.
+Recovery does not discard either triple terms or direction to match those
+expectations. Results in this mode are archived-fixture compatibility evidence,
+not current RDF 1.2 conformance. The 79 unsupported reasoning cases remain.
+
 The separate **W3C conformance** workflow runs weekly and can be started
 manually. It fetches the pinned snapshot and uploads a JSON artifact listing
 passed, failed, unsupported and operationally erroneous tests. It is expected

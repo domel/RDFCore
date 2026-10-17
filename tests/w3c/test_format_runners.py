@@ -1,6 +1,31 @@
 from pathlib import Path
+import pytest
 
 from tests.w3c.runner import run_manifest
+from tests.w3c.runner import _expect_failure
+
+
+def test_canonical_result_is_not_recanonicalized(tmp_path):
+    from tests.w3c.runner import _expect_c14n
+    source = tmp_path / 'input.nt'
+    expected = tmp_path / 'expected.nt'
+    source.write_text('<urn:s> <urn:p> "x" .\n')
+    expected.write_text('<urn:s>   <urn:p> "x" .\n')
+    assert not _expect_c14n(source, expected, 'nt12')
+
+
+def test_missing_negative_fixture_is_an_operational_error(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        _expect_failure(tmp_path / 'missing.nt', 'nt')
+
+
+def test_rdf12_trig_eval_reads_nquads_result(tmp_path):
+    from tests.w3c.runner import _expect_eval
+    source = tmp_path / 'input.trig'
+    target = tmp_path / 'expected.nq'
+    source.write_text('<urn:g> { <urn:s> <urn:p> "x" . }')
+    target.write_text('<urn:s> <urn:p> "x" <urn:g> .\n')
+    assert _expect_eval(source, target, 'trig12', '.nq')
 
 
 def test_runner_dispatches_turtle_and_trig_manifest_classes(tmp_path: Path):

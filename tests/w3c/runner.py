@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from urllib.parse import urlparse
+from xml.sax import SAXParseException
 
 from rdfcore import Dataset, Graph, RDF, URIRef
 from rdfcore.compare import isomorphic
@@ -18,7 +19,7 @@ MF = "http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#"
 RDFT = "http://www.w3.org/ns/rdftest#"
 
 
-def run_manifest(manifest: str | Path, format: str, mode: str = "auto") -> dict[str, bool]:
+def run_manifest(manifest: str | Path, format: str, mode: str = "auto", *, key_by_id: bool = False) -> dict[str, bool]:
     manifest = Path(manifest).resolve()
     graph = Graph().parse(manifest, publicID=manifest.as_uri(), format="turtle")
     entries = _manifest_entries(graph, manifest.parent)
@@ -29,7 +30,7 @@ def run_manifest(manifest: str | Path, format: str, mode: str = "auto") -> dict[
         if action is None:
             continue
         action_path = _uri_path(action, source_base)
-        name = str(source_graph.value(entry, URIRef(MF + "name"), default=entry))
+        name = str(entry) if key_by_id else str(source_graph.value(entry, URIRef(MF + "name"), default=entry))
         type_names = tuple(str(test_type) for test_type in test_types)
         if any("NegativeSyntax" in name for name in type_names):
             results[name] = _expect_failure(action_path, format)
@@ -57,9 +58,11 @@ def _manifest_entries(graph, base):
             current = graph.value(current, RDF.rest)
     yield from list_entries(graph.value(manifest, URIRef(MF + "entries")))
     for include in graph.objects(manifest, URIRef(MF + "include")):
-        included = _uri_path(include, base)
-        included_graph = Graph().parse(included, publicID=included.as_uri(), format="turtle")
-        yield from _manifest_entries(included_graph, included.parent)
+        children = graph.items(include) if (include, RDF.first, None) in graph else (include,)
+        for child in children:
+            included = _uri_path(child, base)
+            included_graph = Graph().parse(included, publicID=included.as_uri(), format="turtle")
+            yield from _manifest_entries(included_graph, included.parent)
 
 
 def _uri_path(value, base):
@@ -82,17 +85,24 @@ def _expect_success(path, format):
 def _expect_failure(path, format):
     try:
         _parse(path, format)
-    except Exception:
+    except (BadSyntax, ParserError, ValueError, AssertionError, IndexError, SAXParseException):
         return True
+    except TypeError as error:
+        if str(error) in ('subject must be a URIRef or BNode', 'predicate must be a URIRef',
+                          'object must be a URIRef, BNode, or Literal'):
+            return True
+        raise
     return False
 
 
 def _expect_eval(path, expected, format, result_suffix):
     try:
         actual = _parse(path, format)
-        result_format = format if format.endswith("12") else {
-            ".nt": "nt", ".nq": "nquads", ".ttl": "turtle", ".trig": "trig",
+        result_format = {
+            ".nt": "nt", ".nq": "nquads", ".ttl": "turtle", ".trig": "trig", '.rdf': 'xml',
         }.get(result_suffix, format)
+        if format.endswith('12'):
+            result_format = {'nt': 'nt12', 'nquads': 'nq12', 'turtle': 'turtle12', 'trig': 'trig12', 'xml': 'xml12'}.get(result_format, result_format)
         target = _parse(expected, result_format)
         return isomorphic(actual, target)
     except Exception:
@@ -102,13 +112,9 @@ def _expect_eval(path, expected, format, result_suffix):
 def _expect_c14n(path, expected, format):
     try:
         actual = _parse(path, format)
-        result_suffix = Path(expected).suffix.lower()
-        result_format = format if format.endswith("12") else {
-            ".nt": "nt", ".nq": "nquads", ".ttl": "turtle", ".trig": "trig",
-            ".nt12": "nt12", ".nq12": "nq12", ".ttl12": "turtle12", ".trig12": "trig12",
-        }.get(result_suffix, format)
-        target = _parse(expected, result_format)
-        return _canonical(actual, format) == _canonical(target, format)
+        # The expected fixture is already canonical. Parsing and serializing it
+        # would hide precisely the lexical errors this test is meant to detect.
+        return _canonical(actual, format).encode('utf-8') == Path(expected).read_bytes()
     except Exception:
         return False
 
@@ -127,13 +133,13 @@ def _canonical(value, format):
 def _parse(path, format):
     public_id = _canonical_public_id(path)
     if format in ("nquads", "nq12"):
-        return Dataset().parse(path, publicID=public_id, format=format)
-    if format in ("nt", "nt12"):
-        return Graph().parse(path, publicID=public_id, format=format)
+        return Dataset().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True)
+    if format in ("nt", "nt12", 'xml', 'xml12'):
+        return Graph().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True)
     if format in ("turtle", "turtle12"):
-        return Graph().parse(path, publicID=public_id, format=format)
+        return Graph().parse(path, publicID=public_id, format=format, strict=True)
     if format in ("trig", "trig12"):
-        return Dataset().parse(path, publicID=public_id, format=format)
+        return Dataset().parse(path, publicID=public_id, format=format, strict=True)
     raise ValueError(f"S17 runner does not support format {format!r}")
 
 

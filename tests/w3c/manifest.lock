@@ -7,6 +7,14 @@ manifests = [
   "rdf/rdf11/rdf-n-quads/manifest.ttl",
   "rdf/rdf11/rdf-turtle/manifest.ttl",
   "rdf/rdf11/rdf-trig/manifest.ttl",
+  "rdf/rdf11/rdf-xml/manifest.ttl",
+  "rdf/rdf11/rdf-mt/manifest.ttl",
+  "rdf/rdf12/rdf-n-triples/manifest.ttl",
+  "rdf/rdf12/rdf-n-quads/manifest.ttl",
+  "rdf/rdf12/rdf-turtle/manifest.ttl",
+  "rdf/rdf12/rdf-trig/manifest.ttl",
+  "rdf/rdf12/rdf-xml/manifest.ttl",
+  "rdf/rdf12/rdf-semantics/manifest.ttl",
 ]
 
 excluded = []

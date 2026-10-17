@@ -257,6 +257,13 @@ the default pretty serializers.
 
 Convert N-Triples and N-Quads through a streaming pipeline:
 
+`convert()` also accepts `nt12` and `nq12`, in either direction, as well as
+the registered RDF 1.1 line-format aliases. RDF 1.2 output announces version
+1.2 unless `canonical=True`. Writing RDF 1.2 terms to a 1.1 target raises
+an error, including with a custom sink; graph-selection policies do not
+disable that check. Conversion does not construct an intermediate graph.
+An error may leave a partial output stream, so discard it after failure.
+
 ```python
 from rdfcore import convert
 

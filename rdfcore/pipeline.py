@@ -2,8 +2,59 @@
 
 from __future__ import annotations
 
-from .io import BoundedWriteStream, open_input, open_output
+from contextlib import ExitStack
+
+from .io import open_input, open_output
 from .streaming import NQStreamingWriter, NTStreamingWriter, parse_stream
+from .rdf_version import required_rdf_version
+
+
+class _RDF12Writer:
+    """Emit individual lines using the existing RDF 1.2 term formatter."""
+
+    def __init__(self, stream, *, dataset, canonical=False):
+        self.stream, self.dataset, self.canonical = stream, dataset, canonical
+        if not canonical:
+            self._write('VERSION "1.2"\n')
+
+    def _write(self, text):
+        try:
+            self.stream.write(text)
+        except TypeError:
+            self.stream.write(text.encode('utf-8'))
+
+    def add(self, statement):
+        from .plugins.serializers.nt12 import _term
+        from .dataset import DATASET_DEFAULT_GRAPH_ID
+        parts = [_term(term, canonical=self.canonical) for term in statement[:3]]
+        if self.dataset and len(statement) == 4 and statement[3] not in (None, DATASET_DEFAULT_GRAPH_ID):
+            parts.append(_term(statement[3], canonical=self.canonical))
+        self._write(' '.join(parts) + ' .\n')
+
+    def close(self):
+        pass
+
+
+_FORMATS = {
+    **{alias: ('graph', '1.1') for alias in ('nt', 'nt11', 'ntriples', 'application/n-triples')},
+    **{alias: ('dataset', '1.1') for alias in ('nquads', 'application/n-quads')},
+    'nt12': ('graph', '1.2'), 'nq12': ('dataset', '1.2'),
+}
+
+
+def _close_stream(stream, owned, *, output=False):
+    import bz2
+    import gzip
+    import lzma
+    raw = getattr(stream, 'fileobj', getattr(stream, '_fp', getattr(stream, 'stream', None)))
+    try:
+        if owned or isinstance(stream, (gzip.GzipFile, bz2.BZ2File, lzma.LZMAFile)):
+            stream.close()
+        elif output:
+            stream.flush()
+    finally:
+        if owned and raw is not None and raw is not stream:
+            raw.close()
 
 
 def _scan(source, format, *, operation, **kwargs):
@@ -49,64 +100,60 @@ def convert(source, destination=None, input_format=None, output_format=None, *, 
         destination, input_format, output_format = None, destination, input_format
     if not isinstance(input_format, str) or not isinstance(output_format, str):
         raise TypeError("input_format and output_format must be strings")
-    supported = {("nt", "nt"), ("nt", "nquads"), ("nquads", "nquads"), ("nquads", "nt")}
-    if (input_format, output_format) not in supported:
+    if input_format not in _FORMATS or output_format not in _FORMATS:
         raise NotImplementedError("S36 streaming conversion supports nt/nquads paths only")
     buffer_size = kwargs.pop("buffer_size", 64 * 1024)
     input_compression = kwargs.pop("input_compression", None)
     output_compression = kwargs.pop("output_compression", None)
-    output_owned = False
-    destination_stream = None
-    if sink is None:
-        if destination is None:
-            raise ValueError("convert() requires destination or sink")
-        destination_stream, output_owned = open_output(
-            destination, compression=output_compression, buffer_size=buffer_size
-        )
-        if output_format == "nt":
-            sink = NTStreamingWriter(destination_stream, canonical=kwargs.pop("canonical", False))
-        elif output_format == "nquads":
-            sink = NQStreamingWriter(destination_stream, canonical=kwargs.pop("canonical", False))
-    input_stream, input_owned = open_input(
-        source, compression=input_compression, buffer_size=buffer_size
-    )
-    try:
-        return _convert_stream(input_stream, input_format, output_format, sink, kwargs)
-    finally:
-        if hasattr(sink, "close"):
-            sink.close()
-        if input_owned or input_stream.__class__.__name__ in ("GzipFile", "BZ2File", "LZMAFile"):
-            input_stream.close()
-        if input_owned:
-            raw_input = getattr(input_stream, "fileobj", getattr(input_stream, "stream", None))
-            if raw_input is not None and raw_input is not input_stream:
-                raw_input.close()
-        if destination_stream is not None:
-            if output_owned or not isinstance(destination_stream, BoundedWriteStream):
-                destination_stream.close()
+    with ExitStack() as cleanup:
+        if sink is None:
+            if destination is None:
+                raise ValueError("convert() requires destination or sink")
+            destination_stream, output_owned = open_output(
+                destination, compression=output_compression, buffer_size=buffer_size)
+            cleanup.callback(_close_stream, destination_stream, output_owned, output=True)
+            family, version = _FORMATS[output_format]
+            canonical = kwargs.pop('canonical', False)
+            if version == '1.2':
+                sink = _RDF12Writer(destination_stream, dataset=family == 'dataset', canonical=canonical)
             else:
-                destination_stream.flush()
-        if destination_stream is not None and output_owned:
-            raw_output = getattr(destination_stream, "fileobj", getattr(destination_stream, "stream", None))
-            if raw_output is not None and raw_output is not destination_stream:
-                raw_output.close()
+                factory = NTStreamingWriter if family == 'graph' else NQStreamingWriter
+                sink = factory(destination_stream, canonical=canonical)
+        try:
+            input_stream, input_owned = open_input(source, compression=input_compression, buffer_size=buffer_size)
+        except BaseException:
+            if hasattr(sink, 'close'):
+                sink.close()
+            raise
+        cleanup.callback(_close_stream, input_stream, input_owned)
+        if hasattr(sink, 'close'):
+            cleanup.callback(sink.close)
+        return _convert_stream(input_stream, input_format, output_format, sink, kwargs)
 
 
 def _convert_stream(source, input_format, output_format, sink, kwargs):
-    if input_format == "nquads" and output_format == "nt":
+    project = _FORMATS[input_format][0] == 'dataset' and _FORMATS[output_format][0] == 'graph'
+    version = _FORMATS[output_format][1]
+    policy = None
+    if project:
         policy = kwargs.pop("dataset_policy", "strict")
         if policy not in ("strict", "default", "union"):
             raise ValueError("dataset_policy must be 'strict', 'default', or 'union'")
 
-        class GraphFormatSink:
-            def add(self, statement):
+    class GraphFormatSink:
+        def add(self, statement):
+            required = required_rdf_version((statement,))
+            if version == '1.1' and required != '1.1':
+                raise ValueError(f'RDF {required} data cannot be converted to RDF 1.1')
+            if project:
                 if len(statement) == 4:
                     if statement[3] is not None and policy == "strict":
                         raise ValueError("named graph cannot be written to an N-Triples stream")
                     if statement[3] is not None and policy == "default":
                         return
                     statement = statement[:3]
-                sink.add(statement)
+            sink.add(statement)
 
-        return parse_stream(source, input_format, GraphFormatSink(), **kwargs)
-    return parse_stream(source, input_format, sink, **kwargs)
+    adapter = GraphFormatSink()
+    parse_stream(source, input_format, adapter, **kwargs)
+    return adapter if project else sink

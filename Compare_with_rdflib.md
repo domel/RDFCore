@@ -85,8 +85,8 @@ not evidence of complete term API parity.
 | Feature | RDFLib | RDFCore |
 |---|---:|---:|
 | `URIRef.n3()` | ✅ | ✅ |
-| `URIRef.toPython()` | ✅ | ⚠️ |
-| `URIRef.defrag()` | ✅ | ❌ |
+| `URIRef.toPython()` | ✅ | ✅ differential tests |
+| `URIRef.defrag()` | ✅ | ✅ differential tests, including return identity |
 | `BNode.n3()` | ✅ | ✅ |
 | `BNode.skolemize()` | ✅ | ✅ |
 | `URIRef.de_skolemize()` | ✅ | ✅ |

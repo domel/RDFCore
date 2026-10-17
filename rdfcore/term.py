@@ -7,7 +7,7 @@ from decimal import Decimal
 from base64 import b64decode
 from binascii import Error as BinasciiError, unhexlify
 import json
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urldefrag, urljoin, urlparse
 from uuid import uuid4
 
 NORMALIZE_LITERALS = True
@@ -41,6 +41,14 @@ class URIRef(IdentifiedNode):
         if base is not None:
             value = urljoin(base, value)
         return str.__new__(cls, value)
+
+    def toPython(self) -> str:
+        return str(self)
+
+    def defrag(self):
+        if "#" in self:
+            return URIRef(urldefrag(self)[0])
+        return self
 
     def n3(self, namespace_manager=None) -> str:
         if namespace_manager is not None:

@@ -162,6 +162,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `parse_stream()` | Push/iterator parser |
 | Iterator resource cleanup | Cancellable queue delivery; bounded worker join on early close; caller-owned streams remain open |
 | Zero-thread line iterator | Benchmark prototype only; not enabled in the public API |
+| W3C reporting | Pinned fixtures, per-test diagnostics, syntax/entailment separation; full RDF 1.2 conformance not established |
 | `convert()` | Streaming NT/NQ 1.1/1.2 conversion; explicit graph policies; rejects unsupported downgrade |
 | `count()` | Streaming count |
 | `validate()` | Streaming validation |

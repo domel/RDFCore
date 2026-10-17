@@ -31,6 +31,8 @@ def test_duplicate_names_are_executed_independently(tmp_path):
     report = report_suite(path, "nt")
     assert report["counts"] == {"passed": 1, "failed": 1, "unsupported": 0, "error": 0}
     assert len({test['id'] for test in report['tests']}) == 2
+    failure, = [test for test in report['tests'] if test['status'] == 'failed']
+    assert 'ParserError' in failure['reason']
 
 
 def test_include_lists_and_direct_includes_are_inventoried(tmp_path):
@@ -59,3 +61,46 @@ def test_include_cycle_is_reported_as_error(tmp_path):
     report = report_suite(path, "nt")
     assert report["suite_error"]
     assert report["counts"]["passed"] == 0
+
+
+def test_missing_action_file_is_error_not_negative_success(tmp_path):
+    path = manifest(tmp_path, '<#n>', '<#n> a rt:TestNTriplesNegativeSyntax ; mf:action <absent.nt> .')
+    report = report_suite(path, 'nt')
+    assert report['counts'] == {'passed': 0, 'failed': 0, 'unsupported': 0, 'error': 1}
+
+
+def test_missing_manifest_is_suite_error(tmp_path):
+    report = report_suite(tmp_path / 'absent.ttl', 'nt')
+    assert report['suite_error']
+    assert not report['total']
+
+
+def test_staged_changes_are_in_report_fingerprint(tmp_path, monkeypatch):
+    from tests.w3c import official
+    import hashlib
+    import subprocess
+    def git(*args):
+        return subprocess.check_output(['git', '-C', str(tmp_path), *args])
+    git('init', '-q')
+    git('-c', 'user.name=domel', '-c', 'user.email=ddooss@wp.pl', 'commit', '--allow-empty', '-qm', 'Baseline')
+    (tmp_path / 'changed.py').write_text('changed = True\n')
+    git('add', 'changed.py')
+    monkeypatch.setattr(official, 'ROOT', tmp_path)
+    monkeypatch.setattr(official, 'verify_checkout', lambda path: 'a' * 40)
+    monkeypatch.setattr(official, 'report_suite', lambda *args: {'counts': {}, 'tests': []})
+    report = official.build_report(tmp_path)
+    expected = hashlib.sha256(git('diff', '--binary', 'HEAD')).hexdigest()
+    assert report['tracked_diff_sha256'] == expected
+    assert expected != hashlib.sha256(b'').hexdigest()
+    assert len(report['suites']) == 12
+    assert all(suite['reference_document'].startswith('https://www.w3.org/TR/') for suite in report['suites'])
+    assert {suite['category'] for suite in report['suites']} == {'syntax', 'entailment'}
+
+
+def test_invalid_pin_has_explicit_error(tmp_path, monkeypatch):
+    from tests.w3c import official
+    lock = tmp_path / 'manifest.lock'
+    lock.write_text('commit = "not-a-revision"\n')
+    monkeypatch.setattr(official, 'LOCK', lock)
+    with pytest.raises(ValueError, match='hexadecimal'):
+        official.verify_checkout(tmp_path)

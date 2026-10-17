@@ -4,6 +4,14 @@ from rdfcore import Graph, URIRef
 from tests.w3c.runner import run_manifest
 
 
+def test_official_public_id_does_not_depend_on_checkout_name(tmp_path):
+    from tests.w3c.runner import _canonical_public_id
+    suffix = 'rdf/rdf11/rdf-xml/xmlbase/test014.rdf'
+    expected = 'https://w3c.github.io/rdf-tests/' + suffix
+    assert _canonical_public_id(tmp_path / 'arbitrary-clone' / suffix) == expected
+    assert _canonical_public_id(tmp_path / 'rdf-tests' / suffix) == expected
+
+
 def test_runner_dispatches_local_positive_and_negative_ntriples(tmp_path: Path):
     positive = tmp_path / "positive.nt"
     negative = tmp_path / "negative.nt"

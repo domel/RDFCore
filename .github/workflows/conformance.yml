@@ -27,6 +27,26 @@ jobs:
           path: .w3c/rdf-tests
       - name: Run all accounted suites
         run: python -m tests.w3c.official .w3c/rdf-tests --output conformance-results.json
+      - name: Summarize conformance results
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('conformance-results.json')
+          if path.exists():
+              report = json.loads(path.read_text())
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+                  output.write('Snapshot: `' + report['snapshot'] + '`\n\n')
+                  output.write('| Version | Format | Passed | Failed | Unsupported | Error |\n')
+                  output.write('| --- | --- | ---: | ---: | ---: | ---: |\n')
+                  for suite in report['suites']:
+                      counts = suite['counts']
+                      output.write('| ' + suite['rdf_version'] + ' | ' + suite['format'] + ' | ' +
+                          ' | '.join(str(counts[key]) for key in ('passed', 'failed', 'unsupported', 'error')) + ' |\n')
+                  output.write('\nSuite errors: ' + str(sum(bool(s.get('suite_error')) for s in report['suites'])) + '\n')
+                  output.write('\nPassed tests are not a complete conformance certification.\n')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:

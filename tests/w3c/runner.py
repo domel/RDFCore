@@ -19,7 +19,8 @@ MF = "http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#"
 RDFT = "http://www.w3.org/ns/rdftest#"
 
 
-def run_manifest(manifest: str | Path, format: str, mode: str = "auto", *, key_by_id: bool = False) -> dict[str, bool]:
+def run_manifest(manifest: str | Path, format: str, mode: str = "auto", *, key_by_id: bool = False,
+                 diagnostics=None) -> dict[str, bool]:
     manifest = Path(manifest).resolve()
     graph = Graph().parse(manifest, publicID=manifest.as_uri(), format="turtle")
     entries = _manifest_entries(graph, manifest.parent)
@@ -32,17 +33,20 @@ def run_manifest(manifest: str | Path, format: str, mode: str = "auto", *, key_b
         action_path = _uri_path(action, source_base)
         name = str(entry) if key_by_id else str(source_graph.value(entry, URIRef(MF + "name"), default=entry))
         type_names = tuple(str(test_type) for test_type in test_types)
+        detail = {}
         if any("NegativeSyntax" in name for name in type_names):
-            results[name] = _expect_failure(action_path, format)
+            results[name] = _expect_failure(action_path, format, detail)
         elif any("PositiveSyntax" in name for name in type_names):
-            results[name] = _expect_success(action_path, format)
+            results[name] = _expect_success(action_path, format, detail)
         elif any("Eval" in name for name in type_names):
             result = source_graph.value(entry, URIRef(MF + "result"))
             result_path = _uri_path(result, source_base)
-            results[name] = _expect_eval(action_path, result_path, format, result_path.suffix.lower())
+            results[name] = _expect_eval(action_path, result_path, format, result_path.suffix.lower(), detail)
         elif any("C14N" in name for name in type_names) or mode == "c14n":
             result = source_graph.value(entry, URIRef(MF + "result"))
-            results[name] = _expect_c14n(action_path, _uri_path(result, source_base), format)
+            results[name] = _expect_c14n(action_path, _uri_path(result, source_base), format, detail)
+        if diagnostics is not None:
+            diagnostics[name] = detail.get('reason', 'test expectations satisfied')
     return results
 
 
@@ -74,17 +78,19 @@ def _uri_path(value, base):
     return (base / str(value)).resolve()
 
 
-def _expect_success(path, format):
+def _expect_success(path, format, detail=None):
     try:
         _parse(path, format)
     except OSError:
         raise
-    except Exception:
+    except Exception as error:
+        if detail is not None:
+            detail['reason'] = f'{type(error).__name__}: {error}'
         return False
     return True
 
 
-def _expect_failure(path, format):
+def _expect_failure(path, format, detail=None):
     try:
         _parse(path, format)
     except (BadSyntax, ParserError, ValueError, AssertionError, IndexError, SAXParseException):
@@ -94,10 +100,12 @@ def _expect_failure(path, format):
                           'object must be a URIRef, BNode, or Literal'):
             return True
         raise
+    if detail is not None:
+        detail['reason'] = 'negative syntax was accepted'
     return False
 
 
-def _expect_eval(path, expected, format, result_suffix):
+def _expect_eval(path, expected, format, result_suffix, detail=None):
     try:
         actual = _parse(path, format)
         result_format = {
@@ -106,25 +114,35 @@ def _expect_eval(path, expected, format, result_suffix):
         if format.endswith('12'):
             result_format = {'nt': 'nt12', 'nquads': 'nq12', 'turtle': 'turtle12', 'trig': 'trig12', 'xml': 'xml12'}.get(result_format, result_format)
         target = _parse(expected, result_format)
-        return isomorphic(actual, target)
+        equivalent = isomorphic(actual, target)
+        if not equivalent and detail is not None:
+            detail['reason'] = 'parsed graph/dataset is not isomorphic to the expected result'
+        return equivalent
     except OSError:
         raise
-    except Exception:
+    except Exception as error:
+        if detail is not None:
+            detail['reason'] = f'{type(error).__name__}: {error}'
         return False
 
 
-def _expect_c14n(path, expected, format):
+def _expect_c14n(path, expected, format, detail=None):
     try:
         actual = _parse(path, format)
         # The expected fixture is already canonical. Parsing and serializing it
         # would hide precisely the lexical errors this test is meant to detect.
         # Canonical NT/NQ specifies each statement's bytes, not graph iteration
         # order. Compare whole lines without changing escapes or whitespace.
-        return sorted(_canonical(actual, format).encode('utf-8').splitlines(keepends=True)) == sorted(
+        equivalent = sorted(_canonical(actual, format).encode('utf-8').splitlines(keepends=True)) == sorted(
             Path(expected).read_bytes().splitlines(keepends=True))
+        if not equivalent and detail is not None:
+            detail['reason'] = 'canonical statement bytes differ from the original expected fixture'
+        return equivalent
     except OSError:
         raise
-    except Exception:
+    except Exception as error:
+        if detail is not None:
+            detail['reason'] = f'{type(error).__name__}: {error}'
         return False
 
 
@@ -158,6 +176,9 @@ def _canonical_public_id(path):
     location = path.as_posix()
     if marker in location:
         return "https://w3c.github.io/rdf-tests/" + location.split(marker, 1)[1]
+    for index, part in enumerate(path.parts[:-1]):
+        if part == 'rdf' and path.parts[index + 1] in ('rdf11', 'rdf12'):
+            return 'https://w3c.github.io/rdf-tests/' + '/'.join(path.parts[index:])
     return path.as_uri()
 
 

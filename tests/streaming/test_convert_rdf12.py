@@ -1,4 +1,4 @@
-"""Line conversion against RDF 1.2 NT/NQ grammar, WD 2026-10-07."""
+"""Line conversion: NT WD 2026-10-07 and NQ WD 2026-10-10."""
 
 from io import BytesIO
 

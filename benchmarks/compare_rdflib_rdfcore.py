@@ -11,6 +11,8 @@ import gc
 import io
 import json
 import platform
+from functools import partial
+import statistics
 import subprocess
 import sys
 import time
@@ -71,14 +73,16 @@ def data(format, size):
     raise ValueError(format)
 
 
-def measure(label, function):
+def _measure_once(label, function):
     gc.collect()
     tracemalloc.start()
     started = time.perf_counter()
-    result = function()
-    elapsed = time.perf_counter() - started
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
+    try:
+        result = function()
+        elapsed = time.perf_counter() - started
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
     if isinstance(result, (str, bytes, bytearray)):
         result = {"type": type(result).__name__, "bytes": len(result)}
     elif isinstance(result, (int, float, bool)) or result is None:
@@ -88,24 +92,40 @@ def measure(label, function):
     return {"test": label, "seconds": elapsed, "peak_python_bytes": peak, "result": result}
 
 
+def measure(label, function, *, repeats=1, warmup=0, setup=None):
+    if repeats < 1 or warmup < 0:
+        raise ValueError('repeats must be positive and warmup nonnegative')
+    for _ in range(warmup):
+        (setup() if setup else function)()
+    runs = [_measure_once(label, setup() if setup else function) for _ in range(repeats)]
+    return {**runs[-1], 'seconds': statistics.median(run['seconds'] for run in runs),
+            'peak_python_bytes': max(run['peak_python_bytes'] for run in runs), 'runs': runs}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--statements", type=int, nargs="+", default=[1000, 10000])
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--repeats', type=int, default=1)
+    parser.add_argument('--warmup', type=int, default=0)
     args = parser.parse_args()
     if any(size <= 0 for size in args.statements):
         parser.error('--statements must be positive')
+    if args.repeats < 1 or args.warmup < 0:
+        parser.error('repeats must be positive and warmup nonnegative')
     rows = []
     for size in args.statements:
         for format in ("nq", "ttl", "trig"):
             payload = data(format, size)
-            rows.extend((format, size, item) for item in benchmarks(payload, size, format))
+            rows.extend((format, size, item) for item in benchmarks(payload, size, format,
+                        repeats=args.repeats, warmup=args.warmup))
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
     dirty = bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip())
     report = json.dumps({'python': platform.python_version(), 'platform': platform.platform(),
                          'rdfcore_revision': revision, 'worktree_dirty': dirty,
                          "rdflib": rdflib.__version__, "rdfcore": rdfcore.__version__,
-                         'measurement': 'single run; tracemalloc Python allocations, not RSS; correctness checked outside timings',
+                         'measurement': 'median seconds, maximum tracemalloc Python allocation peak, not RSS; correctness checked outside timings',
+                         'repeats': args.repeats, 'warmup': args.warmup,
                          "results": rows}, indent=2) + '\n'
     if args.output is not None:
         args.output.write_text(report, encoding='utf-8')
@@ -113,15 +133,21 @@ def main():
         print(report, end='')
 
 
-def benchmarks(payload, size, format):
+def benchmarks(payload, size, format, *, repeats=1, warmup=0):
+    run = partial(measure, repeats=repeats, warmup=warmup)
     graph_format = {"nq": "nquads", "ttl": "turtle", "trig": "trig"}[format]
     is_dataset = format in ("nq", "trig")
     rdf_graph = rdflib.Dataset() if is_dataset else RDFLibGraph()
     core_graph = rdfcore.Dataset() if is_dataset else Graph()
     rows = []
-    rows.append(measure(f"rdflib.parse.{format}", lambda: len(rdf_graph.parse(data=payload, format=graph_format))))
-    rows.append(measure(f"rdfcore.parse.{format}", lambda: len(core_graph.parse(data=payload, format=graph_format))))
-    rows.append(measure(f"rdfcore.parse.{format}.streaming", lambda: rdfcore.count(io.BytesIO(payload), graph_format)))
+    def setup_parse(module):
+        graph = module.Dataset() if is_dataset else module.Graph()
+        return lambda: len(graph.parse(data=payload, format=graph_format))
+    rows.append(run(f"rdflib.parse.{format}", None, setup=lambda: setup_parse(rdflib)))
+    rows.append(run(f"rdfcore.parse.{format}", None, setup=lambda: setup_parse(rdfcore)))
+    rows.append(run(f"rdfcore.parse.{format}.streaming", lambda: rdfcore.count(io.BytesIO(payload), graph_format)))
+    rdf_graph.parse(data=payload, format=graph_format)
+    core_graph.parse(data=payload, format=graph_format)
     assert all(row['result'] == size for row in rows)
     verify_equivalence(rdf_graph, core_graph)
     captured = []
@@ -136,9 +162,9 @@ def benchmarks(payload, size, format):
             value = graph.serialize(format=graph_format, **({'mode': 'stream'} if stream else {}))
         captured.append(value)
         return value
-    rows.append(measure(f"rdflib.serialize.{format}", lambda: serialize(rdf_graph)))
-    rows.append(measure(f"rdfcore.serialize.{format}", lambda: serialize(core_graph)))
-    rows.append(measure(f"rdfcore.serialize.{format}.stream", lambda: serialize(core_graph, True)))
+    rows.append(run(f"rdflib.serialize.{format}", lambda: serialize(rdf_graph)))
+    rows.append(run(f"rdfcore.serialize.{format}", lambda: serialize(core_graph)))
+    rows.append(run(f"rdfcore.serialize.{format}.stream", lambda: serialize(core_graph, True)))
     for value in captured:
         restored = (rdflib.Dataset() if is_dataset else RDFLibGraph()).parse(data=value, format=graph_format)
         verify_equivalence(rdf_graph, restored)
@@ -147,7 +173,7 @@ def benchmarks(payload, size, format):
     parse_stream(io.BytesIO(payload), graph_format, sink)
     verify_equivalence(core_graph, streamed)
     if format == "nq":
-        rows.append(measure(
+        rows.append(run(
             "rdfcore.external_sort.unique",
             lambda: sum(1 for _ in external_sort(
                 parse_stream(io.BytesIO(payload), "nquads"), memory_budget=4096, unique=True
@@ -168,7 +194,7 @@ def benchmarks(payload, size, format):
         finally:
             store.close()
 
-    rows.append(measure(f"rdfcore.sqlite_store.{format}.ingest", sqlite_ingest))
+    rows.append(run(f"rdfcore.sqlite_store.{format}.ingest", sqlite_ingest))
     assert sqlite_ingest(verify=True) == size
     for row in rows:
         row["statements"] = size

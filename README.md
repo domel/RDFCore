@@ -396,10 +396,18 @@ print(result["statements_per_second"])
 print(result["peak_rss_bytes"])
 ```
 
+The historical `benchmark_parse()` field `peak_rss_bytes` is an increase in
+the process high-water mark, not an isolated peak for that operation. It may
+be zero after an earlier memory-heavy operation. Streaming regression tests
+measure absolute RSS in fresh processes instead; neither measure proves a
+hard memory bound for arbitrary RDF input.
+
 Run the RDFLib comparison benchmark from the project root:
 
 ```bash
-python benchmarks/compare_rdflib_rdfcore.py --statements 1000 10000
+python benchmarks/compare_rdflib_rdfcore.py --statements 1000 10000 --repeats 3 --warmup 1
+python benchmarks/sqlite_bulk.py --statements 10000 --repeats 5 --modes transaction bulk
+python benchmarks/memory_queries.py --statements 10000 --repeats 5
 ```
 
 The benchmark covers N-Quads, Turtle, and TriG in standard, streaming, and
@@ -407,6 +415,10 @@ SQLite-backed paths where applicable. Serialization timings exclude parsing.
 Correctness checks run outside timed sections. Reports record Python,
 RDFLib, the RDFCore revision and whether the worktree was dirty. Memory
 figures from this script are traced Python allocations, not process RSS.
+Repeated runs retain individual samples and report median time. Each parse
+run uses a fresh graph prepared outside the timer. `sqlite_bulk.py` checks
+persistence on disk; `memory_queries.py` verifies eight SPO patterns in the
+default graph and two named graphs against RDFLib before timing them.
 
 ## Tests
 
@@ -435,6 +447,17 @@ python -m tests.w3c.official /path/to/rdf-tests --output conformance-results.jso
 ```
 
 The command returns a nonzero status for any failed or unsupported case.
+Reports separate syntax from entailment, record the published reference
+document alongside the older test snapshot, and include individual failure
+reasons. A published reference link does not mean the snapshot covers every
+requirement of that revision. Checkout directory names do not change the
+base IRIs assigned to official fixtures.
+
+The reviewed snapshot still has RDF/XML failures (including XMLLiteral
+lexical-form expectations) and unsupported datatype/inconsistency reasoning
+cases. These remain visible failures or unsupported results, not successful
+conformance checks. The RDFLib-compatible XMLLiteral behavior has separate
+differential tests; expected W3C fixtures are not rewritten to hide the gap.
 The separate **W3C conformance** workflow runs weekly and can be started
 manually. It fetches the pinned snapshot and uploads a JSON artifact listing
 passed, failed, unsupported and operationally erroneous tests. It is expected

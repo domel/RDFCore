@@ -33,6 +33,7 @@ Legend: ✅ supported, ⚠️ partially supported or available in a different fo
 |---|---:|---:|
 | `add`, `addN`, `remove` | ✅ | ✅ |
 | `triples` | ✅ | ✅ |
+| `graph[term]`, `graph[s:p:o]` | ✅ | ✅ differential tests for term and slice indexing; SPARQL paths unsupported |
 | `subjects`, `predicates`, `objects` | ✅ | ✅ |
 | `predicate_objects` | ✅ | ✅ |
 | `subject_predicates` | ✅ | ✅ |

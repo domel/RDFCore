@@ -7,7 +7,7 @@ from pathlib import PurePath
 from .exceptions import UniquenessError
 from .namespace import OWL, RDF, RDFS, XSD, NamespaceManager
 from .store import Memory
-from .term import BNode, Literal, TripleTerm, URIRef
+from .term import BNode, Literal, Node, TripleTerm, URIRef
 from .parser import create_input_source
 from .plugin import get as get_plugin
 from .parser import Parser
@@ -57,8 +57,27 @@ class Graph:
     def __contains__(self, triple):
         return next(self.triples(triple), None) is not None
 
-    def __getitem__(self, pattern):
-        return self.triples(pattern)
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            subject, predicate, obj = item.start, item.stop, item.step
+            if subject is None and predicate is None and obj is None:
+                return self.triples((None, None, None))
+            if subject is None and predicate is None:
+                return self.subject_predicates(obj)
+            if subject is None and obj is None:
+                return self.subject_objects(predicate)
+            if predicate is None and obj is None:
+                return self.predicate_objects(subject)
+            if subject is None:
+                return self.subjects(predicate, obj)
+            if predicate is None:
+                return self.predicates(subject, obj)
+            if obj is None:
+                return self.objects(subject, predicate)
+            return (subject, predicate, obj) in self
+        if isinstance(item, Node):
+            return self.predicate_objects(item)
+        raise TypeError('You can only index a graph by a single RDF term or a slice of RDF terms.')
 
     def subjects(self, predicate=None, object=None, unique=False):
         seen = set()

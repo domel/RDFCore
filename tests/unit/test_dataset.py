@@ -40,9 +40,9 @@ def test_dataset_deprecated_apis_warn():
         list(dataset.contexts())
 
 
-def test_conjunctive_graph_keeps_dataset_default_graph_context():
+def test_conjunctive_graph_uses_its_given_default_graph_identifier():
     with pytest.warns(DeprecationWarning):
         graph = ConjunctiveGraph(identifier=URIRef("http://example.org/conjunctive"))
     triple = (URIRef("http://e/s"), URIRef("http://e/p"), URIRef("http://e/o"))
     graph.add(triple)
-    assert list(graph.quads((None, None, None, None))) == [(*triple, DATASET_DEFAULT_GRAPH_ID)]
+    assert list(graph.quads((None, None, None, None))) == [(*triple, URIRef("http://example.org/conjunctive"))]

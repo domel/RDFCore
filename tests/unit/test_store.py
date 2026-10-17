@@ -16,4 +16,6 @@ def test_memory_store_indexes_and_contexts():
 
     store.remove(triple, context)
     assert len(store) == 0
-    assert list(store.contexts()) == []
+    # RDFLib's graph-aware Memory keeps the empty graph registered.
+    assert list(store.contexts()) == [context]
+    assert list(store.contexts(triple)) == []

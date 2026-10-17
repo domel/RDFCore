@@ -21,9 +21,9 @@ def test_sqlite_store_keeps_named_graphs_separate(tmp_path):
     triple = (URIRef("urn:s"), URIRef("urn:p"), Literal("o"))
     dataset.add((*triple, URIRef("urn:g")))
     dataset.add(triple)
-    assert set(dataset.quads()) == {(*triple, URIRef("urn:g")), (*triple, dataset.identifier)}
+    assert set(dataset.quads()) == {(*triple, URIRef("urn:g")), (*triple, dataset.default_graph.identifier)}
     dataset.remove_graph(URIRef("urn:g"))
-    assert list(dataset.quads()) == [(*triple, dataset.identifier)]
+    assert list(dataset.quads()) == [(*triple, dataset.default_graph.identifier)]
     dataset.close()
 
 

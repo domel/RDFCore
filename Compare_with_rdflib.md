@@ -68,7 +68,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `graph` | ✅ | ✅ |
 | `default_graph`, `default_context` | ✅ | ✅ |
 | `remove_graph` | ✅ | ✅ |
-| `remove_context` | ✅ | ❌ as a `Dataset` method |
+| `remove_context(context)` | ✅ | ✅ `Dataset` and `ConjunctiveGraph`; RDFLib 7.6.0 differential tests, return `None`, retain empty graphs |
 | `get_graph`, `get_context` | ✅ | ✅ |
 | `add_graph` | ✅ | ✅ |
 | `context_id` | ✅ | ✅ differential tests for resolution, empty identifiers, and invalid URI arguments |
@@ -146,10 +146,11 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `remove` | ✅ | ✅ | ✅ |
 | `triples` | ✅ | ✅ | ✅ |
 | `contexts` | ✅ | ✅ | ✅ |
-| `remove_context` | ✅ | ✅ | ✅ |
+| `remove_context` store extension | ❌ (graph API uses `store.remove`) | ✅ removes graph registration | ✅ removes graph registration |
 | SPO index | ✅ | ✅ | ✅ |
 | POS/OSP indexes | Store-dependent | In-memory | ✅ |
 | Persistence across restarts | Store-dependent | ❌ | ✅ |
+| Empty registered contexts after triple removal | ✅ | ✅ | ✅ including reopen |
 | No full Python materialization | Store-dependent | ❌ | ✅ |
 
 ## RDFCore Extensions

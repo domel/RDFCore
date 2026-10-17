@@ -6,12 +6,37 @@ from collections import defaultdict
 from contextlib import contextmanager
 import sqlite3
 from .codec import encode, decode, decode_legacy
+from .term import Node
+
+_UNMATCHED_CONTEXT = object()
+
+
+def _check_removed_context(context):
+    # RDFLib checks its set of registered contexts after removing triples.
+    # Even an unhashable graph-like selector can therefore remove data before
+    # raising TypeError. Set membership also preserves Python 3.14's message.
+    return context in set()
+
+
+def _context_identifier(context):
+    if context is None:
+        return None
+    try:
+        identifier = context.identifier
+        return identifier if isinstance(identifier, str) else _UNMATCHED_CONTEXT
+    except AttributeError:
+        if isinstance(context, str):
+            return context
+        raise RuntimeError('Cannot use that type of object as a Graph context') from None
 
 class Store:
     context_aware = False
     formula_aware = False
     transaction_aware = False
     graph_aware = False
+
+    def _register_context(self, context):
+        return None
 
     def open(self, configuration=None, create=False):
         return self
@@ -39,12 +64,14 @@ class Memory(Store):
     def __init__(self, configuration=None):
         self._triples: set[tuple] = set()
         self._contexts: dict[object, set[tuple]] = defaultdict(set)
+        self._known_contexts = {}
         self._sp = defaultdict(set)
         self._po = defaultdict(set)
         self._os = defaultdict(set)
 
     def add(self, triple, context=None, quoted=False):
         subject, predicate, obj = triple
+        self._register_context(context)
         if triple in self._triples:
             self._contexts[context].add(triple)
             return triple
@@ -56,18 +83,26 @@ class Memory(Store):
         return triple
 
     def remove(self, triple, context=None):
+        original_context = context
+        context = _context_identifier(context)
         subject, predicate, obj = triple
         if subject is None or predicate is None or obj is None:
             matches = list(self.triples((subject, predicate, obj), context))
             for item in matches:
                 self.remove(item[0], context)
+            if triple == (None, None, None):
+                _check_removed_context(original_context)
             return
         if context is not None:
+            if triple not in self._contexts.get(context, ()):
+                return
             self._contexts[context].discard(triple)
             if not self._contexts[context]:
                 self._contexts.pop(context, None)
-            if any(triple in values for values in self._contexts.values()):
+            if any(key is not None and triple in values for key, values in self._contexts.items()):
                 return
+            if None in self._contexts:
+                self._contexts[None].discard(triple)
         else:
             for values in self._contexts.values():
                 values.discard(triple)
@@ -100,9 +135,13 @@ class Memory(Store):
                 yield triple, (context,) if context is not None else ()
 
     def contexts(self, triple=None):
-        for context, triples in self._contexts.items():
-            if context is not None and triples and (triple is None or triple in triples):
+        for context in self._known_contexts:
+            if triple is None or triple == (None, None, None) or triple in self._contexts.get(context, ()):
                 yield context
+
+    def _register_context(self, context):
+        if context is not None:
+            self._known_contexts[context] = None
 
     def __len__(self, context=None):
         return len(self._triples if context is None else self._contexts.get(context, ()))
@@ -110,6 +149,7 @@ class Memory(Store):
     def remove_context(self, context):
         self.remove((None, None, None), context)
         self._contexts.pop(context, None)
+        self._known_contexts.pop(context, None)
 
 
 class SQLiteStore(Store):
@@ -155,6 +195,8 @@ class SQLiteStore(Store):
             except Exception:
                 self._connection.close()
                 raise
+        self._connection.execute('CREATE TABLE IF NOT EXISTS graph_contexts (context BLOB NOT NULL PRIMARY KEY)')
+        self._connection.execute('INSERT OR IGNORE INTO graph_contexts SELECT DISTINCT context FROM triples')
         self._connection.commit()
 
     @staticmethod
@@ -198,24 +240,52 @@ class SQLiteStore(Store):
     def add(self, triple, context=None, quoted=False):
         values = tuple(self._encode(item) for item in (*triple, context))
         self._connection.execute("INSERT OR IGNORE INTO triples VALUES (?, ?, ?, ?)", values)
+        self._register_context(context, commit=False)
         self._commit_if_needed()
         return triple
 
+    def _register_context(self, context, *, commit=True):
+        if context is not None:
+            self._connection.execute('INSERT OR IGNORE INTO graph_contexts VALUES (?)', (self._encode(context),))
+            if commit:
+                self._commit_if_needed()
+
     def remove(self, triple, context=None):
+        original_context = context
+        context = _context_identifier(context)
         pattern = tuple(triple)
         if len(pattern) != 3:
             raise ValueError("triple pattern must contain three elements")
+        if context is not None and not isinstance(context, Node):
+            if pattern == (None, None, None):
+                _check_removed_context(original_context)
+            return
         clauses, values = [], []
         for column, value in zip(("s", "p", "o"), pattern):
             if value is not None:
                 clauses.append(f"{column} = ?")
                 values.append(self._encode(value))
         if context is not None:
+            # A None-context row represents the union-only copy, not another
+            # asserted graph. Remove it when the selected graph was the last
+            # asserted occurrence. Keep unrelated union-only rows unchanged.
+            selected = self._encode(context)
+            none = self._encode(None)
+            match = ' AND '.join(clauses) or '1'
+            same_selected = 'selected.s=triples.s AND selected.p=triples.p AND selected.o=triples.o'
+            same_other = 'other.s=triples.s AND other.p=triples.p AND other.o=triples.o'
+            self._connection.execute(
+                f'DELETE FROM triples WHERE context=? AND ({match}) '
+                f'AND EXISTS (SELECT 1 FROM triples AS selected WHERE {same_selected} AND selected.context=?) '
+                f'AND NOT EXISTS (SELECT 1 FROM triples AS other WHERE {same_other} AND other.context NOT IN (?,?))',
+                [none, *values, selected, none, selected])
             clauses.append("context = ?")
             values.append(self._encode(context))
         where = " AND ".join(clauses) or "1"
         self._connection.execute(f"DELETE FROM triples WHERE {where}", values)
         self._commit_if_needed()
+        if pattern == (None, None, None):
+            _check_removed_context(original_context)
 
     def triples(self, triple_pattern, context=None):
         if len(triple_pattern) != 3:
@@ -237,8 +307,8 @@ class SQLiteStore(Store):
             yield decoded, (self._decode(row[3]),) if context is not None else ()
 
     def contexts(self, triple=None):
-        if triple is None:
-            cursor = self._connection.execute("SELECT DISTINCT context FROM triples")
+        if triple is None or triple == (None, None, None):
+            cursor = self._connection.execute("SELECT context FROM graph_contexts")
         else:
             encoded = [self._encode(value) for value in triple]
             cursor = self._connection.execute(
@@ -259,6 +329,7 @@ class SQLiteStore(Store):
 
     def remove_context(self, context):
         self._connection.execute("DELETE FROM triples WHERE context = ?", (self._encode(context),))
+        self._connection.execute("DELETE FROM graph_contexts WHERE context = ?", (self._encode(context),))
         self._commit_if_needed()
 
     def close(self, commit_pending_transaction=False):

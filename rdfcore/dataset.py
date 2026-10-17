@@ -12,11 +12,11 @@ DATASET_DEFAULT_GRAPH_ID = URIRef("urn:x-rdflib:default")
 
 class Dataset(Graph):
     def __init__(self, store="default", default_union=False, default_graph_base=None):
-        super().__init__(store=store, identifier=DATASET_DEFAULT_GRAPH_ID, base=default_graph_base)
+        super().__init__(store=store, base=default_graph_base)
         self.default_union = default_union
         self.default_graph = Graph(store=self.store, identifier=DATASET_DEFAULT_GRAPH_ID,
                                    namespace_manager=self.namespace_manager, base=default_graph_base)
-        self._graphs = {DATASET_DEFAULT_GRAPH_ID: self}
+        self._graphs = {DATASET_DEFAULT_GRAPH_ID: self.default_graph}
 
     def graph(self, identifier=None, base=None):
         source_graph = identifier if isinstance(identifier, Graph) and not isinstance(identifier, Dataset) else None
@@ -26,7 +26,10 @@ class Dataset(Graph):
             identifier = URIRef(identifier)
         if not isinstance(identifier, (URIRef, BNode)):
             raise TypeError("graph identifier must be a URIRef or BNode")
-        if identifier == DATASET_DEFAULT_GRAPH_ID:
+        register = getattr(self.store, '_register_context', None)
+        if identifier == self.default_graph.identifier:
+            if register is not None:
+                register(identifier)
             return self.default_graph
         graph = self._graphs.get(identifier)
         if graph is None:
@@ -34,6 +37,8 @@ class Dataset(Graph):
             self._graphs[identifier] = graph
         else:
             graph.base = base
+        if register is not None:
+            register(identifier)
         if source_graph is not None:
             for triple in source_graph:
                 graph.add(triple)
@@ -70,13 +75,13 @@ class Dataset(Graph):
         triple = triple_or_quad
         if len(triple) == 4:
             subject, predicate, obj, graph = triple
+            self._assert_triple((subject, predicate, obj))
             if graph is None:
-                self._assert_triple((subject, predicate, obj))
                 self.store.add((subject, predicate, obj), None)
             else:
                 self.graph(getattr(graph, "identifier", graph)).add((subject, predicate, obj))
         else:
-            super().add(triple)
+            self.default_graph.add(triple)
         return self
 
     def addN(self, quads):
@@ -93,10 +98,10 @@ class Dataset(Graph):
         selected = context or selected
         selected = getattr(selected, 'identifier', selected)
         if self.default_union:
-            if selected == DATASET_DEFAULT_GRAPH_ID:
+            if selected == self.default_graph.identifier:
                 selected = None
         elif selected is None:
-            selected = DATASET_DEFAULT_GRAPH_ID
+            selected = self.default_graph.identifier
         for triple, _ in self.store.triples(tuple(pattern), selected):
             yield triple
 
@@ -107,7 +112,7 @@ class Dataset(Graph):
         return self.quads()
 
     def _triples_in_context(self, pattern):
-        for triple, _ in self.store.triples(pattern, DATASET_DEFAULT_GRAPH_ID):
+        for triple, _ in self.store.triples(pattern, self.default_graph.identifier):
             yield triple
 
     def serialize(self, destination=None, format="trig", base=None, encoding=None, **args):
@@ -137,6 +142,8 @@ class Dataset(Graph):
                 continue
             seen.add(context)
             yield self.graph(context)
+        if self.default_graph.identifier not in seen:
+            yield self.default_graph
 
     def remove(self, triple_or_quad):
         pattern = triple_or_quad
@@ -155,12 +162,20 @@ class Dataset(Graph):
 
     def remove_graph(self, g):
         identifier = getattr(g, "identifier", g)
-        if identifier == DATASET_DEFAULT_GRAPH_ID:
+        if identifier == self.default_graph.identifier:
             self.default_graph.remove((None, None, None))
         else:
             self.store.remove_context(identifier)
             self._graphs.pop(identifier, None)
         return self
+
+    def remove_context(self, context) -> None:
+        """Remove a context's triples, retaining the graph, as in RDFLib.
+
+        ``None`` selects the union. Context identifiers retain their term
+        types: a plain string is not an IRI. The return value is ``None``.
+        """
+        self.store.remove((None, None, None), context)
 
     @property
     def default_context(self):
@@ -173,11 +188,20 @@ class Dataset(Graph):
 
 
 class ConjunctiveGraph(Dataset):
+    def contexts(self, triple=None):
+        for context in self.store.contexts(triple):
+            yield self.get_context(context)
+
     def __iter__(self):
         return self.triples((None, None, None))
 
     def __init__(self, store="default", identifier=None):
         warnings.warn("ConjunctiveGraph is deprecated; use Dataset", DeprecationWarning, stacklevel=2)
         super().__init__(store=store, default_union=True)
+        value = identifier or BNode()
+        self.identifier = value if isinstance(value, (URIRef, BNode)) else URIRef(value)
+        self.default_graph = Graph(store=self.store, identifier=identifier or BNode(),
+                                   namespace_manager=self.namespace_manager)
+        self._graphs = {self.default_graph.identifier: self.default_graph}
         if identifier is not None:
             self.conjunctive_identifier = identifier

@@ -80,4 +80,100 @@ def test_legacy_nested_terms_and_datatypes(tmp_path):
         restored = next(store.triples((URIRef(f'urn:s{i}'), None, None)))[0][2]
         assert restored == value
         assert hash(restored) == hash(value)
+        if isinstance(value, Literal) and value.language:
+            assert restored.language == value.language
     store.close()
+
+
+def test_language_forms_are_context_local_and_union_retains_first_spelling(tmp_path):
+    import rdfcore
+    import rdflib
+    def observe(module, store=None):
+        dataset = module.Dataset(**({'store': store} if store is not None else {}))
+        s, p = module.URIRef('urn:s'), module.URIRef('urn:p')
+        g, h = (dataset.graph(module.URIRef(name)) for name in ('urn:g', 'urn:h'))
+        g.add((s, p, module.Literal('v', lang='EN')))
+        h.add((s, p, module.Literal('v', lang='en')))
+        union = lambda: next(dataset.store.triples((None, None, None), None))[0][2].language
+        initial = next(g.objects()).language, next(h.objects()).language, union()
+        dataset.remove_graph(g)
+        surviving = union()
+        dataset.remove_graph(h)
+        h.add((s, p, module.Literal('v', lang='eN')))
+        return initial, surviving, union()
+    store = SQLiteStore(tmp_path/'contexts.sqlite')
+    try:
+        assert observe(rdfcore, store) == observe(rdflib)
+    finally:
+        store.close()
+
+
+def test_nested_language_forms_bulk_rollback_and_reopen(tmp_path):
+    path = tmp_path/'nested.sqlite'
+    store = SQLiteStore(path)
+    s, p, g = map(URIRef, ('urn:s', 'urn:p', 'urn:g'))
+    term = TripleTerm(s, p, Literal('v', lang='EN', direction='rtl'))
+    with pytest.raises(RuntimeError):
+        with store.transaction():
+            store.add_many([(s, p, term)], g)
+            raise RuntimeError('rollback')
+    assert len(store) == 0
+    assert store._connection.execute('SELECT COUNT(*) FROM lexical_forms').fetchone()[0] == 0
+    store.add_many([(s, p, term)], g)
+    store.close()
+    store = SQLiteStore(path)
+    try:
+        restored = next(store.triples((None, None, None), g))[0][2]
+        assert restored.object.language == 'EN'
+        assert restored == term
+        store.remove((None, None, None), g)
+        assert store._connection.execute('SELECT COUNT(*) FROM lexical_forms').fetchone()[0] == 0
+    finally:
+        store.close()
+
+
+def test_canonical_version_one_database_stays_readable(tmp_path):
+    from rdfcore.codec import encode
+    path = tmp_path/'v1.sqlite'
+    terms = URIRef('urn:s'), URIRef('urn:p'), Literal('v', lang='en'), URIRef('urn:g')
+    with sqlite3.connect(path) as connection:
+        connection.execute('CREATE TABLE triples (s BLOB,p BLOB,o BLOB,context BLOB,PRIMARY KEY(s,p,o,context))')
+        connection.execute('INSERT INTO triples VALUES (?,?,?,?)', tuple(encode(term) for term in terms))
+        connection.execute('PRAGMA user_version=1')
+    store = SQLiteStore(path)
+    try:
+        store.add((terms[0], terms[1], Literal('v', lang='EN')), terms[3])
+        assert len(store) == 1
+        assert next(store.triples((None, None, None), terms[3]))[0][2].language == 'en'
+    finally:
+        store.close()
+
+
+def test_language_forms_written_by_another_open_store_are_visible(tmp_path):
+    path = tmp_path/'shared.sqlite'
+    reader, writer = SQLiteStore(path), SQLiteStore(path)
+    s, p, g = map(URIRef, ('urn:s', 'urn:p', 'urn:g'))
+    try:
+        writer.add((s, p, Literal('v', lang='EN')), g)
+        assert next(reader.triples((None, None, None), g))[0][2].language == 'EN'
+        reader.remove((None, None, None), g)
+        reader.add((s, p, Literal('v', lang='eN')), g)
+        assert next(writer.triples((None, None, None), g))[0][2].language == 'eN'
+    finally:
+        reader.close()
+        writer.close()
+
+
+def test_union_deduplicates_identity_before_joining_spellings():
+    store = SQLiteStore()
+    calls = []
+    try:
+        triple = URIRef('urn:s'), URIRef('urn:p'), Literal('v', lang='EN')
+        for graph in ('urn:g', 'urn:h'):
+            store.add(triple, URIRef(graph))
+        store._connection.set_trace_callback(calls.append)
+        assert len(list(store.triples((None, None, None)))) == 1
+        query = next(call for call in calls if call.startswith('SELECT'))
+        assert 'FROM (SELECT DISTINCT' in query
+    finally:
+        store.close()

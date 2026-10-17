@@ -48,3 +48,28 @@ def test_legacy_does_not_discard_direction_to_match_old_expected_graph():
     value = graph.value(URIRef('urn:s'), URIRef('urn:e:p'))
     assert value.language == 'en'
     assert value.direction == 'ltr'
+
+
+@pytest.mark.parametrize('version', ['1.1', '1.2-basic', '1.2'])
+def test_xml12_serializer_respects_explicit_profile(version):
+    from xml.etree import ElementTree
+    output = Graph().serialize(format='xml12', rdf_version=version)
+    root = ElementTree.fromstring(output)
+    assert root.attrib.get('{'+RDF+'}version') == (None if version == '1.1' else version)
+    if version == '1.1':
+        assert len(rdflib.Graph().parse(data=output, format='xml')) == 0
+
+
+def test_xml12_basic_serializer_rejects_triple_terms_directly():
+    from rdfcore.plugins.serializers.rdfxml import XML12Serializer
+    graph = Graph().add((URIRef('urn:s'), URIRef('urn:p'), TripleTerm(URIRef('urn:a'), URIRef('urn:b'), URIRef('urn:c'))))
+    with pytest.raises(ValueError, match='1.2-basic'):
+        XML12Serializer(graph).serialize(rdf_version='1.2-basic')
+
+
+def test_xml12_literal_infoset_retains_comments_and_processing_instructions():
+    # XML WD 2026-10-09 section 5 excludes literal content from the ordinary
+    # syntax-event mapping. RDFLib legacy event filtering is xml-only.
+    data = document('<e:p rdf:parseType="Literal"><!--x--><?p x?><br/></e:p>', 'rdf:version="1.2"')
+    graph = Graph().parse(data=data, format='xml12')
+    assert str(graph.value(URIRef('urn:s'), URIRef('urn:e:p'))) == '<!--x--><?p x?><br/>'

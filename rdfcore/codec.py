@@ -7,12 +7,13 @@ import pickle
 from .term import BNode, Literal, TripleTerm, URIRef, Variable
 
 
-def encode(term):
+def encode(term, *, canonical=True):
     def pack(value):
         if value is None:
             return ['none']
         if isinstance(value, Literal):
-            return ['literal', str(value), value.language.lower() if value.language else None,
+            language = value.language.lower() if canonical and value.language else value.language
+            return ['literal', str(value), language,
                     str(value.datatype) if value.datatype is not None else None, value.direction]
         if isinstance(value, TripleTerm):
             return ['triple', *(pack(item) for item in value)]

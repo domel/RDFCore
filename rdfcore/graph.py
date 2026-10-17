@@ -339,12 +339,12 @@ class Graph:
         if format is None:
             format = _format_from_location(location or source)
         source = create_input_source(source, publicID, location, file, data, format, **args)
-        plugin = get_plugin(format, Parser)
-        parser_class = plugin.getClass()
-        parser = parser_class(self)
-        from .streaming import DatasetSink, GraphSink
-        sink = DatasetSink(self) if hasattr(self, "quads") else GraphSink(self)
         try:
+            plugin = get_plugin(format, Parser)
+            parser_class = plugin.getClass()
+            parser = parser_class(self)
+            from .streaming import DatasetSink, GraphSink
+            sink = DatasetSink(self) if hasattr(self, "quads") else GraphSink(self)
             parser.parse(source, sink, **args)
         finally:
             source.close()

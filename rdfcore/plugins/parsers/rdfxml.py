@@ -296,24 +296,35 @@ class RDFXMLParser(Parser):
         # Preserve source prefixes and add inherited declarations where needed,
         # matching RDFLib's exclusive namespace handling for common XML literals.
         def clone(node, scope):
+            if self.rdf_version == '1.1' and node.nodeType in (Node.COMMENT_NODE, Node.PROCESSING_INSTRUCTION_NODE):
+                return None
+            if node.nodeType == Node.CDATA_SECTION_NODE:
+                return node.ownerDocument.createTextNode(node.data)
             result = node.cloneNode(False)
             if node.nodeType == Node.ELEMENT_NODE:
                 scope = dict(scope)
+                if self.rdf_version == '1.1':
+                    for attr in list(result.attributes.values()):
+                        if attr.name == 'xmlns' or attr.prefix == 'xmlns':
+                            result.removeAttribute(attr.name)
                 used = [(node.prefix or '', node.namespaceURI)]
                 used += [(a.prefix, a.namespaceURI) for a in node.attributes.values()
                          if a.prefix and a.prefix != 'xmlns']
                 for prefix, ns in used:
-                    if ns and scope.get(prefix) != ns:
-                        result.setAttribute('xmlns'+(':'+prefix if prefix else ''), ns)
+                    if (ns or prefix == '') and scope.get(prefix) != ns:
+                        result.setAttribute('xmlns'+(':'+prefix if prefix else ''), ns or '')
                         scope[prefix] = ns
             for child in node.childNodes:
-                result.appendChild(clone(child, scope))
+                copied = clone(child, scope)
+                if copied is not None:
+                    result.appendChild(copied)
             if self.legacy_w3c and node.nodeType == Node.ELEMENT_NODE and not node.childNodes:
                 # DOM serialization, not a regex over markup or attribute data.
                 # This is empty-element expansion, not a general C14N engine.
                 result.appendChild(node.ownerDocument.createTextNode(''))
             return result
-        return ''.join(clone(c, {'xml': XML}).toxml() for c in element.childNodes)
+        return ''.join(copied.toxml() for c in element.childNodes
+                       if (copied := clone(c, {'xml': XML})) is not None)
 
 
 class RDFXML12Parser(RDFXMLParser):

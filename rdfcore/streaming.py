@@ -165,12 +165,17 @@ class NTStreamingWriter:
 
 
 class NQStreamingWriter:
-    """Write N-Quads statements immediately, including the default graph."""
+    """Write N-Quads statements immediately, including the default graph.
 
-    def __init__(self, stream, *, encoding="utf-8", canonical=False):
+    For raw parser quads, use ``default_graph_id=None``: only None denotes
+    the default graph there. The default also accepts Dataset's sentinel.
+    """
+
+    def __init__(self, stream, *, encoding="utf-8", canonical=False, default_graph_id=DATASET_DEFAULT_GRAPH_ID):
         self.stream = stream
         self.encoding = encoding
         self.canonical = canonical
+        self.default_graph_id = default_graph_id
 
     def add(self, statement):
         if len(statement) == 3:
@@ -181,7 +186,7 @@ class NQStreamingWriter:
         else:
             raise ValueError("NQStreamingWriter accepts triples or quads")
         parts = [_term(subject, canonical=self.canonical), _term(predicate, canonical=self.canonical), _term(obj, canonical=self.canonical)]
-        if graph is not None and graph != DATASET_DEFAULT_GRAPH_ID:
+        if graph is not None and graph != self.default_graph_id:
             parts.append(_term(graph, canonical=self.canonical))
         line = " ".join(parts) + " .\n"
         try:

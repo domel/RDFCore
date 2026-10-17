@@ -122,3 +122,18 @@ def test_partial_output_on_invalid_input_is_explicit():
     with pytest.raises(ParserError):
         convert(BytesIO(DATA + b'invalid\n'), output, input_format='nt12', output_format='nt12')
     assert b'<<(' in output.getvalue()
+
+
+@pytest.mark.parametrize('format', ['nquads', 'nq12'])
+def test_conversion_preserves_a_named_graph_with_the_dataset_sentinel_iri(format):
+    from rdfcore import parse_stream
+    data = b'<urn:s> <urn:p> "x" <urn:x-rdflib:default> .\n'
+    output = BytesIO()
+    convert(BytesIO(data), output, input_format=format, output_format=format)
+    class Sink:
+        def __init__(self): self.rows = []
+        def add(self, row): self.rows.append(row)
+    before, after = Sink(), Sink()
+    parse_stream(BytesIO(data), format, before)
+    parse_stream(BytesIO(output.getvalue()), format, after)
+    assert before.rows == after.rows

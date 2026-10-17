@@ -17,7 +17,7 @@ class TurtleSerializer(Serializer):
             else:
                 capture = False
             writer = TurtleStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version="1.1")
-            for triple in self.store:
+            for triple in self.store.triples((None, None, None)):
                 writer.add(triple)
             writer.close()
             return stream.getvalue() if capture else stream
@@ -28,7 +28,7 @@ class TurtleSerializer(Serializer):
         lines = [f"@prefix {prefix}: <{namespace}> .\n" for prefix, namespace in prefixes]
         if prefixes:
             lines.append("\n")
-        triples = sorted(self.store, key=lambda triple: tuple(str(item) for item in triple))
+        triples = sorted(self.store.triples((None, None, None)), key=lambda triple: tuple(str(item) for item in triple))
         lines.extend(
             f"{_term(subject, manager)} {_term(predicate, manager)} {_term(obj, manager)} .\n"
             for subject, predicate, obj in triples

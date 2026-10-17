@@ -16,7 +16,8 @@ class NTSerializer(Serializer):
             warnings.warn("NTSerializer always uses UTF-8 encoding. "
                           f"Given encoding was: {encoding}")
         lines = []
-        for subject, predicate, obj in self.store:
+        for statement in self.store:
+            subject, predicate, obj = statement[:3]
             lines.append(
                 f"{_term(subject, canonical=canonical)} {_term(predicate, canonical=canonical)} {_term(obj, canonical=canonical)} .\n"
             )

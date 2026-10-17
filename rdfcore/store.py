@@ -6,7 +6,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 import sqlite3
 from .codec import encode, decode, decode_legacy
-from .term import Node
+from .term import Literal, Node, TripleTerm
 
 _UNMATCHED_CONTEXT = object()
 
@@ -181,13 +181,22 @@ class SQLiteStore(Store):
         self._connection.execute("CREATE INDEX IF NOT EXISTS triples_pos ON triples (p, o, s)")
         self._connection.execute("CREATE INDEX IF NOT EXISTS triples_osp ON triples (o, s, p)")
         self._connection.execute("CREATE INDEX IF NOT EXISTS triples_context ON triples (context)")
+        # Optional spelling metadata leaves the version-one identity codec and
+        # indexes unchanged. Older databases have canonical spellings only.
+        self._connection.execute('CREATE TABLE IF NOT EXISTS lexical_forms ('
+            's BLOB, p BLOB, o BLOB, context BLOB, lex_s BLOB, lex_p BLOB, lex_o BLOB, '
+            'PRIMARY KEY(s,p,o,context))')
+        self._has_lexical_forms = bool(self._connection.execute('SELECT 1 FROM lexical_forms LIMIT 1').fetchone())
         if version == 0:
             try:
                 with self._connection:
                     self._connection.execute('CREATE TEMP TABLE migrated (s BLOB, p BLOB, o BLOB, context BLOB, PRIMARY KEY(s,p,o,context))')
                     for row in self._connection.execute('SELECT s,p,o,context FROM triples'):
+                        terms = tuple(decode_legacy(value) for value in row)
+                        values = tuple(encode(value) for value in terms)
+                        self._remember_lexical_forms(terms[:3], values, table='migrated')
                         self._connection.execute('INSERT OR IGNORE INTO migrated VALUES (?,?,?,?)',
-                                                 [encode(decode_legacy(value)) for value in row])
+                                                 values)
                     self._connection.execute('DELETE FROM triples')
                     self._connection.execute('INSERT INTO triples SELECT * FROM migrated')
                     self._connection.execute('DROP TABLE migrated')
@@ -210,6 +219,46 @@ class SQLiteStore(Store):
     def _commit_if_needed(self):
         if not self._transaction_depth:
             self._connection.commit()
+
+    def _remember_lexical_forms(self, triple, values, *, table='triples'):
+        def needs_spelling(term):
+            if isinstance(term, Literal):
+                return bool(term.language and term.language != term.language.lower())
+            return isinstance(term, TripleTerm) and any(needs_spelling(item) for item in term)
+        if len(triple) != 3 or not any(needs_spelling(term) for term in triple):
+            return
+        display = tuple(encode(term, canonical=False) for term in triple)
+        none = self._encode(None)
+        scopes = [values[3]] if values[3] == none else [values[3], none]
+        for scope in scopes:
+            selected = '' if scope == none else ' AND context=?'
+            query_values = values[:3] if scope == none else (*values[:3], scope)
+            self._connection.execute(
+                'INSERT OR IGNORE INTO lexical_forms SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS ('
+                f'SELECT 1 FROM {table} WHERE s=? AND p=? AND o=?{selected})',
+                (*values[:3], scope, *display, *query_values))
+        self._has_lexical_forms = True
+
+    def _prune_lexical_forms(self, pattern, context):
+        if not self._has_lexical_forms:
+            self._has_lexical_forms = bool(self._connection.execute('SELECT 1 FROM lexical_forms LIMIT 1').fetchone())
+            if not self._has_lexical_forms:
+                return
+        clauses, values = [], []
+        for column, term in zip(('s', 'p', 'o'), pattern):
+            if term is not None:
+                clauses.append(f'lexical_forms.{column}=?')
+                values.append(self._encode(term))
+        none = self._encode(None)
+        if context is not None:
+            clauses.append('lexical_forms.context IN (?,?)')
+            values.extend((self._encode(context), none))
+        where = ' AND '.join(clauses) or '1'
+        self._connection.execute(
+            f'DELETE FROM lexical_forms WHERE ({where}) AND NOT EXISTS ('
+            'SELECT 1 FROM triples AS t WHERE t.s=lexical_forms.s AND t.p=lexical_forms.p '
+            'AND t.o=lexical_forms.o AND (lexical_forms.context=? OR t.context=lexical_forms.context))',
+            (*values, none))
 
     @contextmanager
     def transaction(self):
@@ -241,7 +290,10 @@ class SQLiteStore(Store):
                 def records():
                     nonlocal count
                     for triple in triples:
-                        yield tuple(self._encode(item) for item in (*triple, context))
+                        terms = tuple(triple)
+                        values = tuple(self._encode(item) for item in (*terms, context))
+                        self._remember_lexical_forms(terms, values)
+                        yield values
                         # executemany inserted the yielded row before resuming.
                         # Register before advancing caller code: its generator
                         # may inspect or remove the context between records.
@@ -254,7 +306,9 @@ class SQLiteStore(Store):
         return count
 
     def add(self, triple, context=None, quoted=False):
-        values = tuple(self._encode(item) for item in (*triple, context))
+        terms = tuple(triple)
+        values = tuple(self._encode(item) for item in (*terms, context))
+        self._remember_lexical_forms(terms, values)
         self._connection.execute("INSERT OR IGNORE INTO triples VALUES (?, ?, ?, ?)", values)
         self._register_context(context, commit=False)
         self._commit_if_needed()
@@ -299,6 +353,7 @@ class SQLiteStore(Store):
             values.append(self._encode(context))
         where = " AND ".join(clauses) or "1"
         self._connection.execute(f"DELETE FROM triples WHERE {where}", values)
+        self._prune_lexical_forms(pattern, context)
         self._commit_if_needed()
         if pattern == (None, None, None):
             _check_removed_context(original_context)
@@ -309,17 +364,33 @@ class SQLiteStore(Store):
         clauses, values = [], []
         for column, value in zip(("s", "p", "o"), triple_pattern):
             if value is not None:
-                clauses.append(f"{column} = ?")
+                clauses.append(f"t.{column} = ?")
                 values.append(self._encode(value))
         if context is not None:
-            clauses.append("context = ?")
+            clauses.append("t.context = ?")
             values.append(self._encode(context))
         where = " AND ".join(clauses) or "1"
-        columns = "s, p, o, context" if context is not None else "DISTINCT s, p, o"
-        cursor = self._connection.execute(f"SELECT {columns} FROM triples WHERE {where}", values)
+        columns = "t.s, t.p, t.o, t.context" if context is not None else "t.s, t.p, t.o"
+        # Join in the same read statement: another connection may have added
+        # spelling metadata since this store was opened.
+        columns += ', f.lex_s, f.lex_p, f.lex_o'
+        join = ' LEFT JOIN lexical_forms AS f ON f.s=t.s AND f.p=t.p AND f.o=t.o AND f.context=?'
+        if context is None:
+            # Deduplicate the indexed identity columns first. DISTINCT over
+            # the joined spellings would require a dataset-sized temp B-tree.
+            query = f'SELECT {columns} FROM (SELECT DISTINCT t.s, t.p, t.o FROM triples AS t WHERE {where}) AS t{join}'
+            values.append(self._encode(None))
+        else:
+            query = f"SELECT {columns} FROM triples AS t{join} WHERE {where}"
+            values.insert(0, self._encode(context))
+        cursor = self._connection.execute(query, values)
         for row in cursor:
             subject, predicate, obj = row[:3]
-            decoded = tuple(self._decode(value) for value in (subject, predicate, obj))
+            encoded = (subject, predicate, obj)
+            offset = 4 if context is not None else 3
+            encoded = tuple(display if display is not None else value for value, display in zip(encoded, row[offset:]))
+            decoded = tuple(term if term is not None else self._decode(value)
+                            for term, value in zip(triple_pattern, encoded))
             yield decoded, (self._decode(row[3]),) if context is not None else ()
 
     def contexts(self, triple=None):
@@ -344,9 +415,9 @@ class SQLiteStore(Store):
         return self._connection.execute("SELECT COUNT(*) FROM triples WHERE context = ?", (encoded,)).fetchone()[0]
 
     def remove_context(self, context):
-        self._connection.execute("DELETE FROM triples WHERE context = ?", (self._encode(context),))
-        self._connection.execute("DELETE FROM graph_contexts WHERE context = ?", (self._encode(context),))
-        self._commit_if_needed()
+        with self.transaction():
+            self.remove((None, None, None), context)
+            self._connection.execute("DELETE FROM graph_contexts WHERE context = ?", (self._encode(context),))
 
     def close(self, commit_pending_transaction=False):
         if self._transaction_depth:

@@ -23,16 +23,21 @@ def _xml(value):
 class XMLSerializer(Serializer):
     rdf_version = '1.1'
 
-    def serialize(self, stream=None, base=None, encoding=None, **kwargs):
+    def serialize(self, stream=None, base=None, encoding=None, rdf_version='auto', **kwargs):
+        from ...rdf_version import validate_rdf_version
+        requested = validate_rdf_version(rdf_version)
+        self._output_version = self.rdf_version if requested == 'auto' else requested
+        if self.rdf_version == '1.1' and self._output_version != '1.1':
+            raise ValueError('select xml12 for RDF 1.2 output')
         self.namespaces = {RDF: 'rdf'}
         self.bnodes = {}
-        triples = list(self.store)
+        triples = list(self.store.triples((None, None, None)))
         for triple in triples:
             self._check(triple)
         body = ''.join(self._node(subject, predicate, obj) for subject, predicate, obj in triples)
         declarations = ''.join(' xmlns:'+prefix+'='+quoteattr(_xml(ns)) for ns, prefix in self.namespaces.items())
-        if self.rdf_version == '1.2':
-            declarations += ' xmlns:its='+quoteattr(ITS)+' rdf:version="1.2" its:version="2.0"'
+        if self._output_version != '1.1':
+            declarations += ' xmlns:its='+quoteattr(ITS)+' rdf:version='+quoteattr(self._output_version)+' its:version="2.0"'
         if base is not None:
             declarations += ' xml:base='+quoteattr(_xml(base))
         codec = encoding or 'utf-8'
@@ -53,10 +58,10 @@ class XMLSerializer(Serializer):
             raise ValueError('RDF/XML requires a resource subject and IRI predicate')
         self._qname(predicate)
         if isinstance(obj, TripleTerm):
-            if self.rdf_version != '1.2': raise ValueError('triple terms require RDF/XML 1.2')
+            if self._output_version != '1.2': raise ValueError('triple terms cannot be serialized as RDF '+self._output_version)
             self._check(tuple(obj), depth+1)
         elif isinstance(obj, Literal):
-            if obj.direction and self.rdf_version != '1.2':
+            if obj.direction and self._output_version == '1.1':
                 raise ValueError('directional literals require RDF/XML 1.2')
         elif not isinstance(obj, (URIRef, BNode)):
             raise ValueError('unsupported RDF/XML object')

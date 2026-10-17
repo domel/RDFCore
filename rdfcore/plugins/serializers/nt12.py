@@ -16,7 +16,8 @@ class NT12Serializer(Serializer):
         lines = []
         if not canonical and version != "1.1":
             lines.append(f'VERSION "{version}"\n')
-        for subject, predicate, obj in self.store:
+        for statement in self.store:
+            subject, predicate, obj = statement[:3]
             lines.append(
                 f"{_term(subject, canonical=canonical)} {_term(predicate, canonical=canonical)} "
                 f"{_term(obj, canonical=canonical)} .\n"

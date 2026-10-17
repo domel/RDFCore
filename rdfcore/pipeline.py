@@ -25,9 +25,8 @@ class _RDF12Writer:
 
     def add(self, statement):
         from .plugins.serializers.nt12 import _term
-        from .dataset import DATASET_DEFAULT_GRAPH_ID
         parts = [_term(term, canonical=self.canonical) for term in statement[:3]]
-        if self.dataset and len(statement) == 4 and statement[3] not in (None, DATASET_DEFAULT_GRAPH_ID):
+        if self.dataset and len(statement) == 4 and statement[3] is not None:
             parts.append(_term(statement[3], canonical=self.canonical))
         self._write(' '.join(parts) + ' .\n')
 
@@ -118,7 +117,8 @@ def convert(source, destination=None, input_format=None, output_format=None, *, 
                 sink = _RDF12Writer(destination_stream, dataset=family == 'dataset', canonical=canonical)
             else:
                 factory = NTStreamingWriter if family == 'graph' else NQStreamingWriter
-                sink = factory(destination_stream, canonical=canonical)
+                options = {'default_graph_id': None} if family == 'dataset' else {}
+                sink = factory(destination_stream, canonical=canonical, **options)
         try:
             input_stream, input_owned = open_input(source, compression=input_compression, buffer_size=buffer_size)
         except BaseException:

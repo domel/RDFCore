@@ -112,9 +112,15 @@ assert json_value.value == {"items": [1.0, True, None]}
 ### RDF/XML
 
 Use `xml12` explicitly for RDF 1.2. Its serializer writes
-`rdf:version="1.2"` on `rdf:RDF`, including for an empty graph. The parser
+`rdf:version="1.2"` on `rdf:RDF` by default, including for an empty graph. An
+explicit `rdf_version="1.2-basic"` writes that profile; `rdf_version="1.1"`
+omits the announcement and rejects terms that require RDF 1.2. The parser
 requires an in-scope version announcement for RDF 1.2-only constructs.
 The legacy `xml` serializer does not add this announcement.
+
+The `xml` parser follows RDFLib's XMLLiteral event handling, including CDATA
+and omission of comments and processing instructions. Explicit `xml12`
+retains comments and processing instructions inside XML literals.
 
 ```python
 from rdfcore import Graph, TripleTerm, URIRef
@@ -333,6 +339,16 @@ restricted legacy reader. If decoding fails, the original rows and storage
 version are retained. Unknown storage versions are rejected. Keep a backup
 before migrating an existing database; the legacy reader does not impose
 hard limits on record size or nesting depth.
+
+Canonical storage keys compare language tags case-insensitively. A separate
+`lexical_forms` table retains the first spelling in each context and in the
+union, including within triple terms. This optional metadata does not change
+the version-one term codec. Existing version-one databases remain readable,
+but spelling already lowercased by an older release cannot be recovered.
+
+When serializing a dataset to a graph format, RDFLib's format-specific
+projection applies: N-Triples includes its quads as triple statements, while
+Turtle and RDF/XML use the default graph unless `default_union=True`.
 
 For sorting large streams, use `external_sort()` with a memory budget:
 

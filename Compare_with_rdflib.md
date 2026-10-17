@@ -132,7 +132,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | TriG 1.1 | ✅ | ✅ |
 | TriG 1.2 | ❌ | ✅ `trig12` |
 | RDF/XML 1.1 | ✅ | ⚠️ `xml`, `rdfxml`; semantic round trips tested, not byte-identical output |
-| RDF/XML 1.2 | ❌ | ⚠️ `xml12`; emits `rdf:version="1.2"` |
+| RDF/XML 1.2 | ❌ | ⚠️ `xml12`; announces `1.2` by default, respects explicit `1.1` / `1.2-basic` profiles |
 | JSON-LD | ✅ | ❌ |
 | Canonical NT/NQ lexical syntax | ⚠️ | ✅ explicit `canonical=True`; not blank-node canonicalization (RDFC-1.0) |
 | `mode="stream"` | ❌ | ✅ Turtle/TriG |
@@ -152,6 +152,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | POS/OSP indexes | Store-dependent | In-memory | ✅ |
 | Persistence across restarts | Store-dependent | ❌ | ✅ |
 | Equal integer, boolean and case-insensitive language literals: lookup and removal | ✅ reference | ✅ differential tests | ✅ differential tests including reopen |
+| Original language-tag spelling per context and union | ✅ reference | ✅ | ✅ spelling metadata, including nested terms and reopen |
 | Empty registered contexts after triple removal | ✅ | ✅ | ✅ including reopen |
 | No full Python materialization | Store-dependent | ❌ | ✅ |
 | Atomic lazy bulk ingestion | No RDFCore `add_many` extension | ❌ | ✅ `add_many`, including rollback of contexts |

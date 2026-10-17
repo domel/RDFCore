@@ -31,3 +31,22 @@ def test_value_uses_default_predicate():
         graph = module.Graph()
         graph.add((module.URIRef('urn:s'), module.RDF.value, module.Literal('x')))
         assert graph.value(module.URIRef('urn:s')) == module.Literal('x')
+
+
+@pytest.mark.parametrize('unique', [False, True])
+def test_value_consumes_only_required_matches(unique):
+    for module in (rdflib, rdfcore):
+        class ControlledGraph(module.Graph):
+            def objects(self, subject=None, predicate=None, unique=False):
+                yield module.Literal('first')
+                if not unique_check:
+                    raise AssertionError('read beyond first match')
+                yield module.Literal('second')
+                raise AssertionError('read beyond second match')
+        unique_check = unique
+        graph = ControlledGraph()
+        if unique:
+            with pytest.raises(module.exceptions.UniquenessError):
+                graph.value(module.URIRef('urn:s'), module.URIRef('urn:p'), any=False)
+        else:
+            assert graph.value(module.URIRef('urn:s'), module.URIRef('urn:p')) == module.Literal('first')

@@ -150,6 +150,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | SPO index | ✅ | ✅ | ✅ |
 | POS/OSP indexes | Store-dependent | In-memory | ✅ |
 | Persistence across restarts | Store-dependent | ❌ | ✅ |
+| Equal integer, boolean and case-insensitive language literals: lookup and removal | ✅ reference | ✅ differential tests | ✅ differential tests including reopen |
 | Empty registered contexts after triple removal | ✅ | ✅ | ✅ including reopen |
 | No full Python materialization | Store-dependent | ❌ | ✅ |
 

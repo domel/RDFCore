@@ -27,3 +27,12 @@ def test_version_scan_stops_after_triple_term(dataset):
 def test_lazy_version_scan_preserves_classification(objects, expected):
     statements = ((URIRef('urn:s'), URIRef('urn:p'), value) for value in objects)
     assert required_rdf_version(statements) == expected
+
+
+def test_version_scan_does_not_stop_at_directional_literal():
+    s, p = URIRef('urn:s'), URIRef('urn:p')
+    def statements():
+        yield s, p, Literal('x', lang='en', direction='rtl')
+        yield s, p, TripleTerm(s, p, Literal('x'))
+        raise AssertionError('unnecessary read after full RDF 1.2')
+    assert required_rdf_version(statements()) == '1.2'

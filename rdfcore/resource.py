@@ -18,13 +18,13 @@ class Resource:
         return self._identifier
 
     def __eq__(self, other):
-        return isinstance(other, Resource) and self.graph is other.graph and self.identifier == other.identifier
+        return isinstance(other, Resource) and self.graph == other.graph and self.identifier == other.identifier
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
-        return hash((id(self.graph), self.identifier))
+        return hash(Resource) ^ hash(self.graph) ^ hash(self.identifier)
 
     def __str__(self):
         return f"Resource({self.identifier})"

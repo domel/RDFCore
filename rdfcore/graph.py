@@ -54,6 +54,12 @@ class Graph:
     def __len__(self):
         return self.store.__len__(self.identifier)
 
+    def __eq__(self, other):
+        return isinstance(other, Graph) and self.identifier == other.identifier
+
+    def __hash__(self):
+        return hash(self.identifier)
+
     def __contains__(self, triple):
         return next(self.triples(triple), None) is not None
 

@@ -73,13 +73,14 @@ def basic_decode(value):
 def _encode_term(term, mapping, result, graph, occupied):
     if not isinstance(term, TripleTerm):
         return term
-    if term in mapping:
-        return mapping[term]
+    key = (graph, term)
+    if key in mapping:
+        return mapping[key]
     node = BNode()
     while node in occupied:
         node = BNode()
     occupied.add(node)
-    mapping[term] = node
+    mapping[key] = node
     subject = _encode_term(term.subject, mapping, result, graph, occupied)
     predicate = _encode_term(term.predicate, mapping, result, graph, occupied)
     obj = _encode_term(term.object, mapping, result, graph, occupied)
@@ -109,7 +110,10 @@ def _proposition_forms(quads):
             RDF.propositionFormPredicate,
             RDF.propositionFormObject,
         ):
-            forms.setdefault(key, {})[predicate] = obj
+            fields = forms.setdefault(key, {})
+            if predicate in fields and fields[predicate] != obj:
+                raise ValueError('ambiguous proposition form component')
+            fields[predicate] = obj
     complete = {}
     for (graph, node), fields in forms.items():
         if all(key in fields for key in ("type", RDF.propositionFormSubject, RDF.propositionFormPredicate, RDF.propositionFormObject)):
@@ -128,11 +132,14 @@ def _is_form_triple(subject, predicate, obj, forms, graph):
     )
 
 
-def _decode_term(term, forms, graph):
+def _decode_term(term, forms, graph, active=frozenset()):
     if isinstance(term, BNode) and (graph, term) in forms:
-        return _decode_term(forms[(graph, term)], forms, graph)
+        key = (graph, term)
+        if key in active:
+            raise ValueError('cyclic proposition form')
+        return _decode_term(forms[key], forms, graph, active | {key})
     if isinstance(term, TripleTerm):
-        return TripleTerm(_decode_term(term.subject, forms, graph), _decode_term(term.predicate, forms, graph), _decode_term(term.object, forms, graph))
+        return TripleTerm(_decode_term(term.subject, forms, graph, active), _decode_term(term.predicate, forms, graph, active), _decode_term(term.object, forms, graph, active))
     return term
 
 

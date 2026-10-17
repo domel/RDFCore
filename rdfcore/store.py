@@ -101,7 +101,7 @@ class Memory(Store):
 
     def contexts(self, triple=None):
         for context, triples in self._contexts.items():
-            if triples and (triple is None or triple in triples):
+            if context is not None and triples and (triple is None or triple in triples):
                 yield context
 
     def __len__(self, context=None):
@@ -245,7 +245,9 @@ class SQLiteStore(Store):
                 "SELECT DISTINCT context FROM triples WHERE s = ? AND p = ? AND o = ?", encoded
             )
         for (context,) in cursor:
-            yield self._decode(context)
+            decoded = self._decode(context)
+            if decoded is not None:
+                yield decoded
 
     def __len__(self, context=None):
         if context is None:

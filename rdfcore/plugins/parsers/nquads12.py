@@ -1,9 +1,7 @@
 """RDF 1.2 N-Quads parser module."""
 
-import re
-
-from ...exceptions import ParserError
 from .nquads import NQuadsParser
+from .ntriples import NT12Parser
 
 
 class NQuads12Parser(NQuadsParser):
@@ -14,13 +12,13 @@ class NQuads12Parser(NQuadsParser):
         from ...rdf_version import validate_rdf_version
 
         self._requested_version = validate_rdf_version(kwargs.get("rdf_version", "auto"))
+        self._announced_version = 'auto'
         return super().parse(source, sink, **kwargs)
 
     def _parse_line(self, line, sink, line_number, bnode_map):
         text = line.strip()
         if text.startswith("VERSION"):
-            if re.fullmatch(r'VERSION\s+"(1\.1|1\.2-basic|1\.2)"(?:\s+#.*)?', text) is None:
-                raise ParserError(f"line {line_number}: invalid VERSION declaration")
+            NT12Parser._parse_version(self, text, line_number)
             return
         super()._parse_line(line, sink, line_number, bnode_map)
 

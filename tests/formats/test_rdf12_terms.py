@@ -34,6 +34,10 @@ def test_triple_term_is_immutable_structural_and_hashable():
     assert triple.n3() == '<<( <http://e/s> <http://e/p> _:o )>>'
     with pytest.raises(AttributeError):
         triple.subject = URIRef("http://e/changed")
+    for field in ('subject', 'predicate', 'object', '_hash'):
+        with pytest.raises(AttributeError):
+            delattr(triple, field)
+    assert triple in {same}
 
 
 @pytest.mark.parametrize("subject,predicate,obj", [

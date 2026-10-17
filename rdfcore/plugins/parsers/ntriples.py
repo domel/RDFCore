@@ -77,6 +77,7 @@ class NT12Parser(NTParser):
         from ...rdf_version import validate_rdf_version
 
         self._requested_version = validate_rdf_version(kwargs.get("rdf_version", "auto"))
+        self._announced_version = 'auto'
         return super().parse(source, sink, **kwargs)
 
     def _parse_line(self, line, sink, line_number, bnode_map):
@@ -109,6 +110,7 @@ class NT12Parser(NTParser):
         match = re.fullmatch(r'VERSION\s+"(1\.1|1\.2-basic|1\.2)"(?:\s+#.*)?', text)
         if match is None:
             raise ParserError(f"line {line_number}: invalid VERSION declaration")
+        self._announced_version = match.group(1)
 
     def _validate_rdf_version(self, term, line_number):
         from ...rdf_version import version_allows
@@ -121,7 +123,8 @@ class NT12Parser(NTParser):
             return "1.1"
 
         needed = required(term)
-        if not version_allows(self._requested_version, needed):
+        if (not version_allows(self._requested_version, needed)
+                or not version_allows(self._announced_version, needed)):
             raise ParserError(f"line {line_number}: {needed} term exceeds rdf_version={self._requested_version!r}")
 
 

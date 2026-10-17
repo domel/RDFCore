@@ -38,11 +38,11 @@ decomposition remains outstanding.
 | [Concepts terms](https://www.w3.org/TR/rdf12-concepts/#section-triples) | Resource subjects, IRI predicates, legal objects | `term.py`, `graph.py` | `test_rdf12_terms.py` | partial: shared generalized RDFLib behavior requires explicit syntax validation |
 | [Concepts triple terms](https://www.w3.org/TR/rdf12-concepts/#section-triple-terms) | Nested, immutable structural terms; no implied assertion | `TripleTerm` | term, comparison, XML and semantics tests | implemented |
 | [Concepts literals](https://www.w3.org/TR/rdf12-concepts/#section-Graph-Literal) | Language/direction/datatype identity | `Literal` | directional and literal matrices | partial: complete BCP47 and datatype audit outstanding |
-| [Concepts JSON](https://www.w3.org/TR/rdf12-concepts/#section-json) | I-JSON lexical space, duplicate rejection, double values | `term.py` | `test_rdf_json.py` | partial: noncharacters and datatype entailment require further evidence |
+| [Concepts JSON](https://www.w3.org/TR/rdf12-concepts/#section-json) | I-JSON lexical space, duplicate rejection, double values, typed JSON equality | `term.py` | `test_rdf_json.py`: escaped/raw noncharacters, scalar/list/map equality | partial: datatype entailment remains incomplete |
 | [Concepts graph comparison](https://www.w3.org/TR/rdf12-concepts/#graph-isomorphism) | Consistent blank-node renaming, including nested terms | `compare.py` | `test_compare.py` | partial: large symmetric graphs not exhaustively evaluated |
 | [N-Triples grammar](https://www.w3.org/TR/rdf12-n-triples/#sec-grammar) | Parse and emit legal terms, whitespace, escapes | `ntriples.py`, `nt12.py` | format tests, official report | partial |
-| [N-Triples version](https://www.w3.org/TR/rdf12-n-triples/#sec-version) | Case-sensitive version announcement and profile checks | `NT12Parser` | `test_nt12.py` | partial: full announcement semantics review outstanding |
-| [N-Triples canonical form](https://www.w3.org/TR/rdf12-n-triples/#canonical-ntriples) | Canonical lexical syntax | `NT12Serializer` | official C14N tests | partial: canonical blank-node identity remains unresolved |
+| [N-Triples version](https://www.w3.org/TR/rdf12-n-triples/#sec-version) | Case-sensitive version announcement and profile checks | `NT12Parser` | `test_nt12.py`, `test_declared_profiles.py` | implemented for announced profiles and explicit caller limits; media-type negotiation not implemented |
+| [N-Triples canonical form](https://www.w3.org/TR/rdf12-n-triples/#canonical-ntriples) | Canonical lexical syntax, including DEL and XML-forbidden characters | `NT12Serializer` | official C14N exact-byte tests, `test_canonical_rdf12_controls.py` | implemented for tested lexical requirements; does not rename blank nodes or implement RDFC-1.0 |
 | [N-Quads grammar](https://www.w3.org/TR/rdf12-n-quads/#sec-grammar) | Preserve graph names and default graph | `nquads12.py`, `nq12.py` | format, store parity, official report | partial |
 | [N-Quads conformance](https://www.w3.org/TR/rdf12-n-quads/#conformance) | Reject illegal positions and malformed labels | line parser | format tests, official report | partial |
 | [Turtle grammar](https://www.w3.org/TR/rdf12-turtle/#sec-grammar) | All legal terms, collections and property lists | `notation3.py`, `turtle12.py` | format and official tests | partial |
@@ -54,11 +54,11 @@ decomposition remains outstanding.
 | [XML conformance](https://www.w3.org/TR/rdf12-xml/#section-conformance) | Version announcement required for new features | XML context handling | XML positive/negative tests | partial: pinned tests predate this requirement |
 | [XML security](https://www.w3.org/TR/rdf12-xml/#security) | No external entity/network expansion | Expat declaration guard | UTF-8/UTF-16 DTD tests | implemented: DTDs forbidden; tree memory proportional to input |
 | [Semantics simple interpretations](https://www.w3.org/TR/rdf12-semantics/#simpleinterpretations) | Existential blank-node matching and transparent nested terms | `semantics.entails` | `test_semantics.py`, official subset | partial |
-| [Semantics RDF](https://www.w3.org/TR/rdf12-semantics/#rdf-interpretations) | RDF axioms and entailment | `semantics.py` | optional-rule tests | partial: complete axioms and negative decisions missing |
+| [Semantics RDF](https://www.w3.org/TR/rdf12-semantics/#rdf-interpretations) | RDF axioms and entailment | `semantics.py` | finite axioms, conclusion-vocabulary container axioms and optional-rule tests | partial: datatype and negative decisions missing |
 | [Semantics RDFS](https://www.w3.org/TR/rdf12-semantics/#rdfs-interpretations) | RDFS hierarchy, domain/range and typing | `entailment_closure` | positive proofs and unsupported decisions | partial |
 | [Semantics datatypes](https://www.w3.org/TR/rdf12-semantics/#datatype-interpretations) | Recognized value spaces, consistency, explosion | none beyond literal conversion | official cases reported unsupported | missing |
 | [Schema vocabulary](https://www.w3.org/TR/rdf12-schema/) | RDF/RDFS classes, properties, domain/range | `namespace.py`, optional rules | namespace and semantics tests | partial: vocabulary inventory incomplete |
-| [Interop](https://www.w3.org/TR/rdf12-interop/) | Explicit, tested downgrade without silent information loss | `interop.py`, serializer dispatch | `test_interop.py`, version tests | partial: all described transformations not audited |
+| [Interop](https://www.w3.org/TR/rdf12-interop/) | Explicit, tested downgrade without silent information loss | `interop.py`, serializer dispatch | `test_interop.py`, `test_interop_context_safety.py`: definitions in each graph, ambiguous/cyclic form rejection | partial: all described transformations not audited |
 
 ## Version discrepancies
 
@@ -73,6 +73,11 @@ The XML WD grammar summary and detailed Triple production are inconsistent;
 the implementation follows the detailed production and example 22. The XML,
 Schema and Semantics Editor's Drafts were inspected during implementation.
 Complete published-versus-ED comparisons for the other documents remain open.
+
+The pinned XML `xml-canon-test001` and `xml-canon-test002` fixtures expect
+`<br></br>` XMLLiteral lexical forms. Both RDFLib 7.6.0 and RDFCore's default
+XML parser produce `<br/>`. These failures remain in the report; preserving
+the reference lexical behavior is not presented as passing those W3C tests.
 
 ## Completion gates still open
 

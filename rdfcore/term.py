@@ -185,6 +185,9 @@ class TripleTerm:
             raise AttributeError("TripleTerm is immutable")
         object.__setattr__(self, name, value)
 
+    def __delattr__(self, name):
+        raise AttributeError("TripleTerm is immutable")
+
     def __iter__(self):
         return iter((self.subject, self.predicate, self.object))
 
@@ -344,6 +347,8 @@ class Literal(Identifier):
             right = str(other.datatype) if other.datatype is not None else _XSD + 'string'
             if left != right:
                 return False
+            if left == _RDF_JSON and self.ill_typed is False and other.ill_typed is False:
+                return _json_value_key(self.value) == _json_value_key(other.value)
             if left == _XSD + 'string':
                 return str(self) == str(other)
             if self.value is not None and other.value is not None:
@@ -502,6 +507,9 @@ def _reject_surrogates(value):
     if isinstance(value, str):
         if any(0xD800 <= ord(char) <= 0xDFFF for char in value):
             raise ValueError("JSON strings must not contain surrogate code points")
+        if any(0xFDD0 <= ord(char) <= 0xFDEF or ord(char) & 0xFFFF in (0xFFFE, 0xFFFF)
+               for char in value):
+            raise ValueError("I-JSON strings must not contain noncharacters")
     elif isinstance(value, list):
         for item in value:
             _reject_surrogates(item)
@@ -509,6 +517,15 @@ def _reject_surrogates(value):
         for key, item in value.items():
             _reject_surrogates(key)
             _reject_surrogates(item)
+
+
+def _json_value_key(value):
+    """JSON equality distinguishes booleans from numbers, also recursively."""
+    if isinstance(value, list):
+        return (list, tuple(_json_value_key(item) for item in value))
+    if isinstance(value, dict):
+        return (dict, frozenset((key, _json_value_key(item)) for key, item in value.items()))
+    return type(value), value
 
 
 def _escape_literal(value):

@@ -37,3 +37,25 @@ def test_rdf_json_scalar_values_and_literal_copy():
     copied = Literal(number)
     assert copied.value == 1.0
     assert copied.ill_typed is False
+
+
+@pytest.mark.parametrize('codepoint', [0xFDD0, 0xFDEF, 0xFFFE, 0xFFFF, 0x1FFFE, 0x10FFFF])
+@pytest.mark.parametrize('template', ['"{}"', '["{}"]', '{{"{}":0}}', '{{"key":"{}"}}'])
+def test_json_rejects_noncharacters(codepoint, template):
+    import json
+    character = chr(codepoint)
+    for encoded in (character, json.dumps(character)[1:-1]):
+        literal = Literal(template.format(encoded), datatype=RDF.JSON)
+        assert literal.ill_typed is True
+        assert literal.value is None
+
+
+@pytest.mark.parametrize('left,right,expected', [
+    ('true', '1', False), ('false', '0', False), ('[true]', '[1]', False),
+    ('{"a":true}', '{"a":1}', False), ('null', 'null', True),
+    ('null', '"null"', False), ('0', '-0', True),
+    ('{"a":1,"b":2}', '{"b":2,"a":1}', True),
+    ('[1,2]', '[2,1]', False), ('1e400', '10e399', True),
+])
+def test_json_value_equality(left, right, expected):
+    assert Literal(left, datatype=RDF.JSON).eq(Literal(right, datatype=RDF.JSON)) is expected

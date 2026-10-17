@@ -35,7 +35,8 @@ def test_graph_parse_and_serialize_are_integrated_for_mime_aliases():
 
 
 def test_integration_preserves_public_exception_types():
-    with pytest.raises(PluginException):
+    from xml.sax import SAXParseException
+    with pytest.raises(SAXParseException):
         Graph().parse(data="", format="xml")
     with pytest.raises(PluginException):
         Graph().serialize(format="json-ld")

@@ -23,6 +23,7 @@ class TriG12Parser(Turtle12Parser):
         self.index = 0
         self.current_graph = None
         self._requested_version = kwargs.get("rdf_version", "auto")
+        self._announced_version = 'auto'
         while not self._at_end():
             if self._peek_lower() == "version" or self._peek() == "@version":
                 self._directive_version()

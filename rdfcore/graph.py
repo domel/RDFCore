@@ -436,5 +436,5 @@ def _format_from_location(location):
     if location is not None:
         name = str(location).lower().split("?", 1)[0]
         suffix = name.rsplit(".", 1)[-1] if "." in name else ""
-        return {"ttl": "turtle", "turtle": "turtle", "nt": "nt", "ntriples": "ntriples", "nquads": "nquads", "trig": "trig"}.get(suffix, "turtle")
+        return {"ttl": "turtle", "turtle": "turtle", "nt": "nt", "ntriples": "ntriples", "nquads": "nquads", "trig": "trig", "rdf": "xml", "xml": "xml"}.get(suffix, "turtle")
     return "turtle"

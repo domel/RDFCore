@@ -70,7 +70,11 @@ class Dataset(Graph):
         triple = triple_or_quad
         if len(triple) == 4:
             subject, predicate, obj, graph = triple
-            self.graph(getattr(graph, "identifier", graph)).add((subject, predicate, obj))
+            if graph is None:
+                self._assert_triple((subject, predicate, obj))
+                self.store.add((subject, predicate, obj), None)
+            else:
+                self.graph(getattr(graph, "identifier", graph)).add((subject, predicate, obj))
         else:
             super().add(triple)
         return self

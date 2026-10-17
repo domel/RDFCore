@@ -17,6 +17,7 @@ class Turtle12Parser(TurtleParser):
         parenthesized = self._accept("(")
         if self._requested_version not in ("auto", "1.2"):
             raise self._error("triple terms require rdf_version='1.2'")
+        self._require_version('1.2')
         subject = self._subject() if self._peek() == '[' else self._term("triple subject")
         predicate = self._predicate()
         if self._peek() == '(':
@@ -82,6 +83,7 @@ class Turtle12Parser(TurtleParser):
         return reifier
 
     def _annotation(self, subject, predicate, obj):
+        self._require_version('1.2')
         reifier = self._reifier() if self._accept('~') else BNode()
         self._add((reifier, RDF.reifies, TripleTerm(subject, predicate, obj)))
         if self._accept("{|"):

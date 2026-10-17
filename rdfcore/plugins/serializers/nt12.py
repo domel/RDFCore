@@ -40,7 +40,7 @@ def _term(term, canonical=False):
     if isinstance(term, TripleTerm):
         return "<<( " + " ".join(_term(item, canonical=canonical) for item in term) + " )>>"
     if isinstance(term, Literal):
-        value = '"' + _escape_literal(str(term)) + '"'
+        value = '"' + _escape_literal(str(term), canonical=canonical) + '"'
         if term.language is not None:
             language = term.language.lower() if canonical else term.language
             if term.direction is not None:
@@ -52,9 +52,11 @@ def _term(term, canonical=False):
     raise TypeError(f"unsupported RDF term: {term!r}")
 
 
-def _escape_literal(value):
+def _escape_literal(value, canonical=False):
     simple = {"\\": "\\\\", '"': '\\"', "\t": "\\t", "\b": "\\b", "\n": "\\n", "\r": "\\r", "\f": "\\f"}
-    return "".join(simple.get(char, _unicode_escape(char) if ord(char) < 0x20 else char) for char in value)
+    return "".join(simple.get(char, _unicode_escape(char)
+        if ord(char) < 0x20 or (canonical and ord(char) in (0x7F, 0xFFFE, 0xFFFF))
+        else char) for char in value)
 
 
 def _escape_iri(value):

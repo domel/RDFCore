@@ -29,6 +29,7 @@ class TurtleParser(Parser):
         self.tokens = _StreamingTokens(stream, legacy=not self.allow_rdf12)
         self.index = 0
         self._requested_version = kwargs.get("rdf_version", "auto")
+        self._announced_version = 'auto'
         while not self._at_end():
             if self._peek_lower() == "version" or self._peek() == "@version":
                 self._directive_version()
@@ -167,6 +168,7 @@ class TurtleParser(Parser):
                     lang, direction = lang.split("--", 1)
                     if not self.allow_rdf12 or self._requested_version == "1.1":
                         raise self._error("directional literal requires RDF 1.2")
+                    self._require_version('1.2-basic')
                 if not re.fullmatch(r"[A-Za-z]+(?:-[A-Za-z0-9]+)*", lang):
                     raise self._error("invalid language tag")
                 if direction is not None and direction not in ("ltr", "rtl"):
@@ -233,8 +235,15 @@ class TurtleParser(Parser):
         version = _decode_string(token, self._line())
         if version not in ("1.1", "1.2-basic", "1.2"):
             raise self._error("invalid RDF version")
+        self._announced_version = version
         if directive == "@version":
             self._expect(".")
+
+    def _require_version(self, required):
+        from ...rdf_version import version_allows
+        if (not version_allows(self._requested_version, required)
+                or not version_allows(self._announced_version, required)):
+            raise self._error(f'construct requires RDF {required}; incompatible requested or announced version')
 
     def _peek(self, offset=0):
         return self.tokens[self.index + offset]

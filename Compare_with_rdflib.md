@@ -23,7 +23,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `Serializer` | ✅ | ✅ |
 | `InputSource` | ✅ | ✅ |
 | SPARQL | ✅ | ❌ |
-| RDF/XML | ✅ | ❌ |
+| RDF/XML | ✅ | ⚠️ `xml` / `xml12`; DTDs rejected; complete syntax and byte parity not established |
 | JSON-LD | ✅ via plugin | ❌ |
 | RDFa/Microdata | ⚠️ | ❌ |
 
@@ -113,7 +113,8 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | Turtle 1.2 | ❌ | ✅ `turtle12` |
 | TriG 1.1 | ✅ `trig` | ✅ `trig`, `trig11` |
 | TriG 1.2 | ❌ | ✅ `trig12` |
-| RDF/XML | ✅ `xml`, `rdfxml` | ❌ |
+| RDF/XML 1.1 | ✅ `xml`, `rdfxml` | ⚠️ `xml`, `rdfxml`; secure tree parser, no DTDs |
+| RDF/XML 1.2 | ❌ | ⚠️ `xml12`; explicit version, triple terms, annotations and direction; see coverage matrix |
 | JSON-LD | ✅ plugin | ❌ |
 | RDFa | ⚠️ | ❌ |
 
@@ -129,9 +130,10 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | Turtle 1.2 | ❌ | ✅ `turtle12` |
 | TriG 1.1 | ✅ | ✅ |
 | TriG 1.2 | ❌ | ✅ `trig12` |
-| RDF/XML | ✅ | ❌ |
+| RDF/XML 1.1 | ✅ | ⚠️ `xml`, `rdfxml`; semantic round trips tested, not byte-identical output |
+| RDF/XML 1.2 | ❌ | ⚠️ `xml12`; emits `rdf:version="1.2"` |
 | JSON-LD | ✅ | ❌ |
-| Canonical NT/NQ | ✅ | ✅ |
+| Canonical NT/NQ lexical syntax | ⚠️ | ✅ explicit `canonical=True`; not blank-node canonicalization (RDFC-1.0) |
 | `mode="stream"` | ❌ | ✅ Turtle/TriG |
 | File-like output | ✅ | ✅ |
 | Binary output with `encoding` | ✅ | ✅ |
@@ -161,6 +163,8 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `external_sort()` | External-memory sorting |
 | `statement_key()` | Stable sorting key |
 | `benchmark_parse()` | Benchmark with peak RSS |
+| `semantics.entails()` | Simple entailment and partial positive RDF/RDFS proofs; unsupported decisions raise |
+| `semantics.entailment_closure()` | Optional finite RDF/RDFS axioms and rules; no automatic Graph inference |
 | `BoundedReadStream` | Bounded reads |
 | `BoundedWriteStream` | Bounded writes |
 | `ChunkReader` | Chunked UTF-8 reader |

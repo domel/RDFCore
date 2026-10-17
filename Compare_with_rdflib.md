@@ -70,13 +70,17 @@ Legend: ✅ supported, ⚠️ partially supported or available in a different fo
 | `remove_context` | ✅ | ❌ as a `Dataset` method |
 | `get_graph`, `get_context` | ✅ | ✅ |
 | `add_graph` | ✅ | ✅ |
-| `context_id` | ✅ | ✅ |
+| `context_id` | ✅ | ✅ differential tests for resolution, empty identifiers, and invalid URI arguments |
 | `parse`, `serialize` | ✅ | ✅ |
 | `bind`, `namespaces`, `qname` | ✅ | ✅ |
 | `query`, `update` | ✅ | ❌ |
 | `commit`, `rollback` | ✅ | ❌ |
 
 ## RDF Terms
+
+Term class equality, inequality, and set membership are checked against RDFLib
+7.6.0 in `tests/compatibility/test_identity_dataset.py`. This is a scoped check,
+not evidence of complete term API parity.
 
 | Feature | RDFLib | RDFCore |
 |---|---:|---:|

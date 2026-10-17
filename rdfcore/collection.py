@@ -75,7 +75,8 @@ class Collection:
 
     def clear(self):
         for node in list(self._nodes()):
-            self.graph.remove((node, None, None))
+            self.graph.remove((node, RDF.first, None))
+            self.graph.remove((node, RDF.rest, None))
         return self
 
     def index(self, item):

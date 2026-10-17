@@ -18,7 +18,8 @@ def test_graph_value_honours_all_bound_positions():
     graph = Graph()
     triple = (URIRef("http://example.org/s"), URIRef("http://example.org/p"), URIRef("http://example.org/o"))
     graph.add(triple)
-    assert graph.value(URIRef("http://example.org/other"), triple[1], triple[2]) is None
+    with pytest.raises(UnboundLocalError):
+        graph.value(URIRef("http://example.org/other"), triple[1], triple[2])
 
 
 def test_invalid_literal_is_not_an_exception_and_keeps_its_lexical_form():

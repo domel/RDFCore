@@ -131,7 +131,8 @@ graph = Graph()
 resource = graph.resource(URIRef("urn:alice"))
 resource.add(URIRef("urn:name"), Literal("Alice"))
 
-collection = graph.collection(URIRef("urn:list"), [Literal("one"), Literal("two")])
+collection = graph.collection(URIRef("urn:list"))
+collection += [Literal("one"), Literal("two")]
 print(list(collection))
 ```
 
@@ -235,10 +236,17 @@ from rdfcore import Graph, SQLiteStore
 
 store = SQLiteStore("data.sqlite3")
 graph = Graph(store=store)
-graph.parse("large.nt", format="nt")
+with store.transaction():
+    graph.parse("large.nt", format="nt")
 print(len(graph))
 store.close()
 ```
+
+`SQLiteStore.transaction()` commits the whole block on success and rolls it
+back on error. Nested blocks use savepoints. Individual writes outside a
+transaction still commit immediately. `store.add_many(triples, context=None)`
+consumes an iterable in one transaction and returns the number of input
+triples, including duplicates. These are RDFCore storage extensions.
 
 For sorting large streams, use `external_sort()` with a memory budget:
 
@@ -251,7 +259,6 @@ try:
     statements = parse_stream(stream, "nquads")
     ordered = external_sort(
         statements,
-        key=statement_key,
         memory_budget=64 * 1024 * 1024,
         unique=True,
         max_open_runs=64,

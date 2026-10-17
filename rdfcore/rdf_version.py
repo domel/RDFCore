@@ -15,26 +15,18 @@ def validate_rdf_version(value: str) -> str:
 
 def required_rdf_version(graph_or_dataset) -> str:
     """Return the least RDF version capable of representing the data."""
-    terms = []
     if hasattr(graph_or_dataset, "quads"):
-        terms.extend(term for quad in graph_or_dataset.quads() for term in quad)
+        statements = graph_or_dataset.quads()
     else:
-        terms.extend(term for triple in graph_or_dataset for term in triple)
-
-    def visit(term):
-        if isinstance(term, TripleTerm):
-            yield "1.2"
-            for component in term:
-                yield from visit(component)
-        elif isinstance(term, Literal) and term.direction is not None:
-            yield "1.2-basic"
+        statements = iter(graph_or_dataset)
 
     required = "1.1"
-    for term in terms:
-        for version in visit(term):
-            if version == "1.2":
-                return version
-            required = version
+    for statement in statements:
+        for term in statement:
+            if isinstance(term, TripleTerm):
+                return "1.2"
+            if isinstance(term, Literal) and term.direction is not None:
+                required = "1.2-basic"
     return required
 
 

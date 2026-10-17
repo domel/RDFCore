@@ -14,7 +14,8 @@ class Dataset(Graph):
     def __init__(self, store="default", default_union=False, default_graph_base=None):
         super().__init__(store=store, identifier=DATASET_DEFAULT_GRAPH_ID, base=default_graph_base)
         self.default_union = default_union
-        self.default_graph = self
+        self.default_graph = Graph(store=self.store, identifier=DATASET_DEFAULT_GRAPH_ID,
+                                   namespace_manager=self.namespace_manager, base=default_graph_base)
         self._graphs = {DATASET_DEFAULT_GRAPH_ID: self}
 
     def graph(self, identifier=None, base=None):
@@ -26,7 +27,7 @@ class Dataset(Graph):
         if not isinstance(identifier, (URIRef, BNode)):
             raise TypeError("graph identifier must be a URIRef or BNode")
         if identifier == DATASET_DEFAULT_GRAPH_ID:
-            return self
+            return self.default_graph
         graph = self._graphs.get(identifier)
         if graph is None:
             graph = Graph(store=self.store, identifier=identifier, namespace_manager=self.namespace_manager, base=base)
@@ -39,22 +40,20 @@ class Dataset(Graph):
         return graph
 
     def get_graph(self, identifier):
-        """Return an existing graph, or ``None`` if it is not present."""
-        identifier = getattr(identifier, "identifier", identifier)
-        if isinstance(identifier, str) and not isinstance(identifier, (URIRef, BNode)):
-            identifier = URIRef(identifier)
+        """Return an existing graph; raise IndexError when it is absent."""
         if identifier in self._graphs:
             return self._graphs[identifier]
         for context in self.store.contexts():
             if context == identifier:
                 return self.graph(identifier)
-        return None
+        raise IndexError("list index out of range")
 
     def get_context(self, identifier, quoted=False, base=None):
         """Return the graph view for an identifier, creating the view if needed."""
-        if identifier is None:
-            return Graph(store=self.store, identifier=BNode(), namespace_manager=self.namespace_manager, base=base)
-        return self.graph(identifier)
+        if isinstance(identifier, str) and not isinstance(identifier, (URIRef, BNode)):
+            identifier = URIRef(identifier)
+        return Graph(store=self.store, identifier=identifier,
+                     namespace_manager=self.namespace_manager, base=base)
 
     def add_graph(self, graph):
         """Compatibility alias for :meth:`graph`."""
@@ -62,8 +61,10 @@ class Dataset(Graph):
 
     def context_id(self, uri, context_id=None):
         """Return a context URI using RDFLib's ``URI#context`` convention."""
-        uri = str(uri).split("#", 1)[0]
-        return URIRef(context_id or "#context", base=uri)
+        uri = uri.split("#", 1)[0]
+        if context_id is None:
+            context_id = "#context"
+        return URIRef(context_id, base=uri)
 
     def add(self, triple):
         if len(triple) == 4:
@@ -84,6 +85,12 @@ class Dataset(Graph):
                 yield triple
         else:
             yield from self._triples_in_context(pattern)
+
+    def __len__(self):
+        return self.store.__len__(None)
+
+    def __iter__(self):
+        return self.quads()
 
     def _triples_in_context(self, pattern):
         for triple, _ in self.store.triples(pattern, DATASET_DEFAULT_GRAPH_ID):
@@ -144,6 +151,9 @@ class Dataset(Graph):
 
 
 class ConjunctiveGraph(Dataset):
+    def __iter__(self):
+        return self.triples((None, None, None))
+
     def __init__(self, store="default", identifier=None):
         warnings.warn("ConjunctiveGraph is deprecated; use Dataset", DeprecationWarning, stacklevel=2)
         super().__init__(store=store, default_union=True)

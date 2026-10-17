@@ -32,20 +32,20 @@ class Resource:
     def __repr__(self):
         return f"Resource({self.graph!r},{self.identifier!r})"
 
-    def add(self, predicate, obj):
-        self.graph.add((self.identifier, predicate, getattr(obj, "identifier", obj)))
+    def add(self, p, o):
+        self.graph.add((self.identifier, p, o.identifier if isinstance(o, Resource) else o))
 
-    def remove(self, predicate, obj=None):
-        self.graph.remove((self.identifier, predicate, getattr(obj, "identifier", obj)))
+    def remove(self, p, o=None):
+        self.graph.remove((self.identifier, p, o.identifier if isinstance(o, Resource) else o))
 
-    def set(self, predicate, obj):
-        self.graph.set((self.identifier, predicate, getattr(obj, "identifier", obj)))
+    def set(self, p, o):
+        self.graph.set((self.identifier, p, o.identifier if isinstance(o, Resource) else o))
 
     def subjects(self, predicate=None):
         return (self._cast(item) for item in self.graph.subjects(predicate, self.identifier))
 
-    def predicates(self, obj=None):
-        return (self._cast(item) for item in self.graph.predicates(self.identifier, getattr(obj, "identifier", obj)))
+    def predicates(self, o=None):
+        return (self._cast(item) for item in self.graph.predicates(self.identifier, o.identifier if isinstance(o, Resource) else o))
 
     def objects(self, predicate=None):
         return (self._cast(item) for item in self.graph.objects(self.identifier, predicate))
@@ -59,8 +59,8 @@ class Resource:
     def predicate_objects(self):
         return ((self._cast(p), self._cast(o)) for p, o in self.graph.predicate_objects(self.identifier))
 
-    def value(self, predicate=RDF.value, obj=None, default=None, any=True):
-        return self._cast(self.graph.value(self.identifier, predicate, getattr(obj, "identifier", obj), default, any))
+    def value(self, p=RDF.value, o=None, default=None, any=True):
+        return self._cast(self.graph.value(self.identifier, p, o.identifier if isinstance(o, Resource) else o, default, any))
 
     def items(self):
         return (self._cast(item) for item in self.graph.items(self.identifier))

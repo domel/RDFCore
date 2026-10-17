@@ -26,7 +26,8 @@ def test_dataset_default_union_and_remove_graph():
     triple = (URIRef("http://e/s"), URIRef("http://e/p"), URIRef("http://e/o"))
     graph_name = BNode("g")
     dataset.add((*triple, graph_name))
-    assert list(dataset) == [triple]
+    assert list(dataset) == [(*triple, graph_name)]
+    assert list(dataset.triples((None, None, None))) == [triple]
     dataset.remove_graph(graph_name)
     assert list(dataset) == []
 

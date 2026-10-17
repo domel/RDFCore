@@ -251,22 +251,24 @@ class Graph:
                 seen.add(item)
                 yield item
 
-    def value(self, subject=None, predicate=None, object=None, default=None, any=True):
-        values = []
-        for candidate_subject, candidate_predicate, candidate_object in self.triples((subject, predicate, object)):
-            if object is None:
-                values.append(candidate_object)
-            elif subject is None:
-                values.append(candidate_subject)
-            elif predicate is None:
-                values.append(candidate_predicate)
-            else:
-                values.append(candidate_object)
-        if not values:
+    def value(self, subject=None, predicate=RDF.value, object=None, default=None, any=True):
+        if (subject is None and predicate is None) or (subject is None and object is None) or (predicate is None and object is None):
+            return None
+        if object is None:
+            values = self.objects(subject, predicate)
+        elif subject is None:
+            values = self.subjects(predicate, object)
+        elif predicate is None:
+            values = self.predicates(subject, object)
+        else:
+            raise UnboundLocalError("cannot access local variable 'values' where it is not associated with a value")
+        try:
+            value = next(values)
+        except StopIteration:
             return default
-        if not any and len(values) > 1:
+        if any is False and next(values, None) is not None:
             raise UniquenessError(f"Found more than one value for {subject!r}, {predicate!r}")
-        return values[0]
+        return value
 
     def set(self, triple):
         subject, predicate, obj = triple

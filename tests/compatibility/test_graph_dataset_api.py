@@ -1,3 +1,5 @@
+import pytest
+
 from rdfcore import Dataset, Graph, Literal, URIRef
 
 
@@ -12,8 +14,9 @@ def test_dataset_graph_compatibility_methods():
     triple = (URIRef("urn:s"), URIRef("urn:p"), Literal("o"))
     graph.add(triple)
 
-    assert dataset.get_graph("urn:named") is graph
-    assert dataset.get_graph("urn:missing") is None
+    assert set(dataset.get_graph(URIRef("urn:named"))) == set(graph)
+    with pytest.raises(IndexError):
+        dataset.get_graph(URIRef("urn:missing"))
     assert dataset.add_graph("urn:other").identifier == URIRef("urn:other")
     assert dataset.context_id("urn:document") == URIRef("#context")
     assert dataset.context_id("urn:document#old", "#new") == URIRef("#new")

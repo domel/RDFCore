@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import pickle
+from contextlib import contextmanager
 import sqlite3
+from .codec import encode, decode, decode_legacy
 
 class Store:
     context_aware = False
@@ -80,14 +81,20 @@ class Memory(Store):
         subject, predicate, obj = triple_pattern
         # ``None`` is the store-level union query. Graph instances always pass
         # a concrete context identifier, including their default graph.
-        available = set(self._triples if context is None else self._contexts.get(context, ()))
-        candidates = available
-        if subject is not None and predicate is not None:
+        available = self._triples if context is None else self._contexts.get(context, ())
+        if subject is not None and predicate is not None and obj is not None:
+            candidates = (triple_pattern,) if triple_pattern in available else ()
+        elif subject is not None and predicate is not None:
             candidates = ((subject, predicate, item) for item in self._sp.get((subject, predicate), ()) if (subject, predicate, item) in available)
         elif predicate is not None and obj is not None:
             candidates = ((item, predicate, obj) for item in self._po.get((predicate, obj), ()) if (item, predicate, obj) in available)
         elif subject is not None and obj is not None:
             candidates = ((subject, item, obj) for item in self._os.get((obj, subject), ()) if (subject, item, obj) in available)
+        else:
+            candidates = available
+        # Snapshot only the selected candidates so removal during iteration
+        # retains RDFLib's observable iterator behavior.
+        candidates = tuple(candidates)
         for triple in candidates:
             if all(value is None or value == actual for value, actual in zip(triple_pattern, triple)):
                 yield triple, (context,) if context is not None else ()
@@ -108,8 +115,8 @@ class Memory(Store):
 class SQLiteStore(Store):
     """Small disk-backed RDF store using SQLite and indexed term blobs.
 
-    The store keeps one row per ``(triple, context)``.  Terms are serialized
-    with pickle solely for the private on-disk representation; queries still
+    The store keeps one row per ``(triple, context)``. Terms use versioned JSON
+    storage representations; queries still
     use SQLite's indexed byte columns and do not materialize the dataset.
     """
 
@@ -118,7 +125,12 @@ class SQLiteStore(Store):
 
     def __init__(self, path=":memory:"):
         self.path = str(path)
+        self._transaction_depth = 0
         self._connection = sqlite3.connect(self.path)
+        version = self._connection.execute('PRAGMA user_version').fetchone()[0]
+        if version not in (0, 1):
+            self._connection.close()
+            raise ValueError(f'unsupported RDF storage version: {version}')
         self._connection.execute("PRAGMA journal_mode = WAL")
         self._connection.execute(
             "CREATE TABLE IF NOT EXISTS triples ("
@@ -129,20 +141,64 @@ class SQLiteStore(Store):
         self._connection.execute("CREATE INDEX IF NOT EXISTS triples_pos ON triples (p, o, s)")
         self._connection.execute("CREATE INDEX IF NOT EXISTS triples_osp ON triples (o, s, p)")
         self._connection.execute("CREATE INDEX IF NOT EXISTS triples_context ON triples (context)")
+        if version == 0:
+            try:
+                with self._connection:
+                    self._connection.execute('CREATE TEMP TABLE migrated (s BLOB, p BLOB, o BLOB, context BLOB, PRIMARY KEY(s,p,o,context))')
+                    for row in self._connection.execute('SELECT s,p,o,context FROM triples'):
+                        self._connection.execute('INSERT OR IGNORE INTO migrated VALUES (?,?,?,?)',
+                                                 [encode(decode_legacy(value)) for value in row])
+                    self._connection.execute('DELETE FROM triples')
+                    self._connection.execute('INSERT INTO triples SELECT * FROM migrated')
+                    self._connection.execute('DROP TABLE migrated')
+                    self._connection.execute('PRAGMA user_version=1')
+            except Exception:
+                self._connection.close()
+                raise
         self._connection.commit()
 
     @staticmethod
     def _encode(value):
-        return sqlite3.Binary(pickle.dumps(value, protocol=4))
+        return sqlite3.Binary(encode(value))
 
     @staticmethod
     def _decode(value):
-        return pickle.loads(value)
+        return decode(value)
+
+    def _commit_if_needed(self):
+        if not self._transaction_depth:
+            self._connection.commit()
+
+    @contextmanager
+    def transaction(self):
+        """Atomically apply a group of writes, with nested savepoints."""
+        name = f'rdfcore_batch_{self._transaction_depth}'
+        self._connection.execute(f'SAVEPOINT {name}')
+        self._transaction_depth += 1
+        try:
+            yield self
+        except BaseException:
+            self._connection.execute(f'ROLLBACK TO SAVEPOINT {name}')
+            self._connection.execute(f'RELEASE SAVEPOINT {name}')
+            raise
+        else:
+            self._connection.execute(f'RELEASE SAVEPOINT {name}')
+        finally:
+            self._transaction_depth -= 1
+
+    def add_many(self, triples, context=None):
+        """Insert an iterable atomically; return the number of input triples."""
+        count = 0
+        with self.transaction():
+            for triple in triples:
+                self.add(triple, context)
+                count += 1
+        return count
 
     def add(self, triple, context=None, quoted=False):
         values = tuple(self._encode(item) for item in (*triple, context))
         self._connection.execute("INSERT OR IGNORE INTO triples VALUES (?, ?, ?, ?)", values)
-        self._connection.commit()
+        self._commit_if_needed()
         return triple
 
     def remove(self, triple, context=None):
@@ -159,7 +215,7 @@ class SQLiteStore(Store):
             values.append(self._encode(context))
         where = " AND ".join(clauses) or "1"
         self._connection.execute(f"DELETE FROM triples WHERE {where}", values)
-        self._connection.commit()
+        self._commit_if_needed()
 
     def triples(self, triple_pattern, context=None):
         if len(triple_pattern) != 3:
@@ -201,8 +257,10 @@ class SQLiteStore(Store):
 
     def remove_context(self, context):
         self._connection.execute("DELETE FROM triples WHERE context = ?", (self._encode(context),))
-        self._connection.commit()
+        self._commit_if_needed()
 
     def close(self, commit_pending_transaction=False):
+        if self._transaction_depth:
+            raise RuntimeError('cannot close store inside an active transaction')
         self._connection.commit()
         self._connection.close()

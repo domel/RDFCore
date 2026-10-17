@@ -23,6 +23,14 @@ class Node(str):
     def n3(self, namespace_manager=None) -> str:
         return str(self)
 
+    def __eq__(self, other):
+        return type(self) is type(other) and str(self) == str(other)
+
+    def __ne__(self, other):
+        return not self == other
+
+    __hash__ = str.__hash__
+
 
 Identifier = Node
 IdentifiedNode = Node

@@ -298,6 +298,10 @@ back on error. Nested blocks use savepoints. Individual writes outside a
 transaction still commit immediately. `store.add_many(triples, context=None)`
 consumes an iterable in one transaction and returns the number of input
 triples, including duplicates. These are RDFCore storage extensions.
+The built-in bulk path feeds records lazily to SQLite's `executemany()`;
+it does not collect the input into a list. A generator failure rolls back
+both inserted triples and context registrations. Stores overriding `add()`
+retain that override during bulk ingestion.
 
 SQLite databases use a versioned JSON representation of RDF terms. Opening
 an older database migrates its term records in one transaction through a

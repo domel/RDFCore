@@ -232,9 +232,25 @@ class SQLiteStore(Store):
         """Insert an iterable atomically; return the number of input triples."""
         count = 0
         with self.transaction():
-            for triple in triples:
-                self.add(triple, context)
-                count += 1
+            if getattr(self.add, '__func__', None) is not SQLiteStore.add:
+                # Preserve extensions which override or replace single writes.
+                for triple in triples:
+                    self.add(triple, context)
+                    count += 1
+            else:
+                def records():
+                    nonlocal count
+                    for triple in triples:
+                        yield tuple(self._encode(item) for item in (*triple, context))
+                        # executemany inserted the yielded row before resuming.
+                        # Register before advancing caller code: its generator
+                        # may inspect or remove the context between records.
+                        self._register_context(context, commit=False)
+                        count += 1
+
+                self._connection.executemany(
+                    'INSERT OR IGNORE INTO triples VALUES (?, ?, ?, ?)', records()
+                )
         return count
 
     def add(self, triple, context=None, quoted=False):

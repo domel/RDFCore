@@ -18,3 +18,10 @@ def test_benchmark_rejects_different_literal_datatypes():
     right = rdfcore.Graph().add((rdfcore.URIRef('urn:s'), rdfcore.URIRef('urn:p'), rdfcore.Literal(1)))
     with pytest.raises(AssertionError):
         verify_equivalence(left, right)
+
+
+@pytest.mark.parametrize('mode', ['single', 'transaction', 'bulk'])
+@pytest.mark.parametrize('size', [0, 5])
+def test_disk_bulk_benchmark_verifies_persisted_records(mode, size):
+    from benchmarks.sqlite_bulk import measure
+    assert measure(size, mode) >= 0

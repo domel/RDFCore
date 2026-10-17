@@ -153,6 +153,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | Equal integer, boolean and case-insensitive language literals: lookup and removal | ✅ reference | ✅ differential tests | ✅ differential tests including reopen |
 | Empty registered contexts after triple removal | ✅ | ✅ | ✅ including reopen |
 | No full Python materialization | Store-dependent | ❌ | ✅ |
+| Atomic lazy bulk ingestion | No RDFCore `add_many` extension | ❌ | ✅ `add_many`, including rollback of contexts |
 
 ## RDFCore Extensions
 

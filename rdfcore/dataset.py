@@ -129,7 +129,8 @@ class Dataset(Graph):
             for context in contexts:
                 self.graph(context).remove((subject, predicate, obj))
             return self
-        return super().remove(pattern)
+        self.store.remove(pattern, None)
+        return self
 
     def remove_graph(self, graph):
         identifier = getattr(graph, "identifier", graph)

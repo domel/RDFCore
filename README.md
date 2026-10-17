@@ -122,6 +122,10 @@ for subject, predicate, obj, graph_name in dataset.quads():
     print(subject, predicate, obj, graph_name)
 ```
 
+`dataset.remove((subject, predicate, obj))` removes matching triples from all
+graphs, as in RDFLib. To restrict removal to one graph, call that graph's
+`remove()` method or pass a four-item pattern with its graph identifier.
+
 Use `Graph.resource()` and `Graph.collection()` for convenience wrappers:
 
 ```python

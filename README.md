@@ -248,6 +248,13 @@ transaction still commit immediately. `store.add_many(triples, context=None)`
 consumes an iterable in one transaction and returns the number of input
 triples, including duplicates. These are RDFCore storage extensions.
 
+SQLite databases use a versioned JSON representation of RDF terms. Opening
+an older database migrates its term records in one transaction through a
+restricted legacy reader. If decoding fails, the original rows and storage
+version are retained. Unknown storage versions are rejected. Keep a backup
+before migrating an existing database; the legacy reader does not impose
+hard limits on record size or nesting depth.
+
 For sorting large streams, use `external_sort()` with a memory budget:
 
 ```python

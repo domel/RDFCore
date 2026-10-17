@@ -17,9 +17,19 @@ class Turtle12Parser(TurtleParser):
         parenthesized = self._accept("(")
         if self._requested_version not in ("auto", "1.2"):
             raise self._error("triple terms require rdf_version='1.2'")
-        subject = self._term("triple subject")
-        predicate = self._term("triple predicate")
-        obj = self._object()
+        subject = self._subject() if self._peek() == '[' else self._term("triple subject")
+        predicate = self._predicate()
+        if self._peek() == '(':
+            raise self._error('collection is not allowed inside a triple term or reified triple')
+        if self._peek() == '[':
+            self._next()
+            self._expect(']')
+            obj = BNode()
+        else:
+            obj = self._term('triple object')
+        reifier = None
+        if not parenthesized and self._accept('~'):
+            reifier = self._reifier()
         if parenthesized:
             self._expect(")")
         self._expect(">>")
@@ -30,7 +40,7 @@ class Turtle12Parser(TurtleParser):
             if role in ("subject", "predicate"):
                 raise self._error("triple term is only allowed as an object")
             return triple
-        reifier = BNode()
+        reifier = BNode() if reifier is None else reifier
         if role == "predicate":
             raise self._error("reifier cannot be used as a predicate")
         self._add((reifier, RDF.reifies, triple))
@@ -48,7 +58,7 @@ class Turtle12Parser(TurtleParser):
             while True:
                 obj = self._object()
                 self._add((subject, predicate, obj))
-                if self._peek() == "~":
+                while self._peek() in ('~', '{|'):
                     self._annotation(subject, predicate, obj)
                 if not self._accept(","):
                     break
@@ -56,15 +66,23 @@ class Turtle12Parser(TurtleParser):
                 break
             while self._accept(";"):
                 pass
-            if self._peek() in (".", "]", ")", "|}"):
+            if self._peek() in (".", "]", ")", "|}", '}'):
                 break
 
+    def _reifier(self):
+        if self._peek() == '[':
+            self._next()
+            self._expect(']')
+            return BNode()
+        if self._peek() in ('>>', '{|', '~', '.', ',', ';', '|}', '}'):
+            return BNode()
+        reifier = self._term('reifier')
+        if not isinstance(reifier, (URIRef, BNode)):
+            raise self._error('reifier must be an IRI or blank node')
+        return reifier
+
     def _annotation(self, subject, predicate, obj):
-        self._expect("~")
-        if self._peek() == "{|":
-            reifier = BNode()
-        else:
-            reifier = self._term("reifier")
+        reifier = self._reifier() if self._accept('~') else BNode()
         self._add((reifier, RDF.reifies, TripleTerm(subject, predicate, obj)))
         if self._accept("{|"):
             self._predicate_objects(reifier)

@@ -35,8 +35,8 @@ class TurtleSerializer(Serializer):
         )
         value = "".join(lines)
         if stream is None:
-            return value.encode(encoding) if encoding else value
-        payload = value.encode(encoding) if encoding else value
+            return value.encode("utf-8") if encoding else value
+        payload = value.encode("utf-8") if encoding else value
         try:
             stream.write(payload)
         except TypeError:

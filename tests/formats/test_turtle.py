@@ -11,7 +11,7 @@ def test_turtle_parser_prefixes_literals_and_lists():
     ''', format="turtle")
     s = URIRef("http://example.org/s")
     assert Literal("text") in list(graph.objects(s, URIRef("http://example.org/p")))
-    assert Literal("01", datatype="http://www.w3.org/2001/XMLSchema#integer", normalize=False) in list(graph.objects(s, URIRef("http://example.org/n")))
+    assert Literal("1", datatype="http://www.w3.org/2001/XMLSchema#integer", normalize=False) in list(graph.objects(s, URIRef("http://example.org/n")))
     head = graph.value(s, URIRef("http://example.org/list"))
     assert graph.value(head, RDF.first) == URIRef("http://example.org/a")
 

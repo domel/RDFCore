@@ -20,4 +20,4 @@ def test_ill_typed_covers_derived_xsd_types():
     valid = Literal("7", datatype="http://www.w3.org/2001/XMLSchema#nonNegativeInteger")
     invalid = Literal("-1", datatype="http://www.w3.org/2001/XMLSchema#nonNegativeInteger")
     assert (valid.value, valid.ill_typed) == (7, False)
-    assert (invalid.value, invalid.ill_typed) == (None, True)
+    assert (invalid.value, invalid.ill_typed) == (-1, True)

@@ -40,8 +40,14 @@ class InputSource:
 
 
 def create_input_source(source=None, publicID=None, location=None, file=None, data=None, format=None, **kwargs):
+    if all(value is None for value in (source, location, file, data)):
+        raise ValueError("exactly one of source, location, file or data must be given")
     if sum(value is not None for value in (source, location, file, data)) > 1:
         raise ValueError("source, location, file, and data are mutually exclusive")
+    if data is not None and not isinstance(data, (str, bytes, bytearray)):
+        raise RuntimeError("parse data can only be str, bytes or bytearray")
+    if isinstance(data, bytearray):
+        data = bytes(data)
     if source is not None:
         if hasattr(source, "read"):
             file = source

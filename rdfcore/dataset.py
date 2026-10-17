@@ -55,9 +55,9 @@ class Dataset(Graph):
         return Graph(store=self.store, identifier=identifier,
                      namespace_manager=self.namespace_manager, base=base)
 
-    def add_graph(self, graph):
+    def add_graph(self, g):
         """Compatibility alias for :meth:`graph`."""
-        return self.graph(graph)
+        return self.graph(g)
 
     def context_id(self, uri, context_id=None):
         """Return a context URI using RDFLib's ``URI#context`` convention."""
@@ -66,7 +66,8 @@ class Dataset(Graph):
             context_id = "#context"
         return URIRef(context_id, base=uri)
 
-    def add(self, triple):
+    def add(self, triple_or_quad):
+        triple = triple_or_quad
         if len(triple) == 4:
             subject, predicate, obj, graph = triple
             self.graph(getattr(graph, "identifier", graph)).add((subject, predicate, obj))
@@ -79,12 +80,21 @@ class Dataset(Graph):
             self.add((subject, predicate, obj, graph))
         return self
 
-    def triples(self, pattern):
-        if self.default_union:
-            for triple, _ in self.store.triples(pattern, None):
-                yield triple
+    def triples(self, triple_or_quad, context=None):
+        if len(triple_or_quad) == 4:
+            *pattern, selected = triple_or_quad
         else:
-            yield from self._triples_in_context(pattern)
+            pattern = triple_or_quad
+            selected = None
+        selected = context or selected
+        selected = getattr(selected, 'identifier', selected)
+        if self.default_union:
+            if selected == DATASET_DEFAULT_GRAPH_ID:
+                selected = None
+        elif selected is None:
+            selected = DATASET_DEFAULT_GRAPH_ID
+        for triple, _ in self.store.triples(tuple(pattern), selected):
+            yield triple
 
     def __len__(self):
         return self.store.__len__(None)
@@ -96,7 +106,13 @@ class Dataset(Graph):
         for triple, _ in self.store.triples(pattern, DATASET_DEFAULT_GRAPH_ID):
             yield triple
 
-    def quads(self, pattern=(None, None, None, None)):
+    def serialize(self, destination=None, format="trig", base=None, encoding=None, **args):
+        return super().serialize(destination=destination, format=format, base=base, encoding=encoding, **args)
+
+    def quads(self, quad=None):
+        pattern = (None, None, None, None) if quad is None else quad
+        if len(pattern) == 3:
+            pattern = (*pattern, None)
         if len(pattern) != 4:
             raise ValueError("quad pattern must contain four elements")
         subject, predicate, obj, graph = pattern
@@ -118,7 +134,8 @@ class Dataset(Graph):
             seen.add(context)
             yield self.graph(context)
 
-    def remove(self, pattern):
+    def remove(self, triple_or_quad):
+        pattern = triple_or_quad
         if len(pattern) == 4:
             subject, predicate, obj, graph = pattern
             contexts = (
@@ -132,8 +149,8 @@ class Dataset(Graph):
         self.store.remove(pattern, None)
         return self
 
-    def remove_graph(self, graph):
-        identifier = getattr(graph, "identifier", graph)
+    def remove_graph(self, g):
+        identifier = getattr(g, "identifier", g)
         if identifier == DATASET_DEFAULT_GRAPH_ID:
             self.default_graph.remove((None, None, None))
         else:

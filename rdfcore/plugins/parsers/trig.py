@@ -13,10 +13,11 @@ class TriGParser(TurtleParser):
         if stream is None:
             raise BadSyntax("TriG source has no readable stream")
         self.sink = sink
+        self._strict = kwargs.get('strict', self.allow_rdf12)
         self.base = source.publicID or kwargs.get("base")
         self.prefixes = {}
         self.bnodes = {}
-        self.tokens = _StreamingTokens(stream)
+        self.tokens = _StreamingTokens(stream, legacy=not self.allow_rdf12)
         self.index = 0
         self.current_graph = None
         while not self._at_end():
@@ -84,4 +85,4 @@ class TriGParser(TurtleParser):
         self.current_graph = previous
 
     def _add(self, triple):
-        self.sink.add(triple if self.current_graph is None else (*triple, self.current_graph))
+        self._emit(triple if self.current_graph is None else (*triple, self.current_graph))

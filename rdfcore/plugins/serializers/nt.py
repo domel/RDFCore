@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import warnings
+
 from ...serializer import Serializer
 from ...term import BNode, Literal, URIRef
 
 
 class NTSerializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, canonical=False, **kwargs):
+        if base is not None:
+            warnings.warn("NTSerializer does not support base.")
+        if encoding != "utf-8" and (stream is not None or encoding is not None):
+            warnings.warn("NTSerializer always uses UTF-8 encoding. "
+                          f"Given encoding was: {encoding}")
         lines = []
         for subject, predicate, obj in self.store:
             lines.append(
@@ -15,11 +22,14 @@ class NTSerializer(Serializer):
             )
         value = "".join(lines)
         if stream is None:
-            return value.encode(encoding) if encoding else value
+            return value.encode("utf-8") if encoding else value
         if encoding:
-            stream.write(value.encode(encoding))
+            stream.write(value.encode("utf-8"))
         else:
-            stream.write(value)
+            try:
+                stream.write(value)
+            except TypeError:
+                stream.write(value.encode("utf-8"))
         return stream
 
 

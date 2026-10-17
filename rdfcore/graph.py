@@ -17,7 +17,7 @@ from .serializer import Serializer
 class Graph:
     def __init__(self, store="default", identifier=None, namespace_manager=None, base=None, bind_namespaces="rdflib"):
         self.store = store if hasattr(store, "triples") else Memory()
-        self.identifier = identifier if identifier is not None else BNode()
+        self.identifier = BNode() if identifier is None else identifier if isinstance(identifier, (URIRef, BNode)) else URIRef(identifier)
         self.base = base
         self.namespace_manager = namespace_manager if namespace_manager is not None else NamespaceManager(self)
         if namespace_manager is None and bind_namespaces == "rdflib":
@@ -41,8 +41,8 @@ class Graph:
         self.store.remove(triple, self.identifier)
         return self
 
-    def triples(self, pattern):
-        for triple, _ in self.store.triples(pattern, self.identifier):
+    def triples(self, triple):
+        for triple, _ in self.store.triples(triple, self.identifier):
             yield triple
 
     def _triples_in_context(self, pattern):
@@ -313,7 +313,7 @@ class Graph:
         return self.namespace_manager.compute_qname(uri, generate)
 
     def absolutize(self, uri, defrag=1):
-        return self.namespace_manager.absolutize(uri)
+        return self.namespace_manager.absolutize(uri, defrag)
 
     def n3(self, namespace_manager=None):
         """Return the graph identifier in RDFLib-compatible N3 form."""
@@ -325,7 +325,7 @@ class Graph:
 
     def resource(self, identifier):
         from .resource import Resource
-        if not isinstance(identifier, (URIRef, BNode)):
+        if not isinstance(identifier, Node):
             identifier = URIRef(identifier)
         return Resource(self, identifier)
 
@@ -360,7 +360,7 @@ class Graph:
         required_version = required_rdf_version(self)
         serializable_graph = self
         if required_version != "1.1":
-            rdf12_serializer = format in ("nt12", "nq12", "turtle12", "trig12")
+            rdf12_serializer = format in ("nt12", "nq12", "turtle12", "trig12", "xml12")
             if downgrade == "interop" and requested_version in ("1.1", "1.2-basic"):
                 from .interop import interop_downgrade
                 serializable_graph = interop_downgrade(self, requested_version)

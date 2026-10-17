@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 from ...serializer import Serializer
 from ...dataset import DATASET_DEFAULT_GRAPH_ID
 from .nt import _term
@@ -9,6 +11,11 @@ from .nt import _term
 
 class NQuadsSerializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, canonical=False, **kwargs):
+        if base is not None:
+            warnings.warn("NQuadsSerializer does not support base.")
+        if encoding is not None and encoding.lower() != "utf-8":
+            warnings.warn("NQuadsSerializer does not use custom encoding. "
+                          f"Given encoding was: {encoding}")
         if hasattr(self.store, "quads"):
             quads = self.store.quads((None, None, None, None))
         else:
@@ -21,8 +28,8 @@ class NQuadsSerializer(Serializer):
             lines.append(" ".join(parts) + " .\n")
         value = "".join(sorted(lines))
         if stream is None:
-            return value.encode(encoding) if encoding else value
-        payload = value.encode(encoding) if encoding else value
+            return value.encode("utf-8") if encoding else value
+        payload = value.encode("utf-8") if encoding else value
         try:
             stream.write(payload)
         except TypeError:

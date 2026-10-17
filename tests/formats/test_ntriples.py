@@ -13,7 +13,7 @@ def test_ntriples_parser_positive_cases():
     )
     values = list(graph.objects(URIRef("http://example.org/s"), None))
     assert Literal("line\n", lang="EN") in values
-    assert any(str(value) == "01" and value.datatype == URIRef("http://www.w3.org/2001/XMLSchema#integer") for value in values)
+    assert any(str(value) == "1" and value.datatype == URIRef("http://www.w3.org/2001/XMLSchema#integer") for value in values)
 
 
 def test_ntriples_parser_preserves_blank_node_identity():

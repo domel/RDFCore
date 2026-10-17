@@ -15,6 +15,11 @@ _BNODE = re.compile(r"_:([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?)")
 _LANG = re.compile(r"@[A-Za-z]+(?:-[A-Za-z0-9]+)*(?:--(?:ltr|rtl))?")
 
 
+class _PreservedBNodes(dict):
+    def setdefault(self, key, default=None):
+        return super().setdefault(key, BNode(key))
+
+
 class NTParser(Parser):
     rdf_version = "1.1"
 
@@ -24,7 +29,7 @@ class NTParser(Parser):
             stream = source.getByteStream()
         if stream is None:
             raise ParserError("N-Triples source has no readable stream")
-        bnode_map = {}
+        bnode_map = _PreservedBNodes() if kwargs.get('preserve_bnode_ids', False) else {}
         for line_number, raw_line in enumerate(stream, 1):
             try:
                 if isinstance(raw_line, bytes):
@@ -34,6 +39,10 @@ class NTParser(Parser):
                 raise
             except (UnicodeDecodeError, ValueError) as error:
                 raise ParserError(f"line {line_number}: {error}") from error
+        # RDFLib's NTParser closes its reader after a successful parse only.
+        # Keep the explicit RDF 1.2 streaming extension's ownership unchanged.
+        if self.rdf_version == "1.1" and self.store is not None:
+            stream.close()
         return sink
 
     def _parse_line(self, line, sink, line_number, bnode_map):
@@ -139,9 +148,9 @@ def _term(text, position, line_number, role, bnode_map, allow_rdf12=False):
         raise ParserError(f"line {line_number}: missing {role}")
     if allow_rdf12 and text.startswith("<<(", position):
         subject, position = _term(text, position + 3, line_number, "triple subject", bnode_map, allow_rdf12=True)
-        position = _required_spaces(text, position, line_number)
+        position = _spaces(text, position)
         predicate, position = _term(text, position, line_number, "triple predicate", bnode_map, allow_rdf12=True)
-        position = _required_spaces(text, position, line_number)
+        position = _spaces(text, position)
         obj, position = _term(text, position, line_number, "triple object", bnode_map, allow_rdf12=True)
         position = _spaces(text, position)
         if not text.startswith(")>>", position):
@@ -171,6 +180,8 @@ def _term(text, position, line_number, role, bnode_map, allow_rdf12=False):
         return bnode_map.setdefault(label, BNode()), match.end()
     if text[position] == '"':
         lexical, end = _literal(text, position, line_number)
+        if allow_rdf12:
+            end = _spaces(text, end)
         lang = None
         datatype = None
         if end < len(text) and text[end] == "@":
@@ -186,9 +197,18 @@ def _term(text, position, line_number, role, bnode_map, allow_rdf12=False):
         direction = None
         if lang is not None and "--" in lang:
             lang, direction = lang.split("--", 1)
+        if allow_rdf12:
+            if datatype is not None and str(datatype) in {
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#langString',
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString',
+            }:
+                raise ParserError(f'line {line_number}: language literal requires a language tag')
+            if lang is not None and re.fullmatch(r'[A-Za-z]{1,8}(?:-[A-Za-z0-9]{1,8})*', lang) is None:
+                raise ParserError(f'line {line_number}: invalid language tag')
         if direction is not None and not allow_rdf12:
             raise ParserError(f"line {line_number}: directional literal requires RDF 1.2")
-        return Literal(lexical, lang=lang, datatype=datatype, normalize=False, direction=direction), end
+        return Literal(lexical, lang=lang, datatype=datatype,
+                       normalize=False if allow_rdf12 else None, direction=direction), end
     raise ParserError(f"line {line_number}: invalid {role}")
 
 

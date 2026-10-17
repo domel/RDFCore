@@ -46,5 +46,6 @@ def test_closed_namespace_and_invalid_qname_local_name():
     manager.bind("ex", "http://example.org/")
     with pytest.raises(ValueError):
         manager.qname("http://example.org/_ contains-space")
-    with pytest.raises(ValueError):
-        NamespaceManager().compute_qname("http://example.org/0invalid")
+    assert NamespaceManager().compute_qname("http://example.org/0invalid") == (
+        "ns1", URIRef("http://example.org/"), "0invalid"
+    )

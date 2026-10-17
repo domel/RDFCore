@@ -1,6 +1,6 @@
 # RDFLib vs RDFCore
 
-Legend: ✅ supported, ⚠️ partially supported or available in a different form, ❌ not supported.
+Legend: ✅ implemented within the listed scope, ⚠️ partial or available in a different form, ❌ not implemented. These marks do not certify complete RDFLib parity. The executable reference is RDFLib 7.6.0.
 
 ## Classes
 
@@ -79,10 +79,6 @@ Legend: ✅ supported, ⚠️ partially supported or available in a different fo
 
 ## RDF Terms
 
-Term class equality, inequality, and set membership are checked against RDFLib
-7.6.0 in `tests/compatibility/test_identity_dataset.py`. This is a scoped check,
-not evidence of complete term API parity.
-
 | Feature | RDFLib | RDFCore |
 |---|---:|---:|
 | `URIRef.n3()` | ✅ | ✅ |
@@ -100,6 +96,10 @@ not evidence of complete term API parity.
 | `rdf:JSON` datatype | ❌ in RDFLib 7.6.0 | ✅ RDF 1.2 |
 | `Literal.direction` | ❌ in RDFLib 7.6.0 | ✅ RDF 1.2 |
 | `TripleTerm` | ❌ in RDFLib 7.6.0 | ✅ |
+| Term identity, hashing and ordering | ✅ | ✅ tested constructor and comparison matrices in `tests/compatibility/` |
+| Literal arithmetic and complete datatype API | ✅ | ⚠️ incomplete; constructor/value compatibility does not imply arithmetic parity |
+| Namespace prefix collisions and QName resolution | ✅ | ✅ executable differential matrices |
+| Collection indexing, deletion and malformed lists | ✅ | ✅ executable differential matrices; cyclic lists may not terminate, as in the reference |
 
 ## Parsers
 

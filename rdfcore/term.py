@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from decimal import Decimal
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from binascii import Error as BinasciiError, unhexlify
 import json
+import re
+import warnings
 from urllib.parse import urldefrag, urljoin, urlparse
 from uuid import uuid4
+from types import GeneratorType
 
 NORMALIZE_LITERALS = True
 
@@ -29,7 +32,39 @@ class Node(str):
     def __ne__(self, other):
         return not self == other
 
+    def eq(self, other):
+        return self == other
+
+    def neq(self, other):
+        return not self.eq(other)
+
     __hash__ = str.__hash__
+
+    def __lt__(self, other):
+        if other is None:
+            return False
+        if type(self) is type(other):
+            return str(self) < str(other)
+        if isinstance(other, Node):
+            order = {BNode: 0, Variable: 1, URIRef: 2, Literal: 3}
+            return order[type(self)] < order[type(other)]
+        return NotImplemented
+
+    def __gt__(self, other):
+        if other is None:
+            return True
+        if type(self) is type(other):
+            return str(self) > str(other)
+        if isinstance(other, Node):
+            order = {BNode: 0, Variable: 1, URIRef: 2, Literal: 3}
+            return order[type(self)] > order[type(other)]
+        return NotImplemented
+
+    def __le__(self, other):
+        return True if self.__lt__(other) else self == other
+
+    def __ge__(self, other):
+        return True if self.__gt__(other) else self == other
 
 
 Identifier = Node
@@ -39,8 +74,21 @@ IdentifiedNode = Node
 class URIRef(IdentifiedNode):
     def __new__(cls, value: str, base: str | None = None):
         if base is not None:
+            trailing_fragment = value.endswith('#')
             value = urljoin(base, value)
+            if trailing_fragment and not value.endswith('#'):
+                value += '#'
         return str.__new__(cls, value)
+
+    def __add__(self, other):
+        return type(self)(str(self) + other)
+
+    def __radd__(self, other):
+        return type(self)(other + str(self))
+
+    @property
+    def fragment(self):
+        return urlparse(self).fragment
 
     def toPython(self) -> str:
         return str(self)
@@ -51,6 +99,8 @@ class URIRef(IdentifiedNode):
         return self
 
     def n3(self, namespace_manager=None) -> str:
+        if any(char in '<>" {}|\\^`' for char in self):
+            raise Exception(f'{self} does not look like a valid URI, I cannot serialize this as N3/Turtle.')
         if namespace_manager is not None:
             try:
                 return namespace_manager.normalizeUri(self)
@@ -73,11 +123,19 @@ class URIRef(IdentifiedNode):
 
 
 class BNode(IdentifiedNode):
-    def __new__(cls, value: str | None = None):
-        return str.__new__(cls, value if value is not None else f"{uuid4().hex}")
+    def __new__(cls, value: str | None = None, _sn_gen=None, _prefix='N'):
+        if value is None:
+            generated = _sn_gen() if callable(_sn_gen) else _sn_gen
+            if isinstance(generated, GeneratorType):
+                generated = next(generated)
+            value = _prefix + str(uuid4().hex if generated is None else generated)
+        return str.__new__(cls, value)
 
     def n3(self, namespace_manager=None) -> str:
         return f"_:{self}"
+
+    def toPython(self):
+        return str(self)
 
     def skolemize(self, authority=None, basepath=None):
         """Create a deterministic RDF 1.1 skolem URI for this blank node."""
@@ -88,13 +146,17 @@ class BNode(IdentifiedNode):
 
 class Variable(Identifier):
     def __new__(cls, value: str):
-        value = str(value)
+        if len(value) == 0:
+            raise Exception("Attempted to create variable with empty string as name!")
         if value.startswith("?"):
             value = value[1:]
         return str.__new__(cls, value)
 
     def n3(self, namespace_manager=None) -> str:
         return f"?{self}"
+
+    def toPython(self):
+        return "?" + self
 
 
 class TripleTerm:
@@ -146,6 +208,18 @@ class TripleTerm:
 
 
 class Literal(Identifier):
+    from .literal_order import literal_lt as __lt__, literal_gt as __gt__, literal_le as __le__, literal_ge as __ge__, literal_bool as __bool__
+
+    def __setattr__(self, name, value):
+        if name in {'language', 'datatype', 'direction', 'value', 'ill_typed'} and hasattr(self, name):
+            raise AttributeError(f'{name} is read-only')
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if name in {'language', 'datatype', 'direction', 'value', 'ill_typed'}:
+            raise AttributeError(f'{name} is read-only')
+        object.__delattr__(self, name)
+
     def __new__(
         cls,
         lexical_or_value,
@@ -155,6 +229,10 @@ class Literal(Identifier):
         *,
         direction: str | None = None,
     ):
+        if lang == '':
+            lang = None
+        if lang is not None and re.fullmatch(r'[a-zA-Z]+(?:-[a-zA-Z0-9]+)*', lang) is None:
+            raise ValueError(f'{lang!r} is not a valid language tag!')
         if direction not in (None, "ltr", "rtl"):
             raise ValueError("direction must be 'ltr', 'rtl', or None")
         if lang is not None and datatype is not None:
@@ -173,16 +251,25 @@ class Literal(Identifier):
         if direction is not None and datatype is not None:
             raise TypeError("a directional literal cannot have an explicit datatype")
         datatype = URIRef(datatype) if datatype is not None else inferred
+        if inferred is not None and not isinstance(lexical_or_value, (str, Literal)):
+            lang = None
         if normalize is None:
             normalize = NORMALIZE_LITERALS
         ill_typed = None
-        if datatype is not None:
+        original_lexical = lexical
+        if str(datatype) in {_XSD + 'normalizedString', _XSD + 'token'}:
+            lexical = lexical.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+            if str(datatype) == _XSD + 'token':
+                lexical = ' '.join(lexical.split())
+        if isinstance(lexical_or_value, bytes) and datatype is not None and str(datatype) != _XSD + 'string':
+            lexical = lexical_or_value.decode('utf-8')
+        if (datatype is not None and isinstance(lexical_or_value, (str, bytes))
+                and not isinstance(lexical_or_value, Literal)):
             try:
                 value = _python_value(lexical, datatype)
                 if (
                     (
-                        isinstance(lexical_or_value, str)
-                        or isinstance(lexical_or_value, Literal)
+                        isinstance(lexical_or_value, (str, bytes))
                     )
                     and str(datatype) in _VALIDATED_DATATYPES
                 ):
@@ -192,6 +279,17 @@ class Literal(Identifier):
             except (ValueError, ArithmeticError):
                 ill_typed = True
                 value = None
+        if str(datatype) == _XSD + 'boolean' and isinstance(lexical_or_value, str):
+            ill_typed = str(lexical_or_value) not in ('true', 'false', '1', '0')
+        if lexical_or_value is None:
+            value = None
+        if str(datatype) == _RDF_JSON and isinstance(lexical_or_value, Literal):
+            ill_typed = lexical_or_value.ill_typed
+        if str(datatype) in {_XSD + 'normalizedString', _XSD + 'token'}:
+            value = original_lexical
+        if str(datatype) in _INTEGER_BOUNDS and value is not None and isinstance(lexical_or_value, (str, bytes)):
+            lower, upper = _INTEGER_BOUNDS[str(datatype)]
+            ill_typed = (lower is not None and value < lower) or (upper is not None and value > upper)
         obj = str.__new__(cls, lexical)
         obj.language = lang
         obj.direction = direction
@@ -229,18 +327,54 @@ class Literal(Identifier):
         return text
 
     def toPython(self):
-        return self.value
+        if self.value is not None or (str(self.datatype) == _RDF_JSON and self.ill_typed is False):
+            return self.value
+        return self
 
     def eq(self, other):
-        return self == other
+        numeric = _INTEGER_DATATYPES | {_XSD + 'decimal', _XSD + 'float', _XSD + 'double'}
+        if isinstance(other, Literal):
+            if (str(self.datatype) in numeric and str(other.datatype) in numeric
+                    and not self.ill_typed and not other.ill_typed
+                    and self.value is not None and other.value is not None):
+                return self.value == other.value
+            if (self.language or '').lower() != (other.language or '').lower() or self.direction != other.direction:
+                return False
+            left = str(self.datatype) if self.datatype is not None else _XSD + 'string'
+            right = str(other.datatype) if other.datatype is not None else _XSD + 'string'
+            if left != right:
+                return False
+            if left == _XSD + 'string':
+                return str(self) == str(other)
+            if self.value is not None and other.value is not None:
+                return self.value == other.value
+            if str(self) == str(other):
+                return True
+            raise TypeError(f'I cannot know that these two lexical forms do not map to the same value: {self} and {other}')
+        if isinstance(other, Node):
+            return False
+        if isinstance(other, str):
+            if self.language is not None:
+                return False
+            if self.datatype is None or str(self.datatype) == _XSD + 'string':
+                return str(self) == other
+        elif isinstance(other, (int, float)):
+            if str(self.datatype) in numeric:
+                return self.value == other
+        elif isinstance(other, (date, datetime, time)):
+            if str(self.datatype) in {_XSD + 'date', _XSD + 'dateTime', _XSD + 'time'}:
+                return self.value == other
+        return NotImplemented
 
     def neq(self, other):
         return not self.eq(other)
 
     def normalize(self):
-        if self.datatype is None:
+        if self.value is None:
             return self
-        return Literal(str(self), datatype=self.datatype, normalize=True)
+        if str(self.datatype) == _RDF_JSON:
+            return self
+        return Literal(self.value, datatype=self.datatype, lang=self.language, direction=self.direction, normalize=True)
 
 
 def _literal_parts(value):
@@ -262,10 +396,18 @@ def _literal_parts(value):
 
 
 def _normalize_lexical(lexical, datatype):
+    if str(datatype) == _XSD + 'date':
+        return date.fromisoformat(re.sub(r'(Z|[+-]\d\d:\d\d)$', '', lexical)).isoformat()
+    if str(datatype) == _XSD + 'decimal':
+        return str(Decimal(lexical))
+    if str(datatype) in {_XSD + 'double', _XSD + 'float'}:
+        return str(float(lexical))
+    if str(datatype) == _XSD + 'base64Binary':
+        return b64encode(b64decode(lexical)).decode('ascii')
     if str(datatype) in _INTEGER_DATATYPES:
         return str(int(lexical))
     if str(datatype) == _XSD + "boolean":
-        return "true" if lexical in ("true", "1") else "false" if lexical in ("false", "0") else lexical
+        return 'true' if lexical.lower() in ('true', '1') else 'false'
     return lexical
 
 
@@ -285,26 +427,21 @@ def _python_value(lexical, datatype):
             return value
         if name in _INTEGER_DATATYPES:
             value = int(lexical)
-            lower, upper = _INTEGER_BOUNDS.get(name, (None, None))
-            if lower is not None and value < lower:
-                raise ValueError(lexical)
-            if upper is not None and value > upper:
-                raise ValueError(lexical)
             return value
         if name == _XSD + "boolean":
-            if lexical not in ("true", "false", "1", "0"):
-                raise ValueError(lexical)
-            return lexical in ("true", "1")
+            if lexical.lower() not in ('true', 'false', '1', '0'):
+                warnings.warn(f"Parsing weird boolean, {lexical!r} does not map to True or False", UserWarning)
+            return lexical.lower() in ('true', '1')
         if name in (_XSD + "double", _XSD + "float"): return float(lexical)
         if name == _XSD + "decimal": return Decimal(lexical)
         if name == _XSD + "dateTime": return datetime.fromisoformat(lexical.replace("Z", "+00:00"))
-        if name == _XSD + "date": return date.fromisoformat(lexical)
+        if name == _XSD + "date": return date.fromisoformat(re.sub(r'(Z|[+-]\d\d:\d\d)$', '', lexical))
         if name == _XSD + "time": return time.fromisoformat(lexical.replace("Z", "+00:00"))
         if name == _XSD + "hexBinary": return unhexlify(lexical)
-        if name == _XSD + "base64Binary": return b64decode(lexical, validate=True)
+        if name == _XSD + "base64Binary": return b64decode(lexical)
     except (ValueError, ArithmeticError, BinasciiError):
         raise
-    return lexical
+    return None
 
 
 _STRING_DATATYPES = {

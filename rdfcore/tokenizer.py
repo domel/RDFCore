@@ -46,7 +46,7 @@ class Token:
 class TokenReader:
     """Tokenize across arbitrary chunk boundaries while retaining positions."""
 
-    _PUNCTUATION = set(";,.[](){}")
+    _PUNCTUATION = set(";,.[](){}~")
 
     def __init__(self, stream, chunk_size=64 * 1024, encoding="utf-8"):
         self.chunks = ChunkReader(stream, chunk_size, encoding)
@@ -72,7 +72,10 @@ class TokenReader:
             yield token
 
     def _next(self, text, line, column, final):
-        if not final and len(text) == 1 and text[0] in "<>{|^":
+        for directive in ('@prefix', '@base'):
+            if text.startswith(directive) and len(text) > len(directive) and text[len(directive)] in ':<':
+                return Token('word', directive, line, column), len(directive)
+        if not final and len(text) == 1 and text[0] in "<>{|^.":
             return None, 0
         if text[0].isspace():
             index = 1
@@ -101,11 +104,18 @@ class TokenReader:
             if end < 0:
                 return (None, 0) if not final else (_error("unterminated literal"), 0)
             return Token("literal", text[:end + len(closing)], line, column), end + len(closing)
-        if text[0] in self._PUNCTUATION:
+        if text[0] in self._PUNCTUATION and not (text[0] == '.' and len(text) > 1 and text[1].isdigit()):
             return Token("punctuation", text[0], line, column), 1
         index = 1
-        delimiters = (self._PUNCTUATION - {"."}) | set("<>")
+        delimiters = (self._PUNCTUATION - {"."}) | set("<>#|\"'")
         while index < len(text) and not text[index].isspace() and text[index] not in delimiters:
+            if text.startswith('_:') and index > 1 and text[index] == ':':
+                break
+            if text[index] == '\\':
+                if index + 1 >= len(text) and not final:
+                    return None, 0
+                index += 2
+                continue
             index += 1
         if index == len(text) and not final:
             return None, 0

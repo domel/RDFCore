@@ -5,7 +5,7 @@ from __future__ import annotations
 from ...exceptions import ParserError
 from ...parser import Parser
 from ...term import BNode, URIRef
-from .ntriples import _spaces, _term, _required_spaces
+from .ntriples import _spaces, _term, _required_spaces, _PreservedBNodes
 
 
 class NQuadsParser(Parser):
@@ -16,7 +16,7 @@ class NQuadsParser(Parser):
         stream = source.getCharacterStream() or source.getByteStream()
         if stream is None:
             raise ParserError("N-Quads source has no readable stream")
-        bnode_map = {}
+        bnode_map = _PreservedBNodes() if kwargs.get('preserve_bnode_ids', False) else {}
         for line_number, raw_line in enumerate(stream, 1):
             try:
                 if isinstance(raw_line, bytes):

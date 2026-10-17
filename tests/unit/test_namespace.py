@@ -1,4 +1,4 @@
-from rdfcore import Namespace, NamespaceManager, RDF, RDFS, XSD
+from rdfcore import Namespace, NamespaceManager, RDF, RDFS, URIRef, XSD
 
 
 def test_namespace_terms():
@@ -16,12 +16,12 @@ def test_namespace_manager_qnames():
     manager.bind("ex", Namespace("http://example.org/"))
     assert manager.qname("http://example.org/person") == "ex:person"
     assert manager.normalizeUri("http://other.example/item") == "<http://other.example/item>"
-    assert manager.compute_qname("http://example.org/person") == ("ex", "http://example.org/", "person")
+    assert manager.compute_qname("http://example.org/person") == ("ex", URIRef("http://example.org/"), "person")
 
 
 def test_rebinding_prefix_removes_stale_reverse_mapping():
     manager = NamespaceManager()
     manager.bind("ex", "http://old.example/")
-    manager.bind("ex", "http://new.example/")
+    manager.bind("ex", "http://new.example/", replace=True)
     assert manager.qname("http://new.example/item") == "ex:item"
     assert manager.normalizeUri("http://old.example/item") == "<http://old.example/item>"

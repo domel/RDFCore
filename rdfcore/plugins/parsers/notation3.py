@@ -9,6 +9,7 @@ from ...exceptions import BadSyntax
 from ...parser import Parser
 from ...term import BNode, Literal, TripleTerm, URIRef
 from ...namespace import RDF
+from ...tokenizer import TokenReader
 from .ntriples import _unescape
 
 
@@ -21,10 +22,11 @@ class TurtleParser(Parser):
         if stream is None:
             raise BadSyntax("Turtle source has no readable stream")
         self.sink = sink
+        self._strict = kwargs.get('strict', self.allow_rdf12)
         self.base = source.publicID or kwargs.get("base")
         self.prefixes = {}
         self.bnodes = {}
-        self.tokens = _StreamingTokens(stream)
+        self.tokens = _StreamingTokens(stream, legacy=not self.allow_rdf12)
         self.index = 0
         self._requested_version = kwargs.get("rdf_version", "auto")
         while not self._at_end():
@@ -48,13 +50,36 @@ class TurtleParser(Parser):
         self._expect(".")
 
     def _add(self, triple):
-        self.sink.add(triple)
+        self._emit(triple)
+
+    def _emit(self, statement):
+        # RDFLib's legacy Turtle parser accepts generalized literal subjects.
+        # Insert only that legacy case directly; Graph.add remains strict and
+        # RDF 1.2 parsers continue through the validating sink.
+        if not self.allow_rdf12 and isinstance(statement[0], Literal):
+            from ...streaming import DatasetSink, GraphSink
+
+            if isinstance(self.sink, DatasetSink):
+                dataset = self.sink.dataset
+                graph = dataset.graph(statement[3]) if len(statement) == 4 else dataset.default_graph
+            elif isinstance(self.sink, GraphSink):
+                graph = self.sink.graph
+            else:
+                self.sink.add(statement)
+                return
+            graph.store.add(tuple(statement[:3]), graph.identifier)
+            return
+        self.sink.add(statement)
 
     def _predicate_objects(self, subject):
         while True:
             predicate = self._predicate()
             while True:
                 obj = self._object()
+                if not self.allow_rdf12 and self._at_end():
+                    # RDFLib checks for statement continuation before emitting
+                    # the final object; incomplete EOF statements add no triple.
+                    self._expect(".")
                 self._add((subject, predicate, obj))
                 if not self._accept(","):
                     break
@@ -80,7 +105,10 @@ class TurtleParser(Parser):
         if self._accept("("):
             self._last_subject_is_collection = True
             return self._collection()
-        return self._term("subject")
+        term = self._term("subject")
+        if getattr(self, '_strict', self.allow_rdf12) and not isinstance(term, (URIRef, BNode)):
+            raise self._error('subject must be an IRI or blank node')
+        return term
 
     def _object(self):
         if self._peek() == "[":
@@ -148,15 +176,16 @@ class TurtleParser(Parser):
                 direction = None
             else:
                 direction = None
-            return Literal(lexical, lang=lang, datatype=datatype, normalize=False, direction=direction)
+            return Literal(lexical, lang=lang, datatype=datatype,
+                           normalize=False if self.allow_rdf12 else None, direction=direction)
         if token in ("true", "false"):
-            return Literal(token, datatype="http://www.w3.org/2001/XMLSchema#boolean", normalize=False)
+            return Literal(token, datatype="http://www.w3.org/2001/XMLSchema#boolean", normalize=False if self.allow_rdf12 else None)
         if re.fullmatch(r"[+-]?\d+", token):
-            return Literal(token, datatype="http://www.w3.org/2001/XMLSchema#integer", normalize=False)
+            return Literal(token, datatype="http://www.w3.org/2001/XMLSchema#integer", normalize=False if self.allow_rdf12 else None)
         if re.fullmatch(r"[+-]?\d*\.\d+", token):
-            return Literal(token, datatype="http://www.w3.org/2001/XMLSchema#decimal", normalize=False)
+            return Literal(token, datatype="http://www.w3.org/2001/XMLSchema#decimal", normalize=False if self.allow_rdf12 else None)
         if re.fullmatch(r"[+-]?(?:\d+\.?(?:\d*)?|\.\d+)[eE][+-]?\d+", token):
-            return Literal(token, datatype="http://www.w3.org/2001/XMLSchema#double", normalize=False)
+            return Literal(token, datatype="http://www.w3.org/2001/XMLSchema#double", normalize=False if self.allow_rdf12 else None)
         if ":" in token:
             prefix, local = token.split(":", 1)
             if prefix not in self.prefixes:
@@ -231,6 +260,9 @@ class TurtleParser(Parser):
 
     def _expect(self, token):
         if not self._accept(token):
+            if (not self.allow_rdf12 and token == "." and self._at_end()
+                    and not self.tokens.trailing_ignored):
+                raise IndexError("string index out of range")
             raise self._error(f"expected {token!r}")
 
     def _at_end(self):
@@ -321,16 +353,32 @@ def _tokenize(data):
     return [token for token in tokens if token != " "]
 
 
+class _LegacyTokenReader(TokenReader):
+    """Translate lexical EOF errors to the pinned legacy parser's errors."""
+
+    def _next(self, text, line, column, final):
+        try:
+            return super()._next(text, line, column, final)
+        except ValueError as error:
+            if str(error) == "unterminated literal":
+                long_string = text.startswith(('"""', "'''"))
+                if not long_string and any(char in text for char in "\r\n"):
+                    raise BadSyntax("newline found in string literal") from error
+                raise AssertionError("Quote expected in string") from error
+            if str(error) == "unterminated IRI":
+                raise BadSyntax("unterminated URI reference") from error
+            raise
+
+
 class _StreamingTokens:
     """Lazy Turtle token sequence with only parser look-ahead in memory."""
 
-    def __init__(self, stream):
-        from ...tokenizer import TokenReader
-
-        self._tokens = iter(TokenReader(stream))
+    def __init__(self, stream, legacy=False):
+        self._tokens = iter((_LegacyTokenReader if legacy else TokenReader)(stream))
         self._buffer = []
         self._offset = 0
         self._done = False
+        self.trailing_ignored = False
 
     def __getitem__(self, index):
         if index < self._offset:
@@ -342,7 +390,10 @@ class _StreamingTokens:
                 self._done = True
                 break
             if token.kind not in ("whitespace", "comment"):
+                self.trailing_ignored = False
                 self._buffer.append(token.value)
+            else:
+                self.trailing_ignored = True
         relative = index - self._offset
         return self._buffer[relative] if relative < len(self._buffer) else None
 

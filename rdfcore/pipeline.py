@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
+import os
+import sys
+from pathlib import Path
 
-from .io import open_input, open_output
+from .io import _check_buffer_size, open_input, open_output
 from .streaming import NQStreamingWriter, NTStreamingWriter, parse_stream
 from .rdf_version import required_rdf_version
 
@@ -104,10 +107,28 @@ def convert(source, destination=None, input_format=None, output_format=None, *, 
     buffer_size = kwargs.pop("buffer_size", 64 * 1024)
     input_compression = kwargs.pop("input_compression", None)
     output_compression = kwargs.pop("output_compression", None)
+    _check_buffer_size(buffer_size)
+    if (_FORMATS[input_format][0] == 'dataset' and _FORMATS[output_format][0] == 'graph'
+            and kwargs.get('dataset_policy', 'strict') not in ('strict', 'default', 'union')):
+        raise ValueError("dataset_policy must be 'strict', 'default', or 'union'")
+    if sink is None:
+        if destination is None:
+            raise ValueError('convert() requires destination or sink')
+        if _same_file(source, destination):
+            raise ValueError('input and output refer to the same file')
     with ExitStack() as cleanup:
+        # Open input before truncating output. Preserve sink cleanup on an
+        # input failure and close sinks before their input on the normal path.
+        try:
+            input_stream, input_owned = open_input(source, compression=input_compression, buffer_size=buffer_size)
+        except BaseException:
+            if sink is not None and hasattr(sink, 'close'):
+                sink.close()
+            raise
+        cleanup.callback(_close_stream, input_stream, input_owned)
+        if sink is not None and hasattr(sink, 'close'):
+            cleanup.callback(sink.close)
         if sink is None:
-            if destination is None:
-                raise ValueError("convert() requires destination or sink")
             destination_stream, output_owned = open_output(
                 destination, compression=output_compression, buffer_size=buffer_size)
             cleanup.callback(_close_stream, destination_stream, output_owned, output=True)
@@ -119,16 +140,31 @@ def convert(source, destination=None, input_format=None, output_format=None, *, 
                 factory = NTStreamingWriter if family == 'graph' else NQStreamingWriter
                 options = {'default_graph_id': None} if family == 'dataset' else {}
                 sink = factory(destination_stream, canonical=canonical, **options)
-        try:
-            input_stream, input_owned = open_input(source, compression=input_compression, buffer_size=buffer_size)
-        except BaseException:
             if hasattr(sink, 'close'):
-                sink.close()
-            raise
-        cleanup.callback(_close_stream, input_stream, input_owned)
-        if hasattr(sink, 'close'):
-            cleanup.callback(sink.close)
+                cleanup.callback(sink.close)
         return _convert_stream(input_stream, input_format, output_format, sink, kwargs)
+
+
+def _same_file(source, destination):
+    if source is None or source == '-':
+        source = getattr(sys.stdin, 'buffer', sys.stdin)
+    if destination is None or destination == '-':
+        destination = getattr(sys.stdout, 'buffer', sys.stdout)
+    if source is destination and hasattr(source, 'read') and hasattr(destination, 'write'):
+        return True
+    def identity(value):
+        try:
+            if isinstance(value, (str, Path)) and value != '-':
+                stat = Path(value).stat()
+            elif hasattr(value, 'fileno'):
+                stat = os.fstat(value.fileno())
+            else:
+                return None
+            return stat.st_dev, stat.st_ino
+        except (OSError, ValueError):
+            return None
+    first, second = identity(source), identity(destination)
+    return first is not None and first == second
 
 
 def _convert_stream(source, input_format, output_format, sink, kwargs):

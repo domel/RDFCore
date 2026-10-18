@@ -38,7 +38,7 @@ class XMLSerializer(Serializer):
         declarations = ''.join(' xmlns:'+prefix+'='+quoteattr(_xml(ns)) for ns, prefix in self.namespaces.items())
         if self._output_version != '1.1':
             declarations += ' xmlns:its='+quoteattr(ITS)+' rdf:version='+quoteattr(self._output_version)+' its:version="2.0"'
-        if base is not None:
+        if base:
             declarations += ' xml:base='+quoteattr(_xml(base))
         codec = encoding or 'utf-8'
         value = '<?xml version="1.0" encoding='+quoteattr(codec)+'?>\n<rdf:RDF'+declarations+'>\n'+body+'</rdf:RDF>\n'

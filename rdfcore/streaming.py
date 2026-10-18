@@ -201,12 +201,13 @@ class NQStreamingWriter:
 class TurtleStreamingWriter:
     """Write Turtle statements immediately, without prefix/global sorting."""
 
-    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto"):
+    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto", base=None):
         if rdf_version not in ("auto", "1.1", "1.2-basic", "1.2"):
             raise ValueError(f"unsupported rdf_version {rdf_version!r}")
         self.stream = stream
         self.encoding = encoding
         self.rdf_version = rdf_version
+        self.base = base
         self._version_written = False
         self._emitted_version = "1.1"
         self._started = False
@@ -214,6 +215,8 @@ class TurtleStreamingWriter:
             self._write(f'VERSION "{rdf_version}"\n')
             self._version_written = True
             self._emitted_version = rdf_version
+        if base:
+            self._write(f'@base {URIRef(base).n3()} .\n')
 
     def add(self, triple):
         if len(triple) != 3:
@@ -233,7 +236,7 @@ class TurtleStreamingWriter:
             self._emitted_version = version
         if self._emitted_version == "1.2-basic" and required == "1.2":
             raise ValueError("cannot upgrade a started Turtle stream from RDF 1.2-basic to RDF 1.2")
-        self._write(f"{_turtle_term(subject)} {_turtle_term(predicate)} {_turtle_term(obj)} .\n")
+        self._write(f"{_turtle_term(subject, self.base)} {_turtle_term(predicate, self.base)} {_turtle_term(obj, self.base)} .\n")
         self._started = True
 
     def _write(self, text):
@@ -246,32 +249,36 @@ class TurtleStreamingWriter:
         return None
 
 
-def _turtle_term(term):
+def _turtle_term(term, base=None):
     if isinstance(term, URIRef):
-        return term.n3()
+        from .plugins.serializers.turtle import _relativize
+        return _relativize(term, base).n3()
     if isinstance(term, BNode):
         return term.n3()
     if isinstance(term, Literal):
         return term.n3()
     if isinstance(term, TripleTerm):
-        return "<<( " + " ".join(_turtle_term(item) for item in term) + " )>>"
+        return "<<( " + " ".join(_turtle_term(item, base) for item in term) + " )>>"
     raise TypeError(f"unsupported RDF term: {term!r}")
 
 
 class TriGStreamingWriter:
     """Write quads as contiguous TriG blocks without grouping the dataset."""
 
-    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto"):
+    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto", base=None):
         if rdf_version not in ("auto", "1.1", "1.2-basic", "1.2"):
             raise ValueError(f"unsupported rdf_version {rdf_version!r}")
         self.stream = stream
         self.encoding = encoding
         self.rdf_version = rdf_version
+        self.base = base
         self._graph = _NO_GRAPH
         self._closed = False
         self._emitted_version = rdf_version if rdf_version != "auto" else "1.1"
         if rdf_version in ("1.2-basic", "1.2"):
             self._write(f'VERSION "{rdf_version}"\n')
+        if base:
+            self._write(f'@base {URIRef(base).n3()} .\n')
 
     def add(self, statement):
         if self._closed:
@@ -301,9 +308,9 @@ class TriGStreamingWriter:
             if graph is None:
                 self._write("{\n")
             else:
-                self._write(f"{_turtle_term(graph)} {{\n")
+                self._write(f"{_turtle_term(graph, self.base)} {{\n")
             self._graph = graph
-        self._write(f"  {_turtle_term(subject)} {_turtle_term(predicate)} {_turtle_term(obj)} .\n")
+        self._write(f"  {_turtle_term(subject, self.base)} {_turtle_term(predicate, self.base)} {_turtle_term(obj, self.base)} .\n")
 
     def _close_graph(self):
         if self._graph is not _NO_GRAPH:

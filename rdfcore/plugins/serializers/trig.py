@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from ...dataset import DATASET_DEFAULT_GRAPH_ID
 from ...serializer import Serializer
+from ...term import URIRef
 from ..serializers.turtle import _term
 
 
 class TriGSerializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, canonical=False, mode="pretty", **kwargs):
+        if base is None:
+            base = self.store.base
         if mode == "stream":
             from ...streaming import TriGStreamingWriter
             if stream is None:
@@ -17,7 +20,7 @@ class TriGSerializer(Serializer):
                 capture = True
             else:
                 capture = False
-            writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version="1.1")
+            writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version="1.1", base=base)
             statements = self.store.quads() if hasattr(self.store, "quads") else self.store
             for statement in statements:
                 writer.add(statement)
@@ -27,6 +30,8 @@ class TriGSerializer(Serializer):
             raise ValueError("mode must be 'pretty' or 'stream'")
         manager = self.store.namespace_manager
         lines = [f"@prefix {prefix}: <{namespace}> .\n" for prefix, namespace in manager.namespaces()]
+        if base:
+            lines.insert(0, f'@base {URIRef(base).n3()} .\n')
         if lines:
             lines.append("\n")
         groups = {}
@@ -37,11 +42,11 @@ class TriGSerializer(Serializer):
             groups[DATASET_DEFAULT_GRAPH_ID] = list(self.store)
         for graph in sorted(groups, key=lambda item: str(item)):
             triples = sorted(groups[graph], key=lambda triple: tuple(str(item) for item in triple))
-            body = "".join(f"  {_term(s, manager)} {_term(p, manager)} {_term(o, manager)} .\n" for s, p, o in triples)
+            body = "".join(f"  {_term(s, manager, base)} {_term(p, manager, base)} {_term(o, manager, base)} .\n" for s, p, o in triples)
             if graph == DATASET_DEFAULT_GRAPH_ID or graph is None:
                 lines.append("{\n" + body + "}\n")
             else:
-                lines.append(f"{_term(graph, manager)} {{\n" + body + "}\n")
+                lines.append(f"{_term(graph, manager, base)} {{\n" + body + "}\n")
         value = "".join(lines)
         if stream is None:
             return value.encode("utf-8") if encoding else value

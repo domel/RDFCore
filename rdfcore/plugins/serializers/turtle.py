@@ -8,6 +8,8 @@ from ...term import BNode, Literal, URIRef
 
 class TurtleSerializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, mode="pretty", **kwargs):
+        if base is None:
+            base = self.store.base
         if mode == "stream":
             from ...streaming import TurtleStreamingWriter
             if stream is None:
@@ -16,7 +18,7 @@ class TurtleSerializer(Serializer):
                 capture = True
             else:
                 capture = False
-            writer = TurtleStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version="1.1")
+            writer = TurtleStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version="1.1", base=base)
             for triple in self.store.triples((None, None, None)):
                 writer.add(triple)
             writer.close()
@@ -26,11 +28,13 @@ class TurtleSerializer(Serializer):
         manager = self.store.namespace_manager
         prefixes = list(manager.namespaces())
         lines = [f"@prefix {prefix}: <{namespace}> .\n" for prefix, namespace in prefixes]
+        if base:
+            lines.insert(0, f'@base {URIRef(base).n3()} .\n')
         if prefixes:
             lines.append("\n")
         triples = sorted(self.store.triples((None, None, None)), key=lambda triple: tuple(str(item) for item in triple))
         lines.extend(
-            f"{_term(subject, manager)} {_term(predicate, manager)} {_term(obj, manager)} .\n"
+            f"{_term(subject, manager, base)} {_term(predicate, manager, base)} {_term(obj, manager, base)} .\n"
             for subject, predicate, obj in triples
         )
         value = "".join(lines)
@@ -44,8 +48,18 @@ class TurtleSerializer(Serializer):
         return stream
 
 
-def _term(term, manager):
+def _relativize(term, base):
+    if (base is not None and term.startswith(base)
+            and '#' not in term.replace(base, '') and '/' not in term.replace(base, '')):
+        return URIRef(term.replace(base, '', 1))
+    return term
+
+
+def _term(term, manager, base=None):
     if isinstance(term, URIRef):
+        relative = _relativize(term, base)
+        if relative != term:
+            return relative.n3()
         return manager.normalizeUri(term)
     if isinstance(term, BNode):
         return term.n3()

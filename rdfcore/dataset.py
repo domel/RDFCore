@@ -108,6 +108,19 @@ class Dataset(Graph):
     def __len__(self):
         return self.store.__len__(None)
 
+    def triples_choices(self, triple, context=None):
+        if context is None:
+            selected = None if self.default_union else self.default_graph.identifier
+        elif isinstance(context, Graph):
+            selected = context.identifier
+        else:
+            if context and not isinstance(context, (URIRef, BNode)):
+                # RDFLib coerces through URIRef, whose URI validation requires
+                # an iterable value. Preserve that error before querying.
+                ' ' in context
+            selected = self.get_context(context or None).identifier
+        yield from self._choices(triple, lambda pattern: (row for row, _ in self.store.triples(pattern, selected)))
+
     def __iter__(self):
         return self.quads()
 

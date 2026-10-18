@@ -1,4 +1,7 @@
 from rdfcore import BNode, Graph, Literal, URIRef
+import pytest
+import rdflib
+import rdfcore
 
 
 def test_graph_isomorphic_is_method_backed_by_compare():
@@ -8,11 +11,11 @@ def test_graph_isomorphic_is_method_backed_by_compare():
     assert left.isomorphic(right)
 
 
-def test_triples_choices_accepts_choices_in_any_position():
-    graph = Graph()
-    subjects = [URIRef("urn:s1"), URIRef("urn:s2")]
-    predicates = [URIRef("urn:p1"), URIRef("urn:p2")]
-    for subject in subjects:
-        for predicate in predicates:
-            graph.add((subject, predicate, Literal("x")))
-    assert len(list(graph.triples_choices((subjects, predicates, Literal("x"))))) == 4
+def test_triples_choices_rejects_lists_in_multiple_positions_like_rdflib():
+    for module in (rdflib, rdfcore):
+        graph = module.Graph()
+        subjects = [module.URIRef('urn:s')]
+        predicates = [module.URIRef('urn:p')]
+        graph.add((subjects[0], predicates[0], module.Literal('x')))
+        with pytest.raises(AssertionError, match='subject / predicate'):
+            list(graph.triples_choices((subjects, predicates, module.Literal('x'))))

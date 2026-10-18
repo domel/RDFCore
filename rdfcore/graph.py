@@ -31,9 +31,12 @@ class Graph:
 
     def addN(self, quads):
         for subject, predicate, obj, context in quads:
-            self._assert_triple((subject, predicate, obj))
-            context_identifier = getattr(context, "identifier", context)
-            if context_identifier == self.identifier:
+            if isinstance(context, Graph) and context.identifier is self.identifier:
+                if isinstance(obj, TripleTerm):
+                    self._assert_triple((subject, predicate, obj))
+                else:
+                    for term in (subject, predicate, obj):
+                        assert isinstance(term, Node), 'Term %s must be an rdflib term' % (term,)
                 self.store.add((subject, predicate, obj), self.identifier)
         return self
 
@@ -175,26 +178,44 @@ class Graph:
         return visited == nodes
 
     def isomorphic(self, other):
-        """Compare this graph with another graph up to blank-node names."""
-        from .compare import isomorphic
+        """RDFLib's approximate check; RDF 1.2 terms use exact comparison.
 
-        return isomorphic(self, other)
+        Use ``rdfcore.compare.isomorphic`` for exact RDF 1.1 comparison too.
+        """
+        if len(self) != len(other):
+            return False
+        from .rdf_version import required_rdf_version
+        if required_rdf_version(self) != '1.1' or required_rdf_version(other) != '1.1':
+            from .compare import isomorphic
+            return isomorphic(self, other)
+        for source, target in ((self, other), (other, self)):
+            for s, p, o in source:
+                if not isinstance(s, BNode) and not isinstance(o, BNode) and (s, p, o) not in target:
+                    return False
+        return True
 
     def triples_choices(self, triple, context=None):
-        """Yield triples matching scalar or list choices in a pattern."""
-        subject, predicate, object = triple
-        choices = [
-            value if isinstance(value, (list, tuple, set, frozenset)) else (value,)
-            for value in (subject, predicate, object)
-        ]
-        seen = set()
-        for chosen_subject in choices[0]:
-            for chosen_predicate in choices[1]:
-                for chosen_object in choices[2]:
-                    for result in self.triples((chosen_subject, chosen_predicate, chosen_object)):
-                        if result not in seen:
-                            seen.add(result)
-                            yield result
+        """RDFLib list choices, retaining duplicate results and empty wildcards."""
+        yield from self._choices(triple, self.triples)
+
+    @staticmethod
+    def _choices(triple, triples):
+        subject, predicate, obj = triple
+        if isinstance(obj, list):
+            assert not isinstance(subject, list), 'object_ / subject are both lists'
+            assert not isinstance(predicate, list), 'object_ / predicate are both lists'
+            slot, choices = 2, obj
+        elif isinstance(subject, list):
+            assert not isinstance(predicate, list), 'subject / predicate are both lists'
+            slot, choices = 0, subject
+        elif isinstance(predicate, list):
+            slot, choices = 1, predicate
+        else:
+            return
+        for choice in choices or [None]:
+            pattern = list(triple)
+            pattern[slot] = choice
+            yield from triples(tuple(pattern))
 
     @staticmethod
     def _map_skolem_term(term, *, to_skolem, authority=None, basepath=None):
@@ -353,6 +374,8 @@ class Graph:
     def serialize(self, destination=None, format="turtle", base=None, encoding=None, **args):
         from .rdf_version import required_rdf_version, validate_rdf_version, version_allows
 
+        if base is None:
+            base = self.base
         requested_version = validate_rdf_version(args.get("rdf_version", "auto"))
         downgrade = args.get("downgrade", "error")
         if downgrade not in ("error", "interop"):

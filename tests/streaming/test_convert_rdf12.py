@@ -91,10 +91,12 @@ def test_compressed_conversion_preserves_caller_streams(compression):
 def test_open_failure_and_sink_close_failure_release_owned_streams(monkeypatch):
     from rdfcore import pipeline
     output = BytesIO()
-    monkeypatch.setattr(pipeline, 'open_output', lambda *args, **kwargs: (output, True))
+    def forbidden(*args, **kwargs):
+        raise AssertionError('output opened before missing input was detected')
+    monkeypatch.setattr(pipeline, 'open_output', forbidden)
     with pytest.raises(FileNotFoundError):
         convert('/path/which/does/not/exist.nt', 'out', input_format='nt12', output_format='nq12')
-    assert output.closed
+    assert not output.closed
     source = BytesIO(DATA)
     monkeypatch.setattr(pipeline, 'open_input', lambda *args, **kwargs: (source, True))
     class Sink:

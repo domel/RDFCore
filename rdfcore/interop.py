@@ -11,6 +11,12 @@ I18N_BASE = "https://www.w3.org/ns/i18n#"
 _I18N = re.compile(r"^https://www\.w3\.org/ns/i18n#([a-z0-9]+(?:-[a-z0-9]+)*)_(ltr|rtl)$")
 
 
+def _copy_graph_names(source, result):
+    if hasattr(source, 'quads'):
+        for graph in source.graphs():
+            result.graph(graph.identifier)
+
+
 def encode_direction_i18n(literal: Literal) -> Literal:
     if not isinstance(literal, Literal) or literal.direction is None or literal.language is None:
         raise ValueError("expected a directional language literal")
@@ -35,6 +41,7 @@ def basic_encode(value):
 
     is_dataset = hasattr(value, "quads")
     result = Dataset() if is_dataset else Graph()
+    _copy_graph_names(value, result)
     mapping = {}
     quads = list(value.quads()) if is_dataset else [(*triple, None) for triple in value]
     occupied = {
@@ -60,6 +67,7 @@ def basic_decode(value):
 
     is_dataset = hasattr(value, "quads")
     result = Dataset() if is_dataset else Graph()
+    _copy_graph_names(value, result)
     quads = list(value.quads()) if is_dataset else [(*triple, None) for triple in value]
     forms = _proposition_forms(quads)
     for subject, predicate, obj, graph in quads:
@@ -151,6 +159,7 @@ def interop_downgrade(value, target_version):
         from .dataset import Dataset
         from .graph import Graph
         output = Dataset() if hasattr(result, "quads") else Graph()
+        _copy_graph_names(result, output)
         quads = list(result.quads()) if hasattr(result, "quads") else [(*triple, None) for triple in result]
         for subject, predicate, obj, graph in quads:
             obj = _encode_directional_term(obj)

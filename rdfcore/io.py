@@ -13,6 +13,13 @@ from .streaming import BoundedReadStream
 DEFAULT_BUFFER_SIZE = 64 * 1024
 
 
+def _check_buffer_size(value):
+    if not isinstance(value, int):
+        raise TypeError('buffer size must be an integer')
+    if value <= 0:
+        raise ValueError('buffer size must be positive')
+
+
 class _CompressionReadStream(BoundedReadStream):
     """Fill codec requests while keeping each underlying read bounded.
 
@@ -36,15 +43,20 @@ class _CompressionReadStream(BoundedReadStream):
 
 class BoundedWriteStream:
     def __init__(self, stream, chunk_size=DEFAULT_BUFFER_SIZE):
-        if chunk_size <= 0:
-            raise ValueError("chunk_size must be positive")
+        _check_buffer_size(chunk_size)
         self.stream = stream
         self.chunk_size = chunk_size
 
     def write(self, data):
         total = 0
         for offset in range(0, len(data), self.chunk_size):
-            total += self.stream.write(data[offset:offset + self.chunk_size])
+            chunk = data[offset:offset + self.chunk_size]
+            while chunk:
+                written = self.stream.write(chunk)
+                if not isinstance(written, int) or not 0 < written <= len(chunk):
+                    raise OSError('output stream did not report valid write progress')
+                total += written
+                chunk = chunk[written:]
         return total
 
     def flush(self):
@@ -66,6 +78,7 @@ def _compression(path, compression):
 
 def open_input(source, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZE):
     """Return ``(stream, owns_stream)`` for a path or file-like source."""
+    _check_buffer_size(buffer_size)
     owns = False
     if source is None or source == "-":
         raw = getattr(sys.stdin, "buffer", sys.stdin)
@@ -89,6 +102,7 @@ def open_input(source, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZE):
 
 def open_output(destination, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZE):
     """Return ``(stream, owns_stream)`` for a path or file-like destination."""
+    _check_buffer_size(buffer_size)
     owns = False
     if destination is None or destination == "-":
         raw = getattr(sys.stdout, "buffer", sys.stdout)
@@ -100,10 +114,11 @@ def open_output(destination, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZ
     else:
         raise TypeError("destination must be a path or writable file-like object")
     kind = _compression(destination, compression)
+    bounded = BoundedWriteStream(raw, buffer_size)
     if kind == "gz":
-        return gzip.GzipFile(fileobj=raw, mode="wb"), owns
+        return gzip.GzipFile(fileobj=bounded, mode="wb"), owns
     if kind == "bz2":
-        return bz2.BZ2File(raw, mode="wb"), owns
+        return bz2.BZ2File(bounded, mode="wb"), owns
     if kind == "xz":
-        return lzma.LZMAFile(raw, mode="wb"), owns
-    return BoundedWriteStream(raw, buffer_size), owns
+        return lzma.LZMAFile(bounded, mode="wb"), owns
+    return bounded, owns

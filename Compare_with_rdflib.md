@@ -31,7 +31,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 
 | Method | RDFLib | RDFCore |
 |---|---:|---:|
-| `add`, `addN`, `remove` | ✅ | ✅ |
+| `add`, `addN`, `remove` | ✅ | ✅ `addN` tests include context identity, raw identifiers, duplicates and validation order |
 | `triples` | ✅ | ✅ |
 | `graph[term]`, `graph[s:p:o]` | ✅ | ✅ differential tests for term and slice indexing; SPARQL paths unsupported |
 | `subjects`, `predicates`, `objects` | ✅ | ✅ |
@@ -41,7 +41,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `value` | ✅ | ✅ |
 | `set` | ✅ | ✅ |
 | `parse` | ✅ | ✅ |
-| `serialize` | ✅ | ✅ |
+| `serialize` | ✅ | ✅ base fallback/override tested against RDFLib; format-specific output parity remains scoped |
 | `bind`, `namespaces`, `qname` | ✅ | ✅ |
 | `compute_qname`, `absolutize` | ✅ | ✅ |
 | `close` | ✅ | ✅ |
@@ -51,8 +51,8 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `transitiveClosure` | ✅ | ✅ |
 | `transitive_subjects`, `transitive_objects` | ✅ | ✅ |
 | `connected`, `all_nodes` | ✅ | ✅ |
-| `isomorphic` method | ✅ | ✅ |
-| `triples_choices` | ✅ | ✅ |
+| `isomorphic` method | ✅ approximate | ✅ same RDF 1.1 approximation; exact comparison for RDF 1.2 data |
+| `triples_choices` | ✅ | ✅ list-only choices, empty-list wildcard, repeated results and errors tested against RDFLib |
 | `query`, `update` | ✅ | ❌ |
 | `skolemize`, `de_skolemize` | ✅ | ✅ |
 | `commit`, `rollback` | ✅ | ❌ |
@@ -96,7 +96,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `rdf:JSON` datatype | ❌ in RDFLib 7.6.0 | ✅ RDF 1.2 |
 | `Literal.direction` | ❌ in RDFLib 7.6.0 | ✅ RDF 1.2 |
 | `TripleTerm` | ❌ in RDFLib 7.6.0 | ✅ |
-| Term identity, hashing and ordering | ✅ | ✅ tested constructor and comparison matrices in `tests/compatibility/` |
+| Term identity, hashing and ordering | ✅ | ✅ tested constructor and comparison matrices, including term-subclass ordering, in `tests/compatibility/` |
 | Literal arithmetic and complete datatype API | ✅ | ⚠️ incomplete; constructor/value compatibility does not imply arithmetic parity |
 | Namespace prefix collisions and QName resolution | ✅ | ✅ executable differential matrices |
 | Collection indexing, deletion and malformed lists | ✅ | ✅ executable differential matrices; cyclic lists may not terminate, as in the reference |
@@ -165,7 +165,9 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | Iterator resource cleanup | Cancellable queue delivery; bounded worker join on early close; caller-owned streams remain open |
 | Zero-thread line iterator | Benchmark prototype only; not enabled in the public API |
 | W3C reporting | Pinned fixtures, per-test diagnostics, syntax/entailment separation; full RDF 1.2 conformance not established |
-| `convert()` | Streaming NT/NQ 1.1/1.2 conversion; explicit graph policies; rejects unsupported downgrade |
+| `convert()` | Streaming NT/NQ 1.1/1.2 conversion; explicit graph policies; rejects unsupported downgrade and same-file output; input/preflight failures do not truncate output |
+| `compare.isomorphic()` | Exact structural comparison, including nested triple terms and empty named graphs; iterative blank-node matching, ground set comparison |
+| Interoperability graph identity | `basic_encode`, `basic_decode` and explicit downgrade retain empty named graphs |
 | `count()` | Streaming count |
 | `validate()` | Streaming validation |
 | `external_sort()` | External-memory sorting |
@@ -174,7 +176,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `semantics.entails()` | Simple entailment and partial positive RDF/RDFS proofs; unsupported decisions raise |
 | `semantics.entailment_closure()` | Optional finite RDF/RDFS axioms and rules; no automatic Graph inference |
 | `BoundedReadStream` | Bounded reads |
-| `BoundedWriteStream` | Bounded writes |
+| `BoundedWriteStream` | Bounded writes with partial-write retries and progress validation, including compressed output |
 | `ChunkReader` | Chunked UTF-8 reader |
 | `TokenReader` | Tokenization across chunk boundaries |
 | `FilterSink` | Statement filtering |

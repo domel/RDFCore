@@ -2,11 +2,14 @@
 
 from ...dataset import DATASET_DEFAULT_GRAPH_ID
 from ...serializer import Serializer
+from ...term import URIRef
 from .turtle12 import _term
 
 
 class TriG12Serializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, canonical=False, rdf_version="auto", mode="pretty", **kwargs):
+        if base is None:
+            base = self.store.base
         if mode == "stream":
             from ...streaming import TriGStreamingWriter
             if stream is None:
@@ -15,7 +18,7 @@ class TriG12Serializer(Serializer):
                 capture = True
             else:
                 capture = False
-            writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=rdf_version)
+            writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=rdf_version, base=base)
             for quad in self.store.quads():
                 writer.add(quad)
             writer.close()
@@ -33,6 +36,8 @@ class TriG12Serializer(Serializer):
         lines = []
         if not canonical and version != "1.1":
             lines.append(f'VERSION "{version}"\n')
+        if base:
+            lines.append(f'@base {URIRef(base).n3()} .\n')
         for prefix, namespace in manager.namespaces():
             lines.append(f"@prefix {prefix}: <{namespace}> .\n")
         if manager._prefixes:
@@ -43,14 +48,14 @@ class TriG12Serializer(Serializer):
         for graph in sorted(groups, key=lambda item: str(item)):
             triples = sorted(groups[graph], key=lambda triple: tuple(str(item) for item in triple))
             body = "".join(
-                f"  {_term(subject, manager, canonical)} {_term(predicate, manager, canonical)} "
-                f"{_term(obj, manager, canonical)} .\n"
+                f"  {_term(subject, manager, canonical, base)} {_term(predicate, manager, canonical, base)} "
+                f"{_term(obj, manager, canonical, base)} .\n"
                 for subject, predicate, obj in triples
             )
             if graph == DATASET_DEFAULT_GRAPH_ID or graph is None:
                 lines.append("{\n" + body + "}\n")
             else:
-                lines.append(f"{_term(graph, manager, canonical)} {{\n" + body + "}\n")
+                lines.append(f"{_term(graph, manager, canonical, base)} {{\n" + body + "}\n")
         value = "".join(lines)
         if stream is None:
             return value.encode(encoding) if encoding else value

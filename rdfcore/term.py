@@ -46,8 +46,8 @@ class Node(str):
         if type(self) is type(other):
             return str(self) < str(other)
         if isinstance(other, Node):
-            order = {BNode: 0, Variable: 1, URIRef: 2, Literal: 3}
-            return order[type(self)] < order[type(other)]
+            order = {BNode: 10, Variable: 20, URIRef: 30, Literal: 40}
+            return order.get(type(self), 0) < order.get(type(other), 0)
         return NotImplemented
 
     def __gt__(self, other):
@@ -56,8 +56,8 @@ class Node(str):
         if type(self) is type(other):
             return str(self) > str(other)
         if isinstance(other, Node):
-            order = {BNode: 0, Variable: 1, URIRef: 2, Literal: 3}
-            return order[type(self)] > order[type(other)]
+            order = {BNode: 10, Variable: 20, URIRef: 30, Literal: 40}
+            return order.get(type(self), 0) > order.get(type(other), 0)
         return NotImplemented
 
     def __le__(self, other):

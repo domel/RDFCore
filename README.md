@@ -268,7 +268,12 @@ the registered RDF 1.1 line-format aliases. RDF 1.2 output announces version
 1.2 unless `canonical=True`. Writing RDF 1.2 terms to a 1.1 target raises
 an error, including with a custom sink; graph-selection policies do not
 disable that check. Conversion does not construct an intermediate graph.
-An error may leave a partial output stream, so discard it after failure.
+Input is opened before output. Conversion rejects input/output aliases of the
+same file, including symlinks and hard links. Missing input, an invalid buffer
+size, or an invalid graph-selection policy does not truncate an existing
+destination. A parsing or writing error can still leave partial output;
+discard that output after failure. Bounded output writes retry partial writes
+and raise an error if the destination makes no progress, also with compression.
 
 ```python
 from rdfcore import convert
@@ -349,6 +354,18 @@ but spelling already lowercased by an older release cannot be recovered.
 When serializing a dataset to a graph format, RDFLib's format-specific
 projection applies: N-Triples includes its quads as triple statements, while
 Turtle and RDF/XML use the default graph unless `default_union=True`.
+Serialization uses `Graph.base` when `base` is omitted. Turtle and TriG pretty
+and streaming output emit the base declaration and relativize eligible IRIs;
+RDF/XML emits `xml:base`. An explicit `base` overrides the graph's base.
+
+`Graph.isomorphic()` follows RDFLib's approximate RDF 1.1 check and can return
+false positives when blank nodes occur. Use `rdfcore.compare.isomorphic()`
+for exact graph/dataset comparison. It includes nested triple terms and empty
+named graphs, with one blank-node mapping across data and graph names.
+Graphs without blank nodes use set comparison; blank-node matching uses an
+iterative search, though symmetric graphs can still be expensive.
+For RDF 1.2 data, the graph method uses this exact comparison as an extension.
+The explicit interoperability transformations also retain empty named graphs.
 
 For sorting large streams, use `external_sort()` with a memory budget:
 

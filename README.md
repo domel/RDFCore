@@ -81,18 +81,24 @@ use the explicit names below or a MIME `version` parameter for RDF 1.2.
 
 RDF 1.2 formats have explicit names:
 
-| Format | Parser and serializer names |
-|---|---|
-| N-Triples 1.2 | `nt12` |
-| N-Quads 1.2 | `nq12` |
-| Turtle 1.2 | `turtle12` |
-| TriG 1.2 | `trig12` |
-| RDF/XML 1.2 | `xml12`, `xmlrdf12` |
+| Format | Parser and serializer names | Versioned MIME alias |
+|---|---|---|
+| N-Triples 1.2 | `nt12` | `application/n-triples; version=1.2` |
+| N-Quads 1.2 | `nq12` | `application/n-quads; version=1.2` |
+| Turtle 1.2 | `turtle12` | `text/turtle; version=1.2` |
+| TriG 1.2 | `trig12` | `application/trig; version=1.2` |
+| RDF/XML 1.2 | `xml12`, `xmlrdf12` | `application/rdf+xml; version=1.2` (RDFCore extension) |
 
 MIME parameters work in `parse()`, `serialize()`, plugin lookup and
 `parse_stream()`. Line-format `convert()` accepts them for both input and output:
 
 ```python
+from rdfcore import Graph
+
+graph = Graph().parse(
+    data='<urn:s> <urn:p> <<( <urn:a> <urn:b> <urn:c> )>> .',
+    format="text/turtle; version=1.2",
+)
 text = graph.serialize(format="text/turtle; version=1.2")
 restored = Graph().parse(data=text, format="text/turtle; version=1.2")
 ```

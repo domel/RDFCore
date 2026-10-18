@@ -383,7 +383,7 @@ class Graph:
         required_version = required_rdf_version(self)
         serializable_graph = self
         if required_version != "1.1":
-            rdf12_serializer = format in ("nt12", "nq12", "turtle12", "trig12", "xml12")
+            rdf12_serializer = format in ("nt12", "nq12", "turtle12", "trig12", "xml12", "xmlrdf12")
             if downgrade == "interop" and requested_version in ("1.1", "1.2-basic"):
                 from .interop import interop_downgrade
                 serializable_graph = interop_downgrade(self, requested_version)

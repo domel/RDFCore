@@ -67,13 +67,17 @@ the common graph and term APIs can usually be migrated with small changes.
 
 RDF 1.1 formats use the usual names:
 
-| Format | Parser and serializer names |
-|---|---|
-| N-Triples | `nt`, `ntriples`, `nt11` |
-| N-Quads | `nquads` |
-| Turtle | `turtle`, `ttl` |
-| TriG | `trig` |
-| RDF/XML | `xml`, `rdfxml`, `application/rdf+xml` |
+| Format | Short names | MIME alias |
+|---|---|---|
+| N-Triples | `nt`, `ntriples`, `nt11` | `application/n-triples` |
+| N-Quads | `nquads` | `application/n-quads` |
+| Turtle | `turtle`, `ttl`, `turtle11` | `text/turtle` |
+| TriG | `trig`, `trig11` | `application/trig` |
+| RDF/XML | `xml`, `rdfxml` | `application/rdf+xml` |
+
+Each name above works with both `parse(format=...)` and
+`serialize(format=...)`. MIME aliases select RDF 1.1 implementations;
+use the explicit names below for RDF 1.2.
 
 RDF 1.2 formats have explicit names:
 
@@ -83,7 +87,7 @@ RDF 1.2 formats have explicit names:
 | N-Quads 1.2 | `nq12` |
 | Turtle 1.2 | `turtle12` |
 | TriG 1.2 | `trig12` |
-| RDF/XML 1.2 | `xml12` |
+| RDF/XML 1.2 | `xml12`, `xmlrdf12` |
 
 Example with an RDF 1.2 triple term:
 
@@ -111,7 +115,8 @@ assert json_value.value == {"items": [1.0, True, None]}
 
 ### RDF/XML
 
-Use `xml12` explicitly for RDF 1.2. Its serializer writes
+Use `xml12` or its alias `xmlrdf12` explicitly for RDF 1.2. Both names select
+the same parser and serializer. The serializer writes
 `rdf:version="1.2"` on `rdf:RDF` by default, including for an empty graph. An
 explicit `rdf_version="1.2-basic"` writes that profile; `rdf_version="1.1"`
 omits the announcement and rejects terms that require RDF 1.2. The parser
@@ -129,9 +134,9 @@ graph = Graph().add((
     URIRef("urn:statement"), URIRef("urn:describes"),
     TripleTerm(URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")),
 ))
-xml = graph.serialize(format="xml12")
+xml = graph.serialize(format="xmlrdf12")
 assert 'rdf:version="1.2"' in xml
-assert graph.isomorphic(Graph().parse(data=xml, format="xml12"))
+assert graph.isomorphic(Graph().parse(data=xml, format="xmlrdf12"))
 ```
 
 Both XML parsers reject DTD declarations and external entities. This is a

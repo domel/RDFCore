@@ -161,8 +161,8 @@ def _parse(path, format, *, legacy_w3c=False):
     public_id = _canonical_public_id(path)
     if format in ("nquads", "nq12"):
         return Dataset().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True)
-    if format in ("nt", "nt12", 'xml', 'xml12'):
-        options = {'legacy_w3c': True} if legacy_w3c and format in ('xml', 'xml12') else {}
+    if format in ("nt", "nt12", 'xml', 'xml12', 'xmlrdf12'):
+        options = {'legacy_w3c': True} if legacy_w3c and format in ('xml', 'xml12', 'xmlrdf12') else {}
         return Graph().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True, **options)
     if format in ("turtle", "turtle12"):
         return Graph().parse(path, publicID=public_id, format=format, strict=True)

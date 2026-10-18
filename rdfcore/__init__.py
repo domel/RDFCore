@@ -53,8 +53,9 @@ from .plugins.serializers.rdfxml import XMLSerializer, XML12Serializer
 for _alias in ('xml', 'rdfxml', 'application/rdf+xml'):
     plugin.register(_alias, Parser, RDFXMLParser)
     plugin.register(_alias, Serializer, XMLSerializer)
-plugin.register('xml12', Parser, RDFXML12Parser)
-plugin.register('xml12', Serializer, XML12Serializer)
+for _alias in ('xml12', 'xmlrdf12'):
+    plugin.register(_alias, Parser, RDFXML12Parser)
+    plugin.register(_alias, Serializer, XML12Serializer)
 
 for _alias in ("nt", "ntriples", "nt11", "application/n-triples"):
     plugin.register(_alias, Parser, NTParser)

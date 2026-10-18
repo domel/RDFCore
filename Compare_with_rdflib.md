@@ -123,6 +123,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | RDF/XML XMLLiteral lexical handling | Executable reference: 7.6.0 | ⚠️ Differential tests cover CR text, CDATA, comments, processing instructions and default namespace undeclarations; XML12 keeps separate lexical rules |
 | RDF/XML 1.2 | ❌ | ⚠️ `xml12`, `xmlrdf12`; same parser, explicit version, triple terms, annotations and direction; full conformance not established |
 | Archived W3C XML recovery | ❌ | ⚠️ Explicit `legacy_w3c=True`; missing-version recovery in `xml12`, empty XMLLiteral element expansion in `xml`/`xml12`; not current-spec conformance |
+| RDF/XML specification/snapshot conflicts | XML11 lexical oracle: 7.6.0 | ⚠️ Offline regressions distinguish all 17 reviewed annotation cases, XMLLiteral lexical conflicts and two disputed results; official expectations and failure statuses remain unchanged |
 | JSON-LD | ✅ plugin | ❌ |
 | RDFa | ⚠️ | ❌ |
 

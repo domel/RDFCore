@@ -635,6 +635,18 @@ reuse two test IDs across XML11 and XML12. Fixture-conflict explanations for
 the two disputed cases require matching reviewed input and result hashes;
 an unknown snapshot or changed disputed fixture remains unreviewed.
 
+The XML conflict regressions run offline, independently of the official checkout.
+They cover each of the 17 annotation constructions with separate default,
+announced `1.2`, and archived-recovery expectations. The selected
+[XML Working Draft of 9 October 2026](https://www.w3.org/TR/2026/WD-rdf12-xml-20261009/)
+has inconsistencies between the Triple grammar summary, detailed production,
+and Example 22. RDFCore retains the example's single outer assertion with a
+triple-term object, without asserting the inner triple. This is an explicit
+interpretation of the disputed text, not evidence that the draft is unambiguous.
+The [Editor's Draft](https://w3c.github.io/rdf-xml/spec/), checked on 18 October
+2026, retains those inconsistencies. Neither an empty expected graph nor a
+directionless expected literal overrides the retained triple or direction.
+
 For archived XML fixtures only, opt into `legacy_w3c=True`:
 
 ```python

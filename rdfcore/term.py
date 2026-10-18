@@ -282,7 +282,9 @@ class Literal(Identifier):
             except (ValueError, ArithmeticError):
                 ill_typed = True
                 value = None
-        if str(datatype) == _XSD + 'boolean' and isinstance(lexical_or_value, str):
+        if (str(datatype) == _XSD + 'boolean'
+                and isinstance(lexical_or_value, str)
+                and not isinstance(lexical_or_value, Literal)):
             ill_typed = str(lexical_or_value) not in ('true', 'false', '1', '0')
         if lexical_or_value is None:
             value = None
@@ -348,7 +350,10 @@ class Literal(Identifier):
             if left != right:
                 return False
             if left == _RDF_JSON and self.ill_typed is False and other.ill_typed is False:
-                return _json_value_key(self.value) == _json_value_key(other.value)
+                # Python containers are mutable helpers, not the RDF value's
+                # identity. Derive equality from the immutable lexical forms.
+                return (_json_value_key(_python_value(str(self), self.datatype))
+                        == _json_value_key(_python_value(str(other), other.datatype)))
             if left == _XSD + 'string':
                 return str(self) == str(other)
             if self.value is not None and other.value is not None:

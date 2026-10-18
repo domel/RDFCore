@@ -39,6 +39,16 @@ def test_rdf_json_scalar_values_and_literal_copy():
     assert copied.ill_typed is False
 
 
+def test_json_value_equality_is_independent_of_mutable_python_helper():
+    literal = Literal('{"items":[1]}', datatype=RDF.JSON)
+    equivalent = Literal('{"items":[1.0]}', datatype=RDF.JSON)
+    original_hash = hash(literal)
+    literal.toPython()["items"].append(2)
+    assert literal.eq(equivalent) is True
+    assert hash(literal) == original_hash
+    assert str(literal) == '{"items":[1]}'
+
+
 @pytest.mark.parametrize('codepoint', [0xFDD0, 0xFDEF, 0xFFFE, 0xFFFF, 0x1FFFE, 0x10FFFF])
 @pytest.mark.parametrize('template', ['"{}"', '["{}"]', '{{"{}":0}}', '{{"key":"{}"}}'])
 def test_json_rejects_noncharacters(codepoint, template):

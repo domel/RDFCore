@@ -519,6 +519,21 @@ A published reference link does not mean the snapshot covers every
 requirement of that revision. Checkout directory names do not change the
 base IRIs assigned to official fixtures.
 
+The current snapshot is `d5d930b03ee6b63b388d0bb28fdb29ee78a59ec0`
+(2026-10-12). The previous revision, `369a90d1a60c021b746df2e411da0ff36258a758`
+(2026-09-21), is retained in `tests/w3c/manifest.previous.lock` for comparison.
+The refresh adds five N-Triples version-announcement tests, all passing, and
+changes manifest metadata. None of the 2447 previous executions changes
+status or fixture bytes; no test is removed.
+
+| Snapshot | Passed | Failed | Unsupported | Error |
+|---|---:|---:|---:|---:|
+| Previous, default profile | 2345 | 23 | 79 | 0 |
+| Current, default profile | 2350 | 23 | 79 | 0 |
+
+These totals count executions across suites, including repeated RDF 1.1
+cases. The current snapshot contains 2452 executions and 1411 unique test IDs.
+
 The reviewed snapshot still has RDF/XML failures (including XMLLiteral
 lexical-form expectations) and unsupported datatype/inconsistency reasoning
 cases. These remain visible failures or unsupported results, not successful
@@ -528,6 +543,7 @@ differential tests; expected W3C fixtures are not rewritten to hide the gap.
 Audit a report or compare two snapshots using the same execution profile:
 
 ```bash
+python -m tests.w3c.official /path/to/previous-rdf-tests --lock tests/w3c/manifest.previous.lock --output .w3c/previous.json
 python -m tests.w3c.audit --current conformance-results.json --output .w3c/audit.json
 python -m tests.w3c.audit --before .w3c/previous.json --current conformance-results.json --output .w3c/comparison.json
 ```
@@ -572,7 +588,7 @@ python -m tests.w3c.official /path/to/rdf-tests --legacy-w3c-xml --output legacy
 ```
 
 The JSON records `execution_profile="legacy-w3c-xml"` and the parser option.
-On snapshot `369a90d`, this resolves 21 of the 23 default-profile failures.
+On both reviewed snapshots, this resolves 21 of the 23 default-profile failures.
 Two XML 1.2 failures remain: `rdf12-xml-tt-01` has an empty expected file,
 and `rdf12-xml-dir-02` expects a literal without the input's direction.
 Recovery does not discard either triple terms or direction to match those
@@ -581,7 +597,7 @@ not current RDF 1.2 conformance. The 79 unsupported reasoning cases remain.
 
 The separate **W3C conformance** workflow runs weekly, on relevant pull
 requests and `v*` release tags, and can be started manually. It fetches or
-restores the pinned fixtures from cache, verifies their clean revision, and
-uploads reports and issue classifications even when tests fail. It is expected
-to remain red while conformance gaps are open;
+restores the current and archived fixtures from cache, verifies their clean
+revisions, and uploads both reports, their comparison and issue classifications
+even when tests fail. It remains red while conformance gaps are open;
 failures are not suppressed to obtain a green badge.

@@ -53,9 +53,38 @@ jobs:
           key: w3c-${{ runner.os }}-${{ steps.snapshot.outputs.revision }}
       - name: Run all accounted suites
         run: python -m tests.w3c.official .w3c/rdf-tests --output .w3c/reports/current.json
+      - name: Read the archived comparison revision
+        if: always()
+        id: previous-snapshot
+        run: python -c "import tomllib; print('revision=' + tomllib.load(open('tests/w3c/manifest.previous.lock', 'rb'))['commit'])" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        if: always()
+        id: previous-cache
+        with:
+          path: .w3c/previous-rdf-tests
+          key: w3c-${{ runner.os }}-${{ steps.previous-snapshot.outputs.revision }}
+      - uses: actions/checkout@v4
+        if: always() && steps.previous-cache.outputs.cache-hit != 'true'
+        with:
+          repository: w3c/rdf-tests
+          ref: ${{ steps.previous-snapshot.outputs.revision }}
+          path: .w3c/previous-rdf-tests
+          persist-credentials: false
+      - name: Verify archived fixtures before caching or execution
+        if: always()
+        id: previous-verification
+        run: python -c "from pathlib import Path; from tests.w3c.official import verify_checkout; verify_checkout(Path('.w3c/previous-rdf-tests'), lock=Path('tests/w3c/manifest.previous.lock'))"
+      - uses: actions/cache/save@v4
+        if: always() && steps.previous-cache.outputs.cache-hit != 'true' && steps.previous-verification.outcome == 'success'
+        with:
+          path: .w3c/previous-rdf-tests
+          key: w3c-${{ runner.os }}-${{ steps.previous-snapshot.outputs.revision }}
+      - name: Execute the archived snapshot without changing expectations
+        if: always()
+        run: python -m tests.w3c.official .w3c/previous-rdf-tests --lock tests/w3c/manifest.previous.lock --output .w3c/reports/previous.json
       - name: Audit all observed issues without changing their status
         if: always()
-        run: python -m tests.w3c.audit --current .w3c/reports/current.json --output .w3c/reports/audit.json
+        run: python -m tests.w3c.audit --before .w3c/reports/previous.json --current .w3c/reports/current.json --output .w3c/reports/audit.json
       - name: Summarize conformance results
         if: always()
         run: |
@@ -77,9 +106,14 @@ jobs:
                   output.write('\nPassed tests are not a complete conformance certification.\n')
                   audit_path = Path('.w3c/reports/audit.json')
                   if audit_path.exists():
-                      audit = json.loads(audit_path.read_text())['audit']
+                      audited = json.loads(audit_path.read_text())
+                      audit = audited['audit']
                       output.write('\nIssues: ' + str(len(audit['issues'])) +
                           '; unreviewed: ' + str(audit['unreviewed']) + '\n')
+                      delta = audited.get('comparison', {})
+                      output.write('\nAdded: ' + str(len(delta.get('added', []))) +
+                          '; removed: ' + str(len(delta.get('removed', []))) +
+                          '; changed: ' + str(len(delta.get('changed', []))) + '\n')
           PY
       - uses: actions/upload-artifact@v4
         if: always()

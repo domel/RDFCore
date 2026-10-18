@@ -169,7 +169,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `parse_stream()` | Push/iterator parser |
 | Iterator resource cleanup | Cancellable queue delivery; bounded worker join on early close; caller-owned streams remain open |
 | Zero-thread line iterator | Benchmark prototype only; not enabled in the public API |
-| W3C reporting | Pinned fixtures, original fixture hashes, per-test diagnostics and reviewed issue explanations; snapshot comparisons preserve repeated executions; full RDF 1.2 conformance not established |
+| W3C reporting | Current and archived pinned fixtures, original fixture hashes, per-test diagnostics and reviewed issue explanations; comparison preserves repeated executions; latest refresh adds five passing NT version tests without hiding existing gaps; full RDF 1.2 conformance not established |
 | `convert()` | Streaming NT/NQ 1.1/1.2 conversion; explicit graph policies; rejects unsupported downgrade and same-file output; input/preflight failures do not truncate output |
 | `compare.isomorphic()` | Exact structural comparison, including nested triple terms and empty named graphs; iterative blank-node matching, ground set comparison |
 | Interoperability graph identity | `basic_encode`, `basic_decode` and explicit downgrade retain empty named graphs |

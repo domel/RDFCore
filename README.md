@@ -149,10 +149,24 @@ explicit `rdf_version="1.2-basic"` writes that profile; `rdf_version="1.1"`
 omits the announcement and rejects terms that require RDF 1.2. The parser
 requires an in-scope version announcement for RDF 1.2-only constructs.
 The legacy `xml` serializer does not add this announcement.
+Like RDFLib 7.6.0, the `xml` serializer writes UTF-8 even when another
+`encoding` argument is supplied; the argument still selects a bytes return
+value. The explicit `xml12` serializer honors the requested encoding.
 
-The `xml` parser follows RDFLib's XMLLiteral event handling, including CDATA
-and omission of comments and processing instructions. Explicit `xml12`
-retains comments and processing instructions inside XML literals.
+The `xml` parser follows RDFLib's XMLLiteral handling, including CDATA,
+omission of comments and processing instructions, CR text normalization,
+and omission of default namespace undeclarations. These legacy lexical
+rules do not apply to `xml12`, which retains comments, processing
+instructions and default namespace undeclarations inside XML literals.
+Outside XML literals, `xml12` accepts only XML whitespace between RDF
+elements; `xml` preserves RDFLib's broader Unicode whitespace handling.
+
+Both parsers reject DTD declarations before processing RDF or accessing
+external entities, including declarations split across input chunks or
+encoded as UTF-16. XML nesting is limited to 256 elements, including the
+RDF wrapper and XML literal content. Input streams supplied by the caller
+remain open after success or failure. The parsers build a tree and do not
+provide a hard memory bound for large text or documents.
 
 ```python
 from rdfcore import Graph, TripleTerm, URIRef

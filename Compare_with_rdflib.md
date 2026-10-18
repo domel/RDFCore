@@ -119,6 +119,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | TriG 1.1 | ✅ `trig` | ✅ `trig`, `trig11` |
 | TriG 1.2 | ❌ | ✅ `trig12` |
 | RDF/XML 1.1 | ✅ `xml`, `rdfxml` | ⚠️ `xml`, `rdfxml`; secure tree parser, no DTDs |
+| RDF/XML XMLLiteral lexical handling | Executable reference: 7.6.0 | ⚠️ Differential tests cover CR text, CDATA, comments, processing instructions and default namespace undeclarations; XML12 keeps separate lexical rules |
 | RDF/XML 1.2 | ❌ | ⚠️ `xml12`, `xmlrdf12`; same parser, explicit version, triple terms, annotations and direction; full conformance not established |
 | Archived W3C XML recovery | ❌ | ⚠️ Explicit `legacy_w3c=True`; missing-version recovery in `xml12`, empty XMLLiteral element expansion in `xml`/`xml12`; not current-spec conformance |
 | JSON-LD | ✅ plugin | ❌ |
@@ -137,6 +138,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | TriG 1.1 | ✅ | ✅ |
 | TriG 1.2 | ❌ | ✅ `trig12` |
 | RDF/XML 1.1 | ✅ | ⚠️ `xml`, `rdfxml`; semantic round trips tested, not byte-identical output |
+| RDF/XML 1.1 encoding argument | UTF-8 output regardless of argument | ✅ Differential tests cover empty/nonempty graphs, bytes/str returns and caller-owned binary streams |
 | RDF/XML 1.2 | ❌ | ⚠️ `xml12`, `xmlrdf12`; same serializer, announces `1.2` by default, respects explicit `1.1` / `1.2-basic` profiles |
 | JSON-LD | ✅ | ❌ |
 | Canonical NT/NQ lexical syntax | ⚠️ | ✅ explicit `canonical=True`; not blank-node canonicalization (RDFC-1.0) |

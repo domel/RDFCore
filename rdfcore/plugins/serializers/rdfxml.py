@@ -22,6 +22,7 @@ def _xml(value):
 
 class XMLSerializer(Serializer):
     rdf_version = '1.1'
+    encoding = 'utf-8'
 
     def serialize(self, stream=None, base=None, encoding=None, rdf_version='auto', **kwargs):
         from ...rdf_version import validate_rdf_version
@@ -38,9 +39,13 @@ class XMLSerializer(Serializer):
         declarations = ''.join(' xmlns:'+prefix+'='+quoteattr(_xml(ns)) for ns, prefix in self.namespaces.items())
         if self._output_version != '1.1':
             declarations += ' xmlns:its='+quoteattr(ITS)+' rdf:version='+quoteattr(self._output_version)+' its:version="2.0"'
-        if base:
+        if 'xml_base' in kwargs:
+            declarations += ' xml:base='+quoteattr(_xml(kwargs['xml_base']))
+        elif base:
             declarations += ' xml:base='+quoteattr(_xml(base))
-        codec = encoding or 'utf-8'
+        # RDFLib 7.6.0's XML11 writer ignores the encoding argument and
+        # uses its encoding attribute. XML12 retains explicit codec support.
+        codec = self.encoding if self.rdf_version == '1.1' else encoding or self.encoding
         value = '<?xml version="1.0" encoding='+quoteattr(codec)+'?>\n<rdf:RDF'+declarations+'>\n'+body+'</rdf:RDF>\n'
         if stream is None:
             return value.encode(codec) if encoding else value

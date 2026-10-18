@@ -5,7 +5,14 @@ import rdflib
 import rdfcore
 
 
-@pytest.mark.parametrize('fragment', ['<br/>', '<br></br>', '<b>text &amp; value</b>'])
+@pytest.mark.parametrize('fragment', [
+    '<br/>', '<br></br>', '<b>text &amp; value</b>',
+    'text&#13;more', '<b>&#13;</b>', '<b a="&#13;&#10;&#9;"/>',
+    '<a xmlns="urn:a"><b xmlns=""/></a>',
+    '<a xmlns="urn:a"><b xmlns=""><c/></b></a>',
+    '<a xmlns="urn:a"><b xmlns=""/><c/></a>',
+    '<!--comment--><![CDATA[text & more]]><?target data?>',
+])
 @pytest.mark.parametrize('reified', [False, True])
 def test_xml_literal_lexical_form_matches_reference(fragment, reified):
     annotation = 'rdf:ID="statement"' if reified else ''

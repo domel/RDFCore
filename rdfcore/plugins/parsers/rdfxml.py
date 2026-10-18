@@ -56,8 +56,11 @@ def _text(element):
     return ''.join(c.data for c in element.childNodes if c.nodeType in (Node.TEXT_NODE, Node.CDATA_SECTION_NODE))
 
 
-def _whitespace(element):
-    if _text(element).strip():
+def _whitespace(element, strict=False):
+    # RDFLib's XML11 handler accepts broader Unicode whitespace. XML12
+    # follows production ws, which only permits XML's four S characters.
+    text = _text(element)
+    if (text.strip(' \t\r\n') if strict else text.strip()):
         _error('unexpected text between RDF elements')
 
 
@@ -125,7 +128,7 @@ class RDFXMLParser(Parser):
                 context, attrs = self._context(root, context)
                 if attrs:
                     _error('invalid attributes on rdf:RDF')
-                _whitespace(root)
+                _whitespace(root, self.rdf_version == '1.2')
                 for child in _elements(root):
                     self._node(child, context, sink.add)
             else:
@@ -217,7 +220,7 @@ class RDFXMLParser(Parser):
         return subject
 
     def _properties(self, element, subject, context, emit):
-        _whitespace(element)
+        _whitespace(element, self.rdf_version == '1.2')
         counter = 0
         for child in _elements(element):
             name = self._name(child)
@@ -244,7 +247,7 @@ class RDFXMLParser(Parser):
                 obj = BNode()
                 self._properties(element, obj, context, emit)
             elif parse_type == 'Collection':
-                _whitespace(element)
+                _whitespace(element, self.rdf_version == '1.2')
                 values = [self._node(c, context, emit) for c in children]
                 obj = BNode() if values else URIRef(RDF+'nil')
                 cell = obj
@@ -257,7 +260,7 @@ class RDFXMLParser(Parser):
                 if context[3] != '1.2': _error('triple terms require rdf:version="1.2"')
                 if reified is not None or annotation is not None or annotation_node is not None:
                     _error('Triple production permits only rdf:parseType')
-                _whitespace(element)
+                _whitespace(element, self.rdf_version == '1.2')
                 triples = set()
                 for child in children: self._node(child, context, triples.add)
                 if len(triples) != 1: _error('Triple content must generate exactly one triple')
@@ -273,7 +276,7 @@ class RDFXMLParser(Parser):
             if children:
                 if attrs or resource is not None or node is not None or datatype is not None or len(children) != 1:
                     _error('invalid resource property content')
-                _whitespace(element)
+                _whitespace(element, self.rdf_version == '1.2')
                 obj = self._node(children[0], context, emit)
             elif resource is not None or node is not None or attrs:
                 if _text(element): _error('resource property must be empty')
@@ -311,6 +314,11 @@ class RDFXMLParser(Parser):
                 used += [(a.prefix, a.namespaceURI) for a in node.attributes.values()
                          if a.prefix and a.prefix != 'xmlns']
                 for prefix, ns in used:
+                    # The reference XML11 SAX handler omits default namespace
+                    # undeclarations. Keep that legacy lexical contract out of
+                    # XML12, where the undeclaration preserves the XML infoset.
+                    if self.rdf_version == '1.1' and not ns:
+                        continue
                     if (ns or prefix == '') and scope.get(prefix) != ns:
                         result.setAttribute('xmlns'+(':'+prefix if prefix else ''), ns or '')
                         scope[prefix] = ns
@@ -323,8 +331,23 @@ class RDFXMLParser(Parser):
                 # This is empty-element expansion, not a general C14N engine.
                 result.appendChild(node.ownerDocument.createTextNode(''))
             return result
-        return ''.join(copied.toxml() for c in element.childNodes
-                       if (copied := clone(c, {'xml': XML})) is not None)
+        fragment = element.ownerDocument.createDocumentFragment()
+        for child in element.childNodes:
+            copied = clone(child, {'xml': XML})
+            if copied is not None:
+                fragment.appendChild(copied)
+        if self.rdf_version == '1.1':
+            # RDFLib reparses its generated XMLLiteral text, normalizing CR in
+            # text content. Do not normalize attribute values or XML12 here.
+            if not self.legacy_w3c:
+                fragment.normalize()
+            def normalize_text(node):
+                if node.nodeType == Node.TEXT_NODE:
+                    node.data = node.data.replace('\r\n', '\n').replace('\r', '\n')
+                for child in node.childNodes:
+                    normalize_text(child)
+            normalize_text(fragment)
+        return ''.join(child.toxml() for child in fragment.childNodes)
 
 
 class RDFXML12Parser(RDFXMLParser):

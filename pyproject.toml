@@ -23,7 +23,8 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "rdflib==7.6.0"]
+test = ["pytest", "rdflib==7.6.0", "html5rdf==1.2.1"]
+html = ["html5rdf>=1.2.1,<2"]
 
 [project.urls]
 Repository = "https://github.com/domel/RDFCore"

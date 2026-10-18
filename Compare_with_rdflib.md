@@ -8,6 +8,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 |---|---|---|
 | MIME `version` parameter | Not registered by default | `1.1`, `1.2-basic`, `1.2`; parsing, serialization, streaming and line-format conversion |
 | RDF/XML MIME version | Not registered by default | Explicit dispatch extension; document version announcement remains required |
+| Explicit datatype value identity | No corresponding module | ⚠️ `rdfcore.datatypes`: immutable XSD/JSON/DOM keys, XML 1.1 character handling, optional HTML5 parser; primitive value identity is separate from arithmetic equality; no D-entailment |
 
 | Area | RDFLib | RDFCore |
 |---|---:|---:|

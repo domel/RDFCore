@@ -140,6 +140,58 @@ assert json_value.ill_typed is False
 assert json_value.value == {"items": [1.0, True, None]}
 ```
 
+`rdf:JSON` value comparison preserves the distinction between positive and
+negative zero, including inside arrays and objects. Object member order does
+not affect value identity. The mutable Python containers returned by
+`toPython()` do not change the literal's lexical form or its `eq()` result;
+copying a JSON literal rebuilds its Python value from the lexical form.
+
+### Explicit datatype values
+
+`rdfcore.datatypes` validates lexical forms independently of RDFLib-compatible
+`Literal.toPython()`. Use `normalize=False` when validating original input,
+because constructor normalization can otherwise change it first. For raw
+input, `lexical_value(text, datatype)` bypasses constructor normalization
+entirely, including the whitespace handling of `normalizedString` and `token`.
+
+```python
+from rdfcore import Literal, XSD
+from rdfcore.datatypes import datatype_value, same_value
+
+a = Literal("01", datatype=XSD.integer, normalize=False)
+b = Literal("1", datatype=XSD.integer, normalize=False)
+assert a != b                 # Different RDF terms.
+assert same_value(a, b)       # The same datatype value.
+assert hash(datatype_value(a)) == hash(datatype_value(b))
+```
+
+The supported subset includes integer types, decimal, binary32/binary64,
+boolean, binary encodings, dates/times (including partial dates and
+`dateTimeStamp`), durations, selected string types, language and directional
+strings, JSON and DOM fragment values. Value keys are immutable. Floating
+point value identity distinguishes signed zeros and treats NaN as identical
+to itself; it is not arithmetic equality. Distinct XSD primitive spaces
+remain disjoint, even when their Python values compare equal. Binary32 mapping
+rounds directly
+from the decimal rational, without an intermediate binary64 rounding.
+Temporal keys retain timezone offsets, arbitrary-size years and exact
+fractional seconds. Two equal instants with different offsets are not
+identical XSD 1.1 values. Duration keys retain months and seconds separately.
+
+For HTML5 fragment values, install `pip install 'rdfcore[html]'`. Without
+that optional parser, HTML value mapping raises `UnsupportedDatatype`.
+The XML fragment mapper forbids DTDs and limits nesting to 256 elements.
+It applies XML 1.1 line-end handling and restricted character references
+without interpreting references in comments, processing instructions or
+CDATA. Those rules are separate from the legacy RDF/XML parser.
+
+`InvalidLexicalForm` reports invalid input for a supported datatype;
+`UnsupportedDatatype` reports missing types or comparisons, and
+`DatatypeResourceLimit` reports a processing limit without declaring the
+literal invalid. Datatype entailment remains unsupported by this module.
+See `SUPPORTED_DATATYPES` for the exact recognized set. Ordinary graph
+operations do not use this module to infer triples or reject stored literals.
+
 ### RDF/XML
 
 Use `xml12` or its alias `xmlrdf12` explicitly for RDF 1.2. Both names select

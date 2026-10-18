@@ -8,6 +8,7 @@ from base64 import b64decode, b64encode
 from binascii import Error as BinasciiError, unhexlify
 import json
 import re
+import sys
 import warnings
 from urllib.parse import urldefrag, urljoin, urlparse
 from uuid import uuid4
@@ -289,10 +290,16 @@ class Literal(Identifier):
         if lexical_or_value is None:
             value = None
         if str(datatype) == _RDF_JSON and isinstance(lexical_or_value, Literal):
-            ill_typed = lexical_or_value.ill_typed
+            try:
+                value = _python_value(lexical, datatype)
+                ill_typed = False
+            except (ValueError, ArithmeticError):
+                value, ill_typed = None, True
         if str(datatype) in {_XSD + 'normalizedString', _XSD + 'token'}:
             value = original_lexical
-        if str(datatype) in _INTEGER_BOUNDS and value is not None and isinstance(lexical_or_value, (str, bytes)):
+        if (str(datatype) in _INTEGER_BOUNDS and value is not None
+                and isinstance(lexical_or_value, (str, bytes))
+                and not isinstance(lexical_or_value, Literal)):
             lower, upper = _INTEGER_BOUNDS[str(datatype)]
             ill_typed = (lower is not None and value < lower) or (upper is not None and value > upper)
         obj = str.__new__(cls, lexical)
@@ -407,7 +414,9 @@ def _literal_parts(value):
 
 def _normalize_lexical(lexical, datatype):
     if str(datatype) == _XSD + 'date':
-        return date.fromisoformat(re.sub(r'(Z|[+-]\d\d:\d\d)$', '', lexical)).isoformat()
+        return _python_value(lexical, datatype).isoformat()
+    if str(datatype) in {_XSD + 'dateTime', _XSD + 'time'}:
+        return _python_value(lexical, datatype).isoformat()
     if str(datatype) == _XSD + 'decimal':
         return str(Decimal(lexical))
     if str(datatype) in {_XSD + 'double', _XSD + 'float'}:
@@ -444,8 +453,18 @@ def _python_value(lexical, datatype):
             return lexical.lower() in ('true', '1')
         if name in (_XSD + "double", _XSD + "float"): return float(lexical)
         if name == _XSD + "decimal": return Decimal(lexical)
-        if name == _XSD + "dateTime": return datetime.fromisoformat(lexical.replace("Z", "+00:00"))
-        if name == _XSD + "date": return date.fromisoformat(re.sub(r'(Z|[+-]\d\d:\d\d)$', '', lexical))
+        if name == _XSD + "dateTime":
+            # The reference uses isodate on 3.10, and stdlib fromisoformat
+            # from 3.11 onward. The former requires the T separator.
+            if sys.version_info < (3, 11) and 'T' not in lexical:
+                raise ValueError('dateTime requires a T separator')
+            return datetime.fromisoformat(lexical.replace("Z", "+00:00"))
+        if name == _XSD + "date":
+            # RDFLib's date converter discards a supplied time and timezone.
+            value = (lexical[:-1] if lexical.endswith(('Z', 'z')) else lexical).split('T', 1)[0]
+            value = re.sub(r'\+.*$|-\d+:\d+$', '', value)
+            if '-' not in value: raise ValueError('XSD date requires dashes')
+            return date.fromisoformat(value)
         if name == _XSD + "time": return time.fromisoformat(lexical.replace("Z", "+00:00"))
         if name == _XSD + "hexBinary": return unhexlify(lexical)
         if name == _XSD + "base64Binary": return b64decode(lexical)
@@ -525,11 +544,15 @@ def _reject_surrogates(value):
 
 
 def _json_value_key(value):
-    """JSON equality distinguishes booleans from numbers, also recursively."""
+    """JSON value identity preserves binary64 signed zero, recursively."""
     if isinstance(value, list):
         return (list, tuple(_json_value_key(item) for item in value))
     if isinstance(value, dict):
         return (dict, frozenset((key, _json_value_key(item)) for key, item in value.items()))
+    if isinstance(value, float):
+        # Concepts A.3 uses identity in the xsd:double value space, not
+        # arithmetic equality (XSD 1.1 § 3.3.5.1 distinguishes +0 and -0).
+        return float, value.hex()
     return type(value), value
 
 

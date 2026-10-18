@@ -354,6 +354,7 @@ class Graph:
         return self.store.close(commit_pending_transaction)
 
     def parse(self, source=None, publicID=None, format=None, location=None, file=None, data=None, **args):
+        automatic_format = format is None
         if "rdf_version" in args:
             from .rdf_version import validate_rdf_version
             validate_rdf_version(args["rdf_version"])
@@ -361,6 +362,11 @@ class Graph:
             format = _format_from_location(location or source)
         source = create_input_source(source, publicID, location, file, data, format, **args)
         try:
+            if automatic_format and source.content_type:
+                from .media import resolve_format
+                _, media_version = resolve_format(source.content_type)
+                if media_version is not None:
+                    format = source.content_type
             plugin = get_plugin(format, Parser)
             parser_class = plugin.getClass()
             parser = parser_class(self)
@@ -373,6 +379,11 @@ class Graph:
 
     def serialize(self, destination=None, format="turtle", base=None, encoding=None, **args):
         from .rdf_version import required_rdf_version, validate_rdf_version, version_allows
+        from .plugin import resolve_format
+        from .media import version_options
+
+        format, media_version = resolve_format(format, Serializer)
+        args = version_options(args, media_version)
 
         if base is None:
             base = self.base

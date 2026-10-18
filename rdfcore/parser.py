@@ -64,7 +64,10 @@ def create_input_source(source=None, publicID=None, location=None, file=None, da
         else:
             path = Path(location)
             file = path.open("rb")
-        return InputSource(data=data, location=location, file=file, publicID=publicID, auto_close=True)
+        result = InputSource(data=data, location=location, file=file, publicID=publicID, auto_close=True)
+        if parsed.scheme in ("http", "https"):
+            result.content_type = getattr(file, 'headers', {}).get('Content-Type')
+        return result
     return InputSource(data=data, location=location, file=file, publicID=publicID)
 
 

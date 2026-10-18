@@ -4,6 +4,11 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 
 ## Classes
 
+| Format dispatch | RDFLib 7.6.0 | RDFCore |
+|---|---|---|
+| MIME `version` parameter | Not registered by default | `1.1`, `1.2-basic`, `1.2`; parsing, serialization, streaming and line-format conversion |
+| RDF/XML MIME version | Not registered by default | Explicit dispatch extension; document version announcement remains required |
+
 | Area | RDFLib | RDFCore |
 |---|---:|---:|
 | `Graph` | ✅ | ✅ |

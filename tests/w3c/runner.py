@@ -111,7 +111,8 @@ def _expect_eval(path, expected, format, result_suffix, detail=None, *, legacy_w
         result_format = {
             ".nt": "nt", ".nq": "nquads", ".ttl": "turtle", ".trig": "trig", '.rdf': 'xml',
         }.get(result_suffix, format)
-        if format.endswith('12'):
+        from rdfcore.media import resolve_format
+        if resolve_format(format)[0].endswith('12'):
             result_format = {'nt': 'nt12', 'nquads': 'nq12', 'turtle': 'turtle12', 'trig': 'trig12', 'xml': 'xml12'}.get(result_format, result_format)
         target = _parse(expected, result_format, legacy_w3c=legacy_w3c)
         equivalent = isomorphic(actual, target)
@@ -147,10 +148,14 @@ def _expect_c14n(path, expected, format, detail=None):
 
 
 def _canonical(value, format):
+    from rdfcore.media import resolve_format
+    resolved, _ = resolve_format(format)
     serialization_format = {
         "nt": "nt", "nt12": "nt12", "nquads": "nquads", "nq": "nquads", "nq11": "nquads", "nq12": "nq12",
         "turtle": "turtle", "turtle12": "turtle12", "trig": "trig", "trig12": "trig12",
-    }[format]
+    }[resolved]
+    if resolved != format:
+        serialization_format = format
     text = value.serialize(format=serialization_format, canonical=True, encoding="utf-8")
     if isinstance(text, bytes):
         text = text.decode("utf-8")
@@ -158,16 +163,19 @@ def _canonical(value, format):
 
 
 def _parse(path, format, *, legacy_w3c=False):
+    from rdfcore.media import resolve_format
+    original_format = format
+    format, _ = resolve_format(format)
     public_id = _canonical_public_id(path)
     if format in ("nquads", "nq", "nq11", "nq12"):
-        return Dataset().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True)
+        return Dataset().parse(path, publicID=public_id, format=original_format, strict=True, preserve_bnode_ids=True)
     if format in ("nt", "nt12", 'xml', 'xml12', 'xmlrdf12'):
         options = {'legacy_w3c': True} if legacy_w3c and format in ('xml', 'xml12', 'xmlrdf12') else {}
-        return Graph().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True, **options)
+        return Graph().parse(path, publicID=public_id, format=original_format, strict=True, preserve_bnode_ids=True, **options)
     if format in ("turtle", "turtle12"):
-        return Graph().parse(path, publicID=public_id, format=format, strict=True)
+        return Graph().parse(path, publicID=public_id, format=original_format, strict=True)
     if format in ("trig", "trig12"):
-        return Dataset().parse(path, publicID=public_id, format=format, strict=True)
+        return Dataset().parse(path, publicID=public_id, format=original_format, strict=True)
     raise ValueError(f"S17 runner does not support format {format!r}")
 
 

@@ -40,7 +40,21 @@ def get(name, kind):
     try:
         return _registry[(name, kind)]
     except KeyError as error:
+        resolved, version = resolve_format(name, kind)
+        if resolved != name:
+            from .media import versioned_class
+            backend = get(resolved, kind).getClass()
+            return Plugin(name, kind, implementation=versioned_class(backend, kind, version))
         raise PluginException(f"No plugin registered for {name!r}") from error
+
+
+def resolve_format(name, kind):
+    from .parser import Parser
+    from .serializer import Serializer
+    if (name, kind) in _registry or kind not in (Parser, Serializer):
+        return name, None
+    from .media import resolve_format as resolve
+    return resolve(name)
 
 
 def plugins(kind=None):

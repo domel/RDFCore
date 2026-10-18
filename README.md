@@ -76,8 +76,8 @@ RDF 1.1 formats use the usual names:
 | RDF/XML | `xml`, `rdfxml` | `application/rdf+xml` |
 
 Each name above works with both `parse(format=...)` and
-`serialize(format=...)`. MIME aliases select RDF 1.1 implementations;
-use the explicit names below for RDF 1.2.
+`serialize(format=...)`. Bare MIME aliases select RDF 1.1 implementations;
+use the explicit names below or a MIME `version` parameter for RDF 1.2.
 
 RDF 1.2 formats have explicit names:
 
@@ -88,6 +88,27 @@ RDF 1.2 formats have explicit names:
 | Turtle 1.2 | `turtle12` |
 | TriG 1.2 | `trig12` |
 | RDF/XML 1.2 | `xml12`, `xmlrdf12` |
+
+MIME parameters work in `parse()`, `serialize()`, plugin lookup and
+`parse_stream()`. Line-format `convert()` accepts them for both input and output:
+
+```python
+text = graph.serialize(format="text/turtle; version=1.2")
+restored = Graph().parse(data=text, format="text/turtle; version=1.2")
+```
+
+The MIME aliases in the first table accept `version=1.1`, `version=1.2-basic`
+and `version=1.2`. Quoted values, such as `version="1.2"`, are accepted;
+media types and parameter names are case-insensitive. `1.2-basic` permits
+directional literals but rejects triple terms. Unknown versions, duplicate
+version parameters and conflicts with an explicit `rdf_version` raise
+`ValueError`. `auto` is an API option, not a media version label. Other
+syntactically valid parameters do not select the RDF version or change decoding.
+
+For HTTP input, `Graph.parse()` uses a versioned `Content-Type` when no
+`format` is supplied. An explicit format takes precedence. RDF/XML MIME
+version dispatch is an RDFCore extension: it does not replace the required
+in-document `rdf:version` announcement for RDF 1.2 constructs.
 
 Example with an RDF 1.2 triple term:
 

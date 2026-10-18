@@ -9,16 +9,16 @@ from pathlib import Path
 
 from .io import _check_buffer_size, open_input, open_output
 from .streaming import NQStreamingWriter, NTStreamingWriter, parse_stream
-from .rdf_version import required_rdf_version
+from .rdf_version import required_rdf_version, version_allows
 
 
 class _RDF12Writer:
     """Emit individual lines using the existing RDF 1.2 term formatter."""
 
-    def __init__(self, stream, *, dataset, canonical=False):
+    def __init__(self, stream, *, dataset, canonical=False, rdf_version='1.2'):
         self.stream, self.dataset, self.canonical = stream, dataset, canonical
         if not canonical:
-            self._write('VERSION "1.2"\n')
+            self._write(f'VERSION "{rdf_version}"\n')
 
     def _write(self, text):
         try:
@@ -102,6 +102,11 @@ def convert(source, destination=None, input_format=None, output_format=None, *, 
         destination, input_format, output_format = None, destination, input_format
     if not isinstance(input_format, str) or not isinstance(output_format, str):
         raise TypeError("input_format and output_format must be strings")
+    from .media import resolve_format, version_options
+    original_input_format = input_format
+    input_format, input_version = resolve_format(input_format)
+    output_format, output_version = resolve_format(output_format)
+    kwargs = version_options(kwargs, input_version)
     if input_format not in _FORMATS or output_format not in _FORMATS:
         raise NotImplementedError("S36 streaming conversion supports nt/nquads paths only")
     buffer_size = kwargs.pop("buffer_size", 64 * 1024)
@@ -135,14 +140,16 @@ def convert(source, destination=None, input_format=None, output_format=None, *, 
             family, version = _FORMATS[output_format]
             canonical = kwargs.pop('canonical', False)
             if version == '1.2':
-                sink = _RDF12Writer(destination_stream, dataset=family == 'dataset', canonical=canonical)
+                sink = _RDF12Writer(destination_stream, dataset=family == 'dataset', canonical=canonical,
+                                    rdf_version=output_version or version)
             else:
                 factory = NTStreamingWriter if family == 'graph' else NQStreamingWriter
                 options = {'default_graph_id': None} if family == 'dataset' else {}
                 sink = factory(destination_stream, canonical=canonical, **options)
             if hasattr(sink, 'close'):
                 cleanup.callback(sink.close)
-        return _convert_stream(input_stream, input_format, output_format, sink, kwargs)
+        return _convert_stream(input_stream, input_format, output_format, sink, kwargs,
+                               parser_format=original_input_format, output_version=output_version)
 
 
 def _same_file(source, destination):
@@ -167,9 +174,9 @@ def _same_file(source, destination):
     return first is not None and first == second
 
 
-def _convert_stream(source, input_format, output_format, sink, kwargs):
+def _convert_stream(source, input_format, output_format, sink, kwargs, *, parser_format=None, output_version=None):
     project = _FORMATS[input_format][0] == 'dataset' and _FORMATS[output_format][0] == 'graph'
-    version = _FORMATS[output_format][1]
+    version = output_version or _FORMATS[output_format][1]
     policy = None
     if project:
         policy = kwargs.pop("dataset_policy", "strict")
@@ -179,8 +186,8 @@ def _convert_stream(source, input_format, output_format, sink, kwargs):
     class GraphFormatSink:
         def add(self, statement):
             required = required_rdf_version((statement,))
-            if version == '1.1' and required != '1.1':
-                raise ValueError(f'RDF {required} data cannot be converted to RDF 1.1')
+            if not version_allows(version, required):
+                raise ValueError(f'RDF {required} data cannot be converted to RDF {version}')
             if project:
                 if len(statement) == 4:
                     if statement[3] is not None and policy == "strict":
@@ -191,5 +198,5 @@ def _convert_stream(source, input_format, output_format, sink, kwargs):
             sink.add(statement)
 
     adapter = GraphFormatSink()
-    parse_stream(source, input_format, adapter, **kwargs)
+    parse_stream(source, parser_format or input_format, adapter, **kwargs)
     return adapter if project else sink

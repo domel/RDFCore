@@ -92,3 +92,61 @@ def test_optional_html_closing_tags_and_eof_do_not_erase_requirements():
     source = b'<!doctype html><title>Spec</title><p>First MUST rule.<p>Second MUST rule.<ul><li>One<li>Two</ul><p>Last rule.'
     report = inventory_document('test', source, 'https://example.org/', '2026-10-17')
     assert [c['text'] for c in report['clauses']] == ['First MUST rule.', 'Second MUST rule.', 'One', 'Two', 'Last rule.']
+
+
+def provenance_record(report):
+    clause = report['clauses'][0]
+    return {'id': clause['id'], 'status': 'partial', 'implementation': 'rdfcore/term.py',
+            'expected': 'Use RDF set semantics', 'reason': 'selected cases only',
+            'tests': ['tests/unit/test_graph.py'], 'reviewed': True,
+            **{field: report[field] for field in ('document', 'url', 'date', 'source_sha256')},
+            'anchor': clause['anchor']}
+
+
+@pytest.mark.parametrize('field,value', [('document', 'other'), ('date', '2026-01-01'),
+                                       ('source_sha256', 'f' * 64), ('url', 'https://other.org/'),
+                                       ('anchor', 'other'), ('reviewed', False)])
+def test_strict_matrix_rejects_wrong_source_or_unreviewed_record(field, value):
+    report = inventory_document('model', b'<section id="a"><p>A graph is a set.</p></section>',
+                                'https://example.org/spec/', '2026-10-18')
+    record = provenance_record(report)
+    record[field] = value
+    with pytest.raises(ValueError, match='provenance|review'):
+        validate_matrix([report], [record], require_provenance=True)
+
+
+def test_strict_matrix_accepts_bound_source_evidence():
+    report = inventory_document('model', b'<section id="a"><p>A graph is a set.</p></section>',
+                                'https://example.org/spec/', '2026-10-18')
+    assert validate_matrix([report], [provenance_record(report)], require_provenance=True)['unaccounted'] == []
+
+
+def test_duplicate_source_documents_are_rejected():
+    report = inventory_document('model', b'<section id="a"><p>A graph is a set.</p></section>',
+                                'https://example.org/spec/', '2026-10-18')
+    with pytest.raises(ValueError, match='duplicate source'):
+        validate_matrix([report, report], [provenance_record(report)])
+
+
+def test_strict_cli_requires_a_matrix(tmp_path, capsys):
+    from tests.w3c.requirements import main
+    path = tmp_path / 'sources.json'
+    path.write_text('[]')
+    with pytest.raises(SystemExit) as raised:
+        main([str(path), '--strict'])
+    assert raised.value.code == 2
+    assert 'requires --matrix' in capsys.readouterr().err
+
+
+def test_cli_rejects_changed_source_bytes(tmp_path, capsys):
+    import json
+    from tests.w3c.requirements import main
+    (tmp_path / 'model.html').write_text('<p>Changed source.</p>')
+    path = tmp_path / 'sources.json'
+    path.write_text(json.dumps([{'document': 'model', 'path': 'model.html',
+                                'url': 'https://example.org/', 'date': '2026-10-18',
+                                'source_sha256': 'f' * 64}]))
+    with pytest.raises(SystemExit) as raised:
+        main([str(path)])
+    assert raised.value.code == 2
+    assert 'source hash mismatch' in capsys.readouterr().err

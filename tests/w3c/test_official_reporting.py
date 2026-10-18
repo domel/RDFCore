@@ -17,6 +17,7 @@ def test_unknown_type_and_missing_action_are_not_success(tmp_path):
     path = manifest(tmp_path, "<#u> <#m>", '''
 <#u> a rt:FutureTest ; mf:name "unknown" ; mf:action <x.nt> .
 <#m> a rt:TestNTriplesPositiveSyntax ; mf:name "missing" .''')
+    (tmp_path / 'x.nt').write_text('<urn:s> <urn:p> <urn:o> .')
     report = report_suite(path, "nt")
     assert report["counts"] == {"passed": 0, "failed": 0, "unsupported": 2, "error": 0}
     assert report["total"] == 2
@@ -48,6 +49,7 @@ def test_include_lists_and_direct_includes_are_inventoried(tmp_path):
 
 def test_unavailable_format_never_passes_negative_tests(tmp_path):
     path = manifest(tmp_path, "<#n>", '<#n> a rt:TestXMLNegativeSyntax ; mf:action <x.rdf> .')
+    (tmp_path / 'x.rdf').write_text('not XML')
     assert report_suite(path, None)["counts"]["unsupported"] == 1
 
 

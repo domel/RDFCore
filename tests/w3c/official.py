@@ -29,7 +29,7 @@ FORMATS = {"rdf-n-triples": ("nt", "nt12"), "rdf-n-quads": ("nquads", "nq12"), '
 TYPES = {RT + "Test" + syntax + kind for syntax in ("NTriples", "NQuads", "Turtle", "Trig", 'XML')
          for kind in ("PositiveSyntax", "NegativeSyntax", "Eval", "C14N", "PositiveC14N")}
 
-# Published references reviewed 2026-10-17, not claims that the older locked
+# Published references reviewed 2026-10-18, not claims that the locked
 # fixtures cover every requirement in these document revisions.
 REFERENCES = {
     'nt12': 'https://www.w3.org/TR/2026/WD-rdf12-n-triples-20261007/',
@@ -51,9 +51,10 @@ def git(path, *args):
     return subprocess.check_output(["git", "-C", str(path), *args], text=True).strip()
 
 
-def verify_checkout(checkout):
+def verify_checkout(checkout, *, lock=None):
     """Check the existing lock without requiring tomllib on Python 3.10."""
-    match = re.search(r'^commit\s*=\s*"([0-9a-f]{40})"', LOCK.read_text(), re.M)
+    lock = LOCK if lock is None else Path(lock)
+    match = re.search(r'^commit\s*=\s*"([0-9a-f]{40})"', lock.read_text(), re.M)
     if match is None:
         raise ValueError('manifest lock must contain a 40-character hexadecimal commit')
     pin = match.group(1)
@@ -109,6 +110,9 @@ def report_suite(manifest, format, *, legacy_w3c=False):
     except Exception as exc:
         report["suite_error"] = f"{type(exc).__name__}: {exc}"
         return report
+    if not entries:
+        report['suite_error'] = 'manifest contains no test entries'
+        return report
     # Execute the existing runner against each physical manifest. This preserves
     # its assertions while accounting independently for every declared entry.
     results, errors, diagnostics = {}, {}, {}
@@ -123,7 +127,17 @@ def report_suite(manifest, format, *, legacy_w3c=False):
     for entry in entries:
         status, reason = "unsupported", "unknown or unsupported test type"
         leaf, name = entry["manifest"], entry["id"]
-        if format == 'semantics':
+        evidence, fixture_error = {}, None
+        for field in ('action', 'result'):
+            evidence[field + '_sha256'] = None
+            if urlparse(entry[field]).scheme == 'file':
+                try:
+                    evidence[field + '_sha256'] = file_sha256(local_path(entry[field]))
+                except (OSError, ValueError) as exc:
+                    fixture_error = f'{type(exc).__name__}: {exc}'
+        if fixture_error is not None:
+            status, reason = 'error', fixture_error
+        elif format == 'semantics':
             status, reason = semantic_result(entry)
         elif format is None:
             reason = "no RDFCore parser/entailment runner for this suite"
@@ -138,7 +152,7 @@ def report_suite(manifest, format, *, legacy_w3c=False):
         else:
             status = "passed" if results[leaf][name] else "failed"
             reason = diagnostics[leaf].get(name, "existing runner returned " + str(results[leaf][name]))
-        report["tests"].append({**entry, "status": status, "reason": reason})
+        report["tests"].append({**entry, **evidence, "status": status, "reason": reason})
         report["counts"][status] += 1
     report["total"] = len(entries)
     assert sum(report["counts"].values()) == report["total"]
@@ -169,43 +183,63 @@ def semantic_result(entry):
     return ('passed', 'entailment result matches manifest') if actual is expected else ('failed', 'entailment result differs from manifest')
 
 
-def build_report(checkout, *, legacy_w3c=False):
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for chunk in iter(lambda: stream.read(64 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_report(checkout, *, legacy_w3c=False, lock=None):
     checkout = Path(checkout).resolve()
-    pin = verify_checkout(checkout)
+    pin = verify_checkout(checkout, **({'lock': lock} if lock is not None else {}))
     suites = []
     for version, index in (("rdf11", 0), ("rdf12", 1)):
         for directory, formats in FORMATS.items():
             options = {'legacy_w3c': True} if legacy_w3c else {}
             suite = report_suite(checkout / "rdf" / version / directory / "manifest.ttl", formats[index], **options)
             suite.update(reference_document=REFERENCES[formats[index]], rdf_version=version,
-                         category='syntax', reference_reviewed='2026-10-17')
+                         category='syntax', reference_reviewed='2026-10-18')
             suites.append(suite)
         for directory in ("rdf-mt" if version == "rdf11" else "rdf-semantics",):
             suite = report_suite(checkout / "rdf" / version / directory / "manifest.ttl", 'semantics')
             suite.update(reference_document=REFERENCES['semantics11' if index == 0 else 'semantics12'],
-                         rdf_version=version, category='entailment', reference_reviewed='2026-10-17')
+                         rdf_version=version, category='entailment', reference_reviewed='2026-10-18')
             suites.append(suite)
     # Relativize the temporary checkout location while retaining entry identity.
     encoded = json.dumps(suites).replace(checkout.as_uri() + "/", "https://w3c.github.io/rdf-tests/")
     encoded = encoded.replace(str(checkout) + "/", "")
     changed = git(ROOT, "status", "--porcelain")
     tracked_diff = subprocess.check_output(["git", "-C", str(ROOT), "diff", "--binary", "HEAD"])
+    untracked_paths = subprocess.check_output(
+        ['git', '-C', str(ROOT), 'ls-files', '--others', '--exclude-standard', '-z'])
+    untracked = {}
+    import os
+    for raw in untracked_paths.split(b'\0'):
+        if raw:
+            name = os.fsdecode(raw)
+            path = ROOT / name
+            untracked[name] = (hashlib.sha256(os.fsencode(os.readlink(path))).hexdigest()
+                               if path.is_symlink() else file_sha256(path))
     totals = {status: sum(suite['counts'].get(status, 0) for suite in suites)
               for status in ('passed', 'failed', 'unsupported', 'error')}
     return {"schema_version": 1, "generated_at": datetime.now(timezone.utc).isoformat(),
             "snapshot": pin, "python": platform.python_version(), "rdflib": rdflib.__version__,
+            "manifest_lock_sha256": file_sha256(LOCK if lock is None else lock),
             "execution_profile": 'legacy-w3c-xml' if legacy_w3c else 'default',
             "parser_options": {'legacy_w3c': True} if legacy_w3c else {},
             "rdfcore_revision": git(ROOT, "rev-parse", "HEAD"), "worktree_status": changed,
             "tracked_diff_sha256": hashlib.sha256(tracked_diff).hexdigest(),
+            "untracked_file_sha256": untracked,
             "totals": totals, "test_executions": sum(suite.get('total', 0) for suite in suites),
             "unique_test_ids": len({test['id'] for suite in suites for test in suite['tests']}),
             "limitations": ["Passed means the selected test passed, not a complete conformance certification.",
                 "Canonical syntax tests compare original UTF-8 statement bytes, ignoring only statement order; this is not RDFC-1.0.",
                 "Unsupported and suite errors never count as success; no skipped test counts as passed.",
                 "Suite includes may repeat RDF 1.1 cases; totals across suites are executions, not unique tests.",
-                "Published reference_document metadata does not mean the older snapshot covers that revision.",
-                "Snapshot predates October 2026 publications; passing it cannot verify later changes.",
+                "Published reference_document metadata does not mean the pinned snapshot covers that revision.",
+                "Passing a pinned snapshot cannot verify requirements absent from its fixtures or later changes.",
                 "The legacy-w3c-xml profile accepts unannounced XML 1.2 and expands empty XMLLiteral elements; it is not current-spec conformance."],
             "suites": json.loads(encoded)}
 
@@ -214,10 +248,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("checkout", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument('--lock', type=Path, help='explicit alternate revision lock for archived comparisons')
     parser.add_argument('--legacy-w3c-xml', action='store_true', help='explicit recovery for old XML fixtures, not current-spec conformance')
     args = parser.parse_args(argv)
     try:
-        report = build_report(args.checkout, **({'legacy_w3c': True} if args.legacy_w3c_xml else {}))
+        options = {'legacy_w3c': True} if args.legacy_w3c_xml else {}
+        if args.lock is not None:
+            options['lock'] = args.lock
+        report = build_report(args.checkout, **options)
     except ValueError as exc:
         parser.error(str(exc))
     rendered = json.dumps(report, indent=2, ensure_ascii=False) + "\n"

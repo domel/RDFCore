@@ -8,7 +8,7 @@ directory naming. It accepts a local checkout of the snapshot listed in
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from xml.sax import SAXParseException
 
 from rdfcore import Dataset, Graph, RDF, URIRef
@@ -72,7 +72,9 @@ def _manifest_entries(graph, base):
 def _uri_path(value, base):
     parsed = urlparse(str(value))
     if parsed.scheme == "file":
-        return Path(parsed.path)
+        if parsed.netloc:
+            raise ValueError(f"remote W3C test action is not allowed: {value}")
+        return Path(unquote(parsed.path))
     if parsed.scheme:
         raise ValueError(f"remote W3C test action is not allowed: {value}")
     return (base / str(value)).resolve()

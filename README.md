@@ -513,8 +513,9 @@ python -m tests.w3c.official /path/to/rdf-tests --output conformance-results.jso
 
 The command returns a nonzero status for any failed or unsupported case.
 Reports separate syntax from entailment, record the published reference
-document alongside the older test snapshot, and include individual failure
-reasons. A published reference link does not mean the snapshot covers every
+document alongside the pinned test snapshot, and include individual failure
+reasons and SHA-256 hashes of the original action and expected-result files.
+A published reference link does not mean the snapshot covers every
 requirement of that revision. Checkout directory names do not change the
 base IRIs assigned to official fixtures.
 
@@ -523,6 +524,26 @@ lexical-form expectations) and unsupported datatype/inconsistency reasoning
 cases. These remain visible failures or unsupported results, not successful
 conformance checks. The RDFLib-compatible XMLLiteral behavior has separate
 differential tests; expected W3C fixtures are not rewritten to hide the gap.
+
+Audit a report or compare two snapshots using the same execution profile:
+
+```bash
+python -m tests.w3c.audit --current conformance-results.json --output .w3c/audit.json
+python -m tests.w3c.audit --before .w3c/previous.json --current conformance-results.json --output .w3c/comparison.json
+```
+
+The audit explains reviewed issues and identifies unreviewed ones. It does
+not alter test statuses and returns a nonzero exit status while issues remain.
+Comparison retains repeated executions, format and RDF-version distinctions,
+and reports added, removed and changed cases, including changed fixture bytes.
+Default and archived-recovery profiles cannot be compared as equivalent runs.
+
+The reviewed issues comprise 79 unsupported semantic executions, 17 XML
+announcement conflicts, four XMLLiteral lexical conflicts with the pinned
+RDFLib behavior, and two disputed XML fixtures. The four lexical executions
+reuse two test IDs across XML11 and XML12. Fixture-conflict explanations for
+the two disputed cases require matching reviewed input and result hashes;
+an unknown snapshot or changed disputed fixture remains unreviewed.
 
 For archived XML fixtures only, opt into `legacy_w3c=True`:
 
@@ -558,8 +579,9 @@ Recovery does not discard either triple terms or direction to match those
 expectations. Results in this mode are archived-fixture compatibility evidence,
 not current RDF 1.2 conformance. The 79 unsupported reasoning cases remain.
 
-The separate **W3C conformance** workflow runs weekly and can be started
-manually. It fetches the pinned snapshot and uploads a JSON artifact listing
-passed, failed, unsupported and operationally erroneous tests. It is expected
+The separate **W3C conformance** workflow runs weekly, on relevant pull
+requests and `v*` release tags, and can be started manually. It fetches or
+restores the pinned fixtures from cache, verifies their clean revision, and
+uploads reports and issue classifications even when tests fail. It is expected
 to remain red while conformance gaps are open;
 failures are not suppressed to obtain a green badge.

@@ -108,9 +108,17 @@ def inventory_document(name, source, url, date, informative=False):
     return report
 
 
-def validate_matrix(reports, records):
+def validate_matrix(reports, records, *, require_provenance=False):
     """Reject accounting gaps; a passing result does not prove conformance."""
-    expected = {clause['id'] for report in reports for clause in report['clauses']}
+    expected, documents = {}, set()
+    for report in reports:
+        if report['document'] in documents:
+            raise ValueError('duplicate source document: ' + report['document'])
+        documents.add(report['document'])
+        for clause in report['clauses']:
+            if clause['id'] in expected:
+                raise ValueError('duplicate source clause: ' + clause['id'])
+            expected[clause['id']] = (report, clause)
     seen = set()
     statuses = {'implemented', 'partial', 'missing', 'not-applicable-with-reason'}
     for record in records:
@@ -120,6 +128,15 @@ def validate_matrix(reports, records):
         if identifier not in expected:
             raise ValueError('unknown requirement: ' + identifier)
         seen.add(identifier)
+        if require_provenance:
+            source, clause = expected[identifier]
+            if record.get('reviewed') is not True:
+                raise ValueError('manual review required: ' + identifier)
+            for field in ('document', 'url', 'date', 'source_sha256'):
+                if record.get(field) != source[field]:
+                    raise ValueError('source provenance mismatch for ' + field + ': ' + identifier)
+            if record.get('anchor') != clause['anchor']:
+                raise ValueError('anchor provenance mismatch: ' + identifier)
         if record.get('status') not in statuses:
             raise ValueError('invalid requirement status: ' + identifier)
         for field in ('implementation', 'expected', 'reason'):
@@ -130,13 +147,13 @@ def validate_matrix(reports, records):
             raise ValueError('tests must be a list: ' + identifier)
         if record['status'] == 'implemented' and not record['tests']:
             raise ValueError('implemented requires test evidence: ' + identifier)
-    missing = sorted(expected - seen)
+    missing = sorted(expected.keys() - seen)
     if missing:
         raise ValueError('unaccounted requirements: ' + ', '.join(missing))
     return {'requirements': len(expected), 'unaccounted': []}
 
 
-def main():
+def main(argv=None):
     """Read an explicit local manifest; emit JSON without touching spec.md."""
     import argparse
     import json
@@ -145,7 +162,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('manifest', type=Path, help='JSON list of local source records')
     parser.add_argument('--matrix', type=Path, help='JSON requirement records to validate')
-    args = parser.parse_args()
+    parser.add_argument('--strict', action='store_true',
+                        help='require reviewed records bound to document revision, hash and anchor')
+    args = parser.parse_args(argv)
+    if args.strict and args.matrix is None:
+        parser.error('--strict requires --matrix')
     sources = json.loads(args.manifest.read_text(encoding='utf-8'))
     reports = []
     names = set()
@@ -155,11 +176,15 @@ def main():
             parser.error('duplicate source document: ' + name)
         names.add(name)
         path = args.manifest.parent / source['path']
-        reports.append(inventory_document(name, path.read_bytes(), source['url'], source['date'],
+        data = path.read_bytes()
+        if source.get('source_sha256') is not None and sha256(data).hexdigest() != source['source_sha256']:
+            parser.error('source hash mismatch: ' + name)
+        reports.append(inventory_document(name, data, source['url'], source['date'],
                                           informative=source.get('informative', False)))
     result = {'documents': reports, 'scope': 'candidate clauses; manual normative review required'}
     if args.matrix:
-        result['accounting'] = validate_matrix(reports, json.loads(args.matrix.read_text(encoding='utf-8')))
+        result['accounting'] = validate_matrix(reports, json.loads(args.matrix.read_text(encoding='utf-8')),
+                                               require_provenance=args.strict)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

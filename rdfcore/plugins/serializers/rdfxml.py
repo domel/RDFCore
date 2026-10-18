@@ -22,7 +22,11 @@ def _xml(value):
 
 class XMLSerializer(Serializer):
     rdf_version = '1.1'
-    encoding = 'utf-8'
+    _binary_output = True
+
+    def __init__(self, store=None):
+        super().__init__(store)
+        self.encoding = 'utf-8'
 
     def serialize(self, stream=None, base=None, encoding=None, rdf_version='auto', **kwargs):
         from ...rdf_version import validate_rdf_version
@@ -47,8 +51,12 @@ class XMLSerializer(Serializer):
         # uses its encoding attribute. XML12 retains explicit codec support.
         codec = self.encoding if self.rdf_version == '1.1' else encoding or self.encoding
         value = '<?xml version="1.0" encoding='+quoteattr(codec)+'?>\n<rdf:RDF'+declarations+'>\n'+body+'</rdf:RDF>\n'
+        errors = 'replace' if self.rdf_version == '1.1' else 'strict'
         if stream is None:
-            return value.encode(codec) if encoding else value
+            return value.encode(codec, errors) if encoding is not None else value
+        if self.rdf_version == '1.1':
+            stream.write(value.encode(codec, errors))
+            return None
         try:
             stream.write(value.encode(codec))
         except TypeError:
@@ -57,7 +65,9 @@ class XMLSerializer(Serializer):
         return None
 
     def _check(self, triple, depth=0):
-        if depth > 128: raise ValueError('triple term nesting exceeds supported depth')
+        # The parser permits 256 XML elements. Root/outer node/property use
+        # three levels, and each nested triple term needs another two.
+        if depth > 126: raise ValueError('RDF/XML nesting exceeds supported depth of 256')
         subject, predicate, obj = triple
         if not isinstance(subject, (URIRef, BNode)) or not isinstance(predicate, URIRef):
             raise ValueError('RDF/XML requires a resource subject and IRI predicate')

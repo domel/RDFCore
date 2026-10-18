@@ -411,8 +411,9 @@ class Graph:
         plugin = get_plugin(format, Serializer)
         serializer = plugin.getClass()(serializable_graph)
         if isinstance(destination, (str, PurePath)):
-            mode = "wb" if encoding else "w"
-            open_kwargs = {} if encoding else {"encoding": "utf-8", "newline": ""}
+            binary = bool(encoding) or getattr(serializer, '_binary_output', False)
+            mode = "wb" if binary else "w"
+            open_kwargs = {} if binary else {"encoding": "utf-8", "newline": ""}
             with open(destination, mode, **open_kwargs) as stream:
                 serializer.serialize(stream, base=base, encoding=encoding, **args)
             return self

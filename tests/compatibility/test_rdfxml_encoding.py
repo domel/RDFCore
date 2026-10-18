@@ -7,7 +7,7 @@ import rdflib
 import rdfcore
 
 
-@pytest.mark.parametrize('encoding', [None, 'ascii', 'utf-8', 'utf-16', 'not-a-codec'])
+@pytest.mark.parametrize('encoding', [None, '', False, 'ascii', 'utf-8', 'utf-16', 'not-a-codec'])
 @pytest.mark.parametrize('destination', [False, True])
 @pytest.mark.parametrize('empty', [False, True])
 def test_xml11_encoding_and_return_contract(encoding, destination, empty):
@@ -20,7 +20,7 @@ def test_xml11_encoding_and_return_contract(encoding, destination, empty):
         stream = BytesIO() if destination else None
         result = graph.serialize(destination=stream, format='xml', encoding=encoding)
         output = stream.getvalue() if destination else result
-        assert isinstance(output, bytes if destination or encoding else str)
+        assert isinstance(output, bytes if destination or encoding is not None else str)
         assert result is graph if destination else result is output
         assert output.startswith(b'<?xml version="1.0" encoding="utf-8"?>'
                                  if isinstance(output, bytes)

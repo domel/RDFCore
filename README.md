@@ -152,6 +152,10 @@ The legacy `xml` serializer does not add this announcement.
 Like RDFLib 7.6.0, the `xml` serializer writes UTF-8 even when another
 `encoding` argument is supplied; the argument still selects a bytes return
 value. The explicit `xml12` serializer honors the requested encoding.
+For `xml`, caller-supplied output streams must accept bytes, as in RDFLib.
+Text streams raise `TypeError`; sink exceptions propagate without a text retry. File
+paths are opened in binary mode. The low-level XML11 writer also follows
+RDFLib's replacement policy if its `encoding` attribute is changed to ASCII.
 
 The `xml` parser follows RDFLib's XMLLiteral handling, including CDATA,
 omission of comments and processing instructions, CR text normalization,
@@ -160,13 +164,17 @@ rules do not apply to `xml12`, which retains comments, processing
 instructions and default namespace undeclarations inside XML literals.
 Outside XML literals, `xml12` accepts only XML whitespace between RDF
 elements; `xml` preserves RDFLib's broader Unicode whitespace handling.
+The XML12 event mapping ignores reserved `xml*` element and attribute names,
+except inside XML literals. XML11 retains the reference's legacy handling.
 
 Both parsers reject DTD declarations before processing RDF or accessing
 external entities, including declarations split across input chunks or
 encoded as UTF-16. XML nesting is limited to 256 elements, including the
-RDF wrapper and XML literal content. Input streams supplied by the caller
-remain open after success or failure. The parsers build a tree and do not
-provide a hard memory bound for large text or documents.
+RDF wrapper and XML literal content. The XML12 writer rejects more than
+126 nested triple terms so that its output stays within the parser's limit.
+Input streams supplied by the caller remain open after success or failure.
+The parsers build a tree and do not provide a hard memory bound for large
+text or documents.
 
 ```python
 from rdfcore import Graph, TripleTerm, URIRef

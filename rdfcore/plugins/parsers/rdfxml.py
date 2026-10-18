@@ -48,8 +48,13 @@ def _error(message):
     raise SAXParseException(message, None, _Locator())
 
 
-def _elements(element):
-    return [child for child in element.childNodes if child.nodeType == Node.ELEMENT_NODE]
+def _reserved_xml_name(element):
+    return (element.prefix or element.localName or element.nodeName).lower().startswith('xml')
+
+
+def _elements(element, strict=False):
+    return [child for child in element.childNodes if child.nodeType == Node.ELEMENT_NODE
+            and not (strict and _reserved_xml_name(child))]
 
 
 def _text(element):
@@ -118,6 +123,8 @@ class RDFXMLParser(Parser):
         context = (str(base), None, None, version)
         try:
             root = dom.documentElement
+            if self.rdf_version == '1.2' and _reserved_xml_name(root):
+                _error('reserved XML name cannot be an RDF document element')
             for element in dom.getElementsByTagName('*'):
                 for attr in element.attributes.values():
                     if attr.namespaceURI == 'http://www.w3.org/2000/xmlns/':
@@ -129,7 +136,7 @@ class RDFXMLParser(Parser):
                 if attrs:
                     _error('invalid attributes on rdf:RDF')
                 _whitespace(root, self.rdf_version == '1.2')
-                for child in _elements(root):
+                for child in _elements(root, self.rdf_version == '1.2'):
                     self._node(child, context, sink.add)
             else:
                 self._node(root, context, sink.add)
@@ -151,6 +158,9 @@ class RDFXMLParser(Parser):
             if ns == XML:
                 if attr.localName == 'base': base = urldefrag(urljoin(base, attr.value))[0]
                 if attr.localName == 'lang': lang = attr.value or None
+                continue
+            if (self.rdf_version == '1.2' and attr.prefix
+                    and attr.prefix.lower().startswith('xml')):
                 continue
             if not ns:
                 if attr.name.lower().startswith('xml'): continue
@@ -222,7 +232,7 @@ class RDFXMLParser(Parser):
     def _properties(self, element, subject, context, emit):
         _whitespace(element, self.rdf_version == '1.2')
         counter = 0
-        for child in _elements(element):
+        for child in _elements(element, self.rdf_version == '1.2'):
             name = self._name(child)
             if name == RDF+'li':
                 counter += 1
@@ -240,7 +250,7 @@ class RDFXMLParser(Parser):
             if context[3] != '1.2': _error('annotations require rdf:version="1.2"')
             if annotation is not None and annotation_node is not None: _error('conflicting annotation identifiers')
         parse_type = attrs.pop(RDF+'parseType', None)
-        children = _elements(element)
+        children = _elements(element, self.rdf_version == '1.2')
         if parse_type is not None:
             if attrs: _error('property attributes not allowed with rdf:parseType')
             if parse_type == 'Resource':

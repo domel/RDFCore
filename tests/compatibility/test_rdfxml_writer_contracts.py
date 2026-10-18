@@ -55,3 +55,36 @@ def test_xml11_file_destination_remains_binary_without_encoding_argument(tmp_pat
         output = path.read_bytes()
         assert output.startswith(b'<?xml version="1.0" encoding="utf-8"?>')
         assert ElementTree.fromstring(output).find('.//{urn:}p').text == 'é😀'
+
+
+@pytest.mark.parametrize('base', [None, '', 'https://example.org/override/'])
+def test_direct_xml11_serializer_uses_graph_base_when_argument_is_none(base):
+    observations = []
+    for module, cls in ((rdflib, ReferenceSerializer), (rdfcore, XMLSerializer)):
+        value = graph(module)
+        value.base = 'https://example.org/graph/'
+        output = BytesIO()
+        assert cls(value).serialize(output, base=base) is None
+        observations.append(ElementTree.fromstring(output.getvalue()).attrib.get(
+            '{http://www.w3.org/XML/1998/namespace}base'))
+    assert observations[0] == observations[1]
+
+
+@pytest.mark.parametrize('predicate', ['urn:p', 'urn:1p', 'urn:名', 'urn:p-1', 'urn:123'])
+def test_xml11_qname_output_reparses_with_reference(predicate):
+    observations = []
+    for module in (rdflib, rdfcore):
+        value = module.Graph().add((module.URIRef('urn:s'), module.URIRef(predicate),
+                                    module.Literal('é😀\r\n\t')))
+        try:
+            output = value.serialize(format='xml')
+        except ValueError:
+            observations.append(ValueError)
+        else:
+            # Use the reference reader for both outputs; do not hide writer
+            # errors behind matching defects in our own reader.
+            actual = rdflib.Graph().parse(data=output, format='xml')
+            assert set(actual) == {(rdflib.URIRef('urn:s'), rdflib.URIRef(predicate),
+                                    rdflib.Literal('é😀\r\n\t'))}
+            observations.append('roundtrip')
+    assert observations[0] == observations[1]

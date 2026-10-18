@@ -27,10 +27,16 @@ class XMLSerializer(Serializer):
     def __init__(self, store=None):
         super().__init__(store)
         self.encoding = 'utf-8'
+        self.base = None
 
     def serialize(self, stream=None, base=None, encoding=None, rdf_version='auto', **kwargs):
         from ...rdf_version import validate_rdf_version
         requested = validate_rdf_version(rdf_version)
+        if base is not None:
+            self.base = base
+        elif self.store.base is not None:
+            self.base = self.store.base
+        base = self.base
         self._output_version = self.rdf_version if requested == 'auto' else requested
         if self.rdf_version == '1.1' and self._output_version != '1.1':
             raise ValueError('select xml12 for RDF 1.2 output')

@@ -141,7 +141,9 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | TriG 1.2 | ❌ | ✅ `trig12` |
 | RDF/XML 1.1 | ✅ | ⚠️ `xml`, `rdfxml`; semantic round trips tested, not byte-identical output |
 | RDF/XML 1.1 encoding argument | UTF-8 output regardless of argument | ✅ Differential tests cover empty/nonempty graphs, bytes/str returns and caller-owned binary streams |
+| Direct RDF/XML serializer base | Graph base when `base=None`; empty string suppresses it | ✅ Executable differential tests against 7.6.0 |
 | RDF/XML 1.2 | ❌ | ⚠️ `xml12`, `xmlrdf12`; same serializer, announces `1.2` by default, respects explicit `1.1` / `1.2-basic` profiles |
+| RDF/XML writer round trips | RDF 1.1 reference | ✅ Tested XML11 reference parsing and XML12 profiles, Unicode, XMLLiteral, shared BNodes, nested terms and reifiers; UTF-32 requires explicit input decoding; no byte-parity claim |
 | JSON-LD | ✅ | ❌ |
 | Canonical NT/NQ lexical syntax | ⚠️ | ✅ explicit `canonical=True`; not blank-node canonicalization (RDFC-1.0) |
 | `mode="stream"` | ❌ | ✅ Turtle/TriG |

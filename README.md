@@ -208,6 +208,13 @@ For `xml`, caller-supplied output streams must accept bytes, as in RDFLib.
 Text streams raise `TypeError`; sink exceptions propagate without a text retry. File
 paths are opened in binary mode. The low-level XML11 writer also follows
 RDFLib's replacement policy if its `encoding` attribute is changed to ASCII.
+Direct serializer calls use the graph's base when `base=None`, as in RDFLib;
+an explicit empty base suppresses it. Writer round-trip tests cover shared
+blank nodes, XMLLiteral lexical forms, Unicode, directional literals, nested
+triple terms and multiple reifiers. UTF-8 and UTF-16 output can be parsed
+directly. UTF-32 output must be decoded to text before parsing because the
+current XML parser does not accept UTF-32 byte input. Namespace prefixes and
+statement order are not promised to match RDFLib byte for byte.
 
 The `xml` parser follows RDFLib's XMLLiteral handling, including CDATA,
 omission of comments and processing instructions, CR text normalization,

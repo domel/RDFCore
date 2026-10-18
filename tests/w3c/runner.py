@@ -148,7 +148,7 @@ def _expect_c14n(path, expected, format, detail=None):
 
 def _canonical(value, format):
     serialization_format = {
-        "nt": "nt", "nt12": "nt12", "nquads": "nquads", "nq12": "nq12",
+        "nt": "nt", "nt12": "nt12", "nquads": "nquads", "nq": "nquads", "nq11": "nquads", "nq12": "nq12",
         "turtle": "turtle", "turtle12": "turtle12", "trig": "trig", "trig12": "trig12",
     }[format]
     text = value.serialize(format=serialization_format, canonical=True, encoding="utf-8")
@@ -159,7 +159,7 @@ def _canonical(value, format):
 
 def _parse(path, format, *, legacy_w3c=False):
     public_id = _canonical_public_id(path)
-    if format in ("nquads", "nq12"):
+    if format in ("nquads", "nq", "nq11", "nq12"):
         return Dataset().parse(path, publicID=public_id, format=format, strict=True, preserve_bnode_ids=True)
     if format in ("nt", "nt12", 'xml', 'xml12', 'xmlrdf12'):
         options = {'legacy_w3c': True} if legacy_w3c and format in ('xml', 'xml12', 'xmlrdf12') else {}

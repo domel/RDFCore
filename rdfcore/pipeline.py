@@ -39,7 +39,7 @@ class _RDF12Writer:
 
 _FORMATS = {
     **{alias: ('graph', '1.1') for alias in ('nt', 'nt11', 'ntriples', 'application/n-triples')},
-    **{alias: ('dataset', '1.1') for alias in ('nquads', 'application/n-quads')},
+    **{alias: ('dataset', '1.1') for alias in ('nquads', 'nq', 'nq11', 'application/n-quads')},
     'nt12': ('graph', '1.2'), 'nq12': ('dataset', '1.2'),
 }
 

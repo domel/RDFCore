@@ -107,7 +107,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 |---|---:|---:|
 | N-Triples 1.1 | ✅ `nt` | ✅ `nt`, `nt11` |
 | N-Triples 1.2 | ❌ | ✅ `nt12` |
-| N-Quads 1.1 | ✅ `nquads` | ✅ `nquads`, `nq11` |
+| N-Quads 1.1 | ✅ `nquads` | ✅ `nquads`, `nq`, `nq11`, `application/n-quads` |
 | N-Quads 1.2 | ❌ | ✅ `nq12` |
 | Turtle 1.1 | ✅ `turtle`, `ttl` | ✅ `turtle`, `turtle11` |
 | Turtle 1.2 | ❌ | ✅ `turtle12` |
@@ -125,7 +125,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 |---|---:|---:|
 | N-Triples 1.1 | ✅ | ✅ |
 | N-Triples 1.2 | ❌ | ✅ `nt12` |
-| N-Quads 1.1 | ✅ | ✅ |
+| N-Quads 1.1 | ✅ | ✅ `nquads`, `nq`, `nq11`, `application/n-quads` |
 | N-Quads 1.2 | ❌ | ✅ `nq12` |
 | Turtle 1.1 | ✅ | ✅ |
 | Turtle 1.2 | ❌ | ✅ `turtle12` |

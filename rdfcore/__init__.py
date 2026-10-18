@@ -61,7 +61,7 @@ for _alias in ("nt", "ntriples", "nt11", "application/n-triples"):
     plugin.register(_alias, Parser, NTParser)
 for _alias in ("nt12",):
     plugin.register(_alias, Parser, NT12Parser)
-for _alias in ("nquads", "application/n-quads"):
+for _alias in ("nquads", "nq", "nq11", "application/n-quads"):
     plugin.register(_alias, Parser, NQuadsParser)
 plugin.register("nq12", Parser, NQuads12Parser)
 for _alias in ("turtle", "ttl", "text/turtle"):
@@ -75,7 +75,7 @@ plugin.register("trig12", Parser, TriG12Parser)
 for _alias in ("nt", "ntriples", "nt11", "application/n-triples"):
     plugin.register(_alias, Serializer, NT11Serializer if _alias == "nt11" else NTSerializer)
 plugin.register("nt12", Serializer, NT12Serializer)
-for _alias in ("nquads", "application/n-quads"):
+for _alias in ("nquads", "nq", "nq11", "application/n-quads"):
     plugin.register(_alias, Serializer, NQuadsSerializer)
 plugin.register("nq12", Serializer, NQuads12Serializer)
 for _alias in ("turtle", "ttl", "text/turtle"):

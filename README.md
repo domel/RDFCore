@@ -70,7 +70,7 @@ RDF 1.1 formats use the usual names:
 | Format | Short names | MIME alias |
 |---|---|---|
 | N-Triples | `nt`, `ntriples`, `nt11` | `application/n-triples` |
-| N-Quads | `nquads` | `application/n-quads` |
+| N-Quads | `nquads`, `nq`, `nq11` | `application/n-quads` |
 | Turtle | `turtle`, `ttl`, `turtle11` | `text/turtle` |
 | TriG | `trig`, `trig11` | `application/trig` |
 | RDF/XML | `xml`, `rdfxml` | `application/rdf+xml` |

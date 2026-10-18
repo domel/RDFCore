@@ -9,14 +9,14 @@ def test_all_supported_aliases_are_registered_for_parser_and_serializer():
     serializer_names = {plugin.name for plugin in plugins(Serializer)}
     expected = {
         "nt", "ntriples", "nt11", "application/n-triples",
-        "nquads", "application/n-quads",
+        "nquads", "nq", "nq11", "application/n-quads",
         "turtle", "ttl", "text/turtle",
         "trig", "application/trig",
     }
     assert expected <= parser_names
     assert expected <= serializer_names
-    assert not parser_names.intersection({"nq", "n-triples", "n-quads"})
-    assert not serializer_names.intersection({"nq", "n-triples", "n-quads"})
+    assert not parser_names.intersection({"n-triples", "n-quads"})
+    assert not serializer_names.intersection({"n-triples", "n-quads"})
 
 
 def test_dataset_parse_and_serialize_are_integrated_for_nquads_and_trig():

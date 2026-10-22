@@ -19,6 +19,10 @@ Baseline, inspected 2026-10-17:
 * T37 decision contract reviewed 2026-10-22 against the same published
   Semantics §§5, 7.1–7.2, 8–9 and the linked ED. No ED-only change is used.
   Schema WD 2026-10-22 is now published; its full rule audit belongs to T39.
+* T38 value-space constraints use Semantics §§7–9, Concepts CR 2026-04-07
+  §5/Appendix A and XSD 1.1 Part 2 REC 2012-04-05 §2.2.1/built-in types.
+  Published Concepts/Semantics and linked EDs checked 2026-10-22. No
+  ED-only lexical mapping or rule change is selected.
 
 ``entails(S, E)`` decides simple entailment by a blank-node homomorphism.
 Matching descends into triple terms, with one mapping across the whole
@@ -44,14 +48,28 @@ datatypes.py (RDF/RDFS always include string/langString/dirLangString).
 It validates literals even inside triple terms, proves explosion from an
 ill-typed recognized premise literal and matches recognized literal values.
 The literal False as conclusion asks whether the premise is inconsistent.
-False decisions require a countermodel certificate: ordinary ground RDF(S)
-graphs without reserved vocabulary (RDF also permits type/Property), or the
-simple-D fragment without triple terms or explicit recognized datatype IRIs
-in subject/predicate/object positions. Literal objects are allowed. Missing
-certificates raise UnsupportedEntailment; no proof failure implies False.
+False decisions require a countermodel certificate. Certificates include
+ordinary ground RDF(S) graphs without reserved vocabulary (RDF also permits
+type/Property), the datatype-schema fragment below, and the simple-D fragment
+without explicit recognized datatype IRIs in subject/predicate/object positions
+or triple-term components. Simple-D matching descends through nested triple
+terms without asserting their contents. Literal objects are allowed. Missing certificates raise
+UnsupportedEntailment; no proof failure implies False.
 
-NOT implemented: full datatype membership/inconsistency reasoning,
-exhaustive proposition generation, dataset entailment, or complete RDF 1.2
+Decision mode also checks supported datatype memberships and constraints,
+including disjoint type/range/domain requirements and value-space inclusions.
+It does not turn a space inclusion into an asserted subClassOf relation.
+The datatype-schema countermodel fragment permits ordinary edges, type
+assertions to recognized datatypes/Property, datatype domain/range, ordinary
+subproperty links and recognized datatype subclass assertions. Fixed-vocabulary
+aliasing and proposition constraints are excluded from that certificate.
+Boolean and integer domains of at most 4096 values can be exhaustive;
+larger spaces supply existence witnesses only. At most 4096 assignment
+combinations are explored; exceeding this raises EntailmentResourceLimit.
+New unresolved constraints prevent a countermodel certificate.
+
+NOT implemented: general RDF/RDFS decision procedures, exhaustive
+proposition generation, dataset entailment, or complete RDF 1.2
 Semantics conformance. In proof mode, ``datatypes`` remains reserved and any
 supplied value still raises explicitly rather than being ignored.
 The rules are monotonic and optional; no Graph methods or inputs are mutated.
@@ -210,6 +228,23 @@ def _ill_typed(graph, recognized) -> bool:
     return False
 
 
+def _literal_syntax(graph) -> None:
+    """Invalid RDF input is not a D-inconsistency (Concepts §3.3)."""
+    from ._language import well_formed_language_tag
+    for triple in graph:
+        for root in triple:
+            for term in _terms(root):
+                if not isinstance(term, Literal):
+                    continue
+                if any(0xD800 <= ord(char) <= 0xDFFF for char in str(term)):
+                    raise TypeError('RDF literal strings must contain Unicode scalar values')
+                if term.language and not well_formed_language_tag(term.language):
+                    raise TypeError('RDF literal language tag must be BCP47 well-formed')
+                if (term.datatype == RDF.langString and not term.language
+                        or term.datatype == RDF.dirLangString and not (term.language and term.direction)):
+                    raise TypeError('RDF language literal is missing language/direction components')
+
+
 def _ordinary_ground(graph, regime) -> bool:
     """Certificate for a deliberately small countermodel fragment.
 
@@ -237,19 +272,30 @@ def _ordinary_ground(graph, regime) -> bool:
 
 
 def _simple_value_fragment(graph, recognized) -> bool:
-    # Datatype IRIs themselves denote fixed datatypes, not freely chosen
-    # resources. Triple-term/value interactions are left to T38/T39.
+    # Quotient recognized literal values, then use a free triple-term algebra.
+    # Datatype IRIs themselves denote fixed datatypes, not freely chosen names.
     for triple in graph:
-        for term in triple:
-            _step()
-            if isinstance(term, TripleTerm) or (isinstance(term, URIRef) and term in recognized):
-                return False
+        for root in triple:
+            for term in _terms(root):
+                if isinstance(term, URIRef) and term in recognized:
+                    return False
     return True
 
 
 def _decide(source, target, regime, recognized) -> bool:
     if _ill_typed(source, recognized):
         return True  # Includes the explicit False conclusion: ex falso.
+    if regime != 'simple':
+        from ._datatype_reasoning import evaluate
+        from .datatypes import DatatypeResourceLimit, UnsupportedDatatype
+        try:
+            result = evaluate(source, target, regime, recognized)
+        except DatatypeResourceLimit as exc:
+            raise EntailmentResourceLimit(str(exc)) from exc
+        except UnsupportedDatatype as exc:
+            raise UnsupportedEntailment(str(exc)) from exc
+        if result is not None:
+            return result
     consistent = regime == 'simple' or _ordinary_ground(source, regime)
     if target is None:
         if consistent:
@@ -479,6 +525,11 @@ def entails(
     literal types remain opaque. conclusion=False asks about inconsistency,
     not the empty graph. Outside supported fragments the result is unknown,
     never an assumed False. This is not a complete RDF/RDFS decision mode.
+    Supported value-space constraints include incompatible types and datatype
+    ranges/domains; see the module's datatype-schema fragment and assignment
+    limits. An empty property extension does not assert subPropertyOf.
+    Malformed RDF literal components raise TypeError in decision mode, not an
+    inconsistency verdict. Constructors and the legacy proof path are unchanged.
     """
     if mode not in ('proof', 'decide'):
         raise ValueError("mode must be 'proof' or 'decide'")
@@ -488,6 +539,9 @@ def entails(
             recognized = _recognition(regime, datatypes)
             source = _snapshot(premise)
             target = None if conclusion is False else _snapshot(conclusion)
+            _literal_syntax(source)
+            if target is not None:
+                _literal_syntax(target)
             token = _recognized.set(recognized)
             try:
                 return _decide(source, target, regime, recognized)

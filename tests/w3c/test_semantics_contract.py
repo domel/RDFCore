@@ -41,3 +41,14 @@ def test_every_historical_execution_has_requirement_regression_and_route():
         assert plan['reference'].startswith('https://www.w3.org/TR/') and '#' in plan['reference']
         assert plan['regression'].startswith('tests/w3c/test_semantics_contract.py::test_case[')
     assert semantic_plan('urn:unreviewed') is None
+
+
+def test_t38_backlog_has_decisions_not_unsupported_boundary_expectations():
+    catalogue = {**SEMANTIC_11, **SEMANTIC_12}
+    names = [name for name, requirement in catalogue.items() if requirement[0] == 'S11 T38']
+    assert names
+    for name in names:
+        case = CASES[name]
+        assert case.supported, name
+        assert entails(case.premise, case.conclusion, regime=case.regime,
+                       datatypes=case.datatypes, mode='decide') is case.expected

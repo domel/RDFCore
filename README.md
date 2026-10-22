@@ -310,21 +310,40 @@ ill-typed recognized literals, including those inside triple terms. Supply
 RDF/RDFS always recognize `xsd:string`, `rdf:langString` and
 `rdf:dirLangString`. Other literal types remain opaque. An unknown requested
 datatype raises `UnsupportedEntailment`. HTML value mapping requires the
-optional HTML extra described above.
+optional HTML extra described above, also when the RDF/RDFS evaluator builds
+value witnesses for an explicitly recognized `rdf:HTML`.
+Malformed RDF literal components, including missing language/direction or
+non-scalar Unicode, raise `TypeError` in this mode. They are not datatype
+inconsistency proofs; RDFLib-compatible literal constructors remain unchanged.
 
 In decision mode, `conclusion=False` asks whether the premise is
 inconsistent; an empty graph is a different conclusion. A recognized
 ill-typed premise entails any conclusion, without asserting embedded
-triples. Negative decisions require a countermodel certificate. Supported
-RDF/RDFS negative cases are ground graphs with ordinary IRIs and literal
-objects, without RDF/RDFS/XSD vocabulary in subject/predicate/object
-positions (RDF also permits `rdf:type` and `rdf:Property`). Simple-D
-negatives support graphs without triple terms or recognized datatype IRIs
-in those positions; simple entailment without datatype recognition retains
-its existing coverage. Other undecided cases raise `UnsupportedEntailment`,
-never an assumed `False`. Full datatype membership, schema consistency and
-RDF 1.2 Semantics remain incomplete. Dataset inputs are rejected; select an
-explicit graph instead.
+triples. RDF/RDFS also check recognized value-space membership, compatible
+datatype inclusions, disjoint type constraints and domain/range clashes.
+Membership uses value identity, not Python coercion: boolean is not integer,
+and a JSON number is an `xsd:double`, not an `xsd:integer`. HTML and XMLLiteral
+share the DOM fragment value space but have different lexical mappings.
+Space inclusion can imply instance typing; it does not automatically assert
+an `rdfs:subClassOf` triple.
+
+Negative decisions require a checked countermodel. The supported datatype
+schema fragment allows ordinary edges, type assertions to recognized
+datatypes or `rdf:Property`, domain/range constraints to recognized datatypes,
+subproperty links between ordinary properties and subclass assertions between
+recognized datatypes. It excludes proposition constraints and fixed-vocabulary
+aliasing. The earlier ordinary-ground certificate remains available. Simple-D
+negatives also support transparent nested triple terms, provided recognized
+datatype IRIs do not themselves occur in subject/predicate/object positions
+or as triple-term components. Other undecided cases
+raise `UnsupportedEntailment`, never an assumed `False`. General RDF/RDFS
+reasoning remains incomplete. Dataset inputs are rejected; select a graph.
+
+Boolean domains and integer intervals of at most 4096 values can be checked
+exhaustively. Larger spaces use witnesses for consistency/countermodels only;
+a few samples never prove a universal conclusion. Evaluation stops with
+`EntailmentResourceLimit` after 4096 assignment combinations. Aliasing that
+introduces unresolved constraints cannot certify a countermodel.
 
 Both `entails()` and `entailment_closure()` accept `max_steps=None` (the
 default) or a non-negative integer work budget. Exhaustion raises
@@ -342,7 +361,7 @@ premise = Graph().add((URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")))
 conclusion = [(URIRef("urn:p"), RDF.type, RDF.Property)]
 assert entails(premise, conclusion, regime="rdf")
 
-from rdfcore import Literal, XSD
+from rdfcore import Literal, RDFS, XSD
 
 source = [(URIRef("urn:s"), URIRef("urn:p"),
            Literal("01", datatype=XSD.integer, normalize=False))]
@@ -350,6 +369,9 @@ target = [(URIRef("urn:s"), URIRef("urn:p"),
            Literal("1", datatype=XSD.integer, normalize=False))]
 assert entails(source, target, datatypes={XSD.integer}, mode="decide")
 assert entails(source, False, datatypes={XSD.integer}, mode="decide") is False
+
+clash = source + [(URIRef("urn:p"), RDFS.range, XSD.string)]
+assert entails(clash, False, regime="rdfs", datatypes={XSD.integer}, mode="decide")
 ```
 
 ## Graphs and datasets
@@ -726,12 +748,13 @@ status or fixture bytes; no test is removed.
 | Previous, before T37 | 2345 | 23 | 79 | 0 |
 | Current, before T37 | 2350 | 23 | 79 | 0 |
 | Current, explicit decision mode (T37) | 2401 | 23 | 28 | 0 |
+| Current, datatype constraints (T38) | 2411 | 23 | 18 | 0 |
 
 These totals count executions across suites, including repeated RDF 1.1
 cases. The current snapshot contains 2452 executions and 1411 unique test IDs.
 
 The reviewed snapshot still has RDF/XML failures (including XMLLiteral
-lexical-form expectations) and unsupported datatype/inconsistency reasoning
+lexical-form expectations) and unsupported general schema/reification reasoning
 cases. These remain visible failures or unsupported results, not successful
 conformance checks. The RDFLib-compatible XMLLiteral behavior has separate
 differential tests; expected W3C fixtures are not rewritten to hide the gap.
@@ -759,8 +782,9 @@ reuse two test IDs across XML11 and XML12. Fixture-conflict explanations for
 the two disputed cases require matching reviewed input and result hashes;
 an unknown snapshot or changed disputed fixture remains unreviewed.
 
-T37 resolves 51 of the historical 79 semantic executions; 28 remain
-unsupported. The report records `entailment_options` and a `semantic_plan`
+T37 resolves 51 of the historical 79 semantic executions; T38 resolves ten
+more. The remaining 18 executions concern general RDF/RDFS reasoning. The
+report records `entailment_options` and a `semantic_plan`
 for each historical execution, linking its requirement to an offline minimal
 regression and implementation route. Passing an unsupported-boundary
 regression does not count as passing that W3C test. Boolean false conclusions

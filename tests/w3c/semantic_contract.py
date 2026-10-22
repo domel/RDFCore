@@ -43,8 +43,8 @@ def value_case(name, left, right, datatype, *, expected=True, other=None):
 
 add('datatypes-intensional-xsd-integer-decimal-compatible',
     [(XSD.integer, RDFS.subClassOf, XSD.decimal)], False, regime='rdfs',
-    datatypes={XSD.integer, XSD.decimal}, expected=False, supported=False,
-    implementation='T38: decide inclusions between recognized datatype value spaces and premise consistency.')
+    datatypes={XSD.integer, XSD.decimal}, expected=False,
+    implementation='T38: _datatype_spaces.subset and a checked datatype-schema candidate establish consistency.')
 for number, recognized in ((1, ()), (2, (XSD.integer,))):
     add(f'datatypes-non-well-formed-literal-{number}', [(S, P, literal('flargh', XSD.integer))], False,
         regime='rdfs', datatypes=recognized, expected=number == 2,
@@ -58,8 +58,8 @@ for name, value, datatype in (
     ('rdfs-entailment-test002', Literal('flargh'), RDF.langString),
 ):
     add(name, [(S, P, value), (P, RDFS.range, datatype)], False, regime='rdfs',
-        datatypes={XSD.integer, XSD.string, RDF.langString}, supported=False,
-        implementation='T38: check inferred value membership against recognized range; prove inconsistency on disjoint spaces.')
+        datatypes={XSD.integer, XSD.string, RDF.langString},
+        implementation='T38: _datatype_reasoning checks inferred value membership against recognized ranges and detects disjoint spaces.')
 add('datatypes-plain-literal-and-xsd-string', [(S, P, Literal('a string'))],
     [(S, P, literal('a string', XSD.string))], regime='rdfs', datatypes={XSD.string})
 add('horst-01-subClassOf-intensional', [(C, RDF.type, RDFS.Class), (RDF.type, RDFS.domain, D)],
@@ -69,8 +69,8 @@ add('horst-01-subPropertyOf-intensional',
     [(P, RDF.type, RDF.Property), (P, RDFS.range, XSD.integer),
      (P, RDFS.range, XSD.string), (Q, RDF.type, RDF.Property)],
     [(P, RDF.type, RDF.Property), (P, RDFS.subPropertyOf, Q)], regime='rdfs',
-    datatypes={XSD.integer, XSD.string}, expected=False, supported=False,
-    implementation='T38: empty property extension from disjoint ranges is consistent and does not force subPropertyOf.')
+    datatypes={XSD.integer, XSD.string}, expected=False,
+    implementation='T38: checked candidate with an empty property extension; no subPropertyOf edge is invented.')
 for name, left, right in (
     ('rdf-charmod-uris-test003', 'André', 'Andr%C3%A9'),
     ('rdf-charmod-uris-test004', 'Andr%C3%A9', 'André'),
@@ -120,7 +120,7 @@ for number in (2, 4):
 x = BNode('value')
 add('literal-type', [(S, P, literal('42', XSD.integer))],
     [(S, P, x), (x, RDF.type, XSD.integer)], datatypes={XSD.integer},
-    implementation='T37: recognized literal value witness, then shared-binding homomorphism; full datatype membership belongs to T38.')
+    implementation='T37/T38: recognized value witness, membership closure and shared-binding homomorphism.')
 for kind, different, same in (
     ('float', ('16777206.5', '16777207.5'), ('16777206.5', '16777205.5')),
     ('double', ('9007199254740990.5', '9007199254740991.5'),

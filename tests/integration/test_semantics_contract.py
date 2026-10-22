@@ -63,8 +63,9 @@ def test_transparent_values_do_not_assert_inner_triples():
 
 
 def test_negative_certificate_is_not_assumed_for_full_rdfs_or_rdf():
-    # RDF finite datatype constraints and RDFS schema consequences need T38/T39.
-    premise = [(S, RDF.type, XSD.boolean)]
+    # Proposition constraints still need T39; finite booleans are covered by T38.
+    from rdfcore import RDFS
+    premise = [(S, RDF.type, RDFS.Proposition)]
     for regime in ('rdf', 'rdfs'):
         with pytest.raises(semantics.UnsupportedEntailment):
             semantics.entails(premise, [(S, P, O)], regime=regime,

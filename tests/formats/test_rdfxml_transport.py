@@ -24,6 +24,23 @@ def document(text, declaration='1.1', encoding='UTF-8'):
             '</e:p></rdf:Description></rdf:RDF>')
 
 
+@pytest.mark.parametrize('attribute', ['rdf:about', 'rdf:resource', 'rdf:datatype',
+                                      'rdf:annotation', 'rdf:type', 'xml:base'])
+@pytest.mark.parametrize('value', ['urn:&#1;bad', 'urn:bad space', 'urn:bad%zz', 'urn:&#9;bad'])
+def test_xml12_validates_iri_attributes_after_character_restoration(attribute, value):
+    source = document('').replace('<e:p></e:p>', f'<e:p {attribute}="{value}"/>')
+    if attribute == 'rdf:about':
+        source = document('v').replace('rdf:about="urn:s"', f'rdf:about="{value}"')
+    with pytest.raises(SAXParseException, match='IRI'):
+        Graph().parse(data=source, format='xml12')
+
+
+def test_xml12_valid_relative_unicode_and_percent_encoded_iris_are_preserved():
+    source = document('').replace('<e:p></e:p>', '<e:p rdf:resource="é%20x"/>')
+    graph = Graph().parse(data=source, format='xml12', publicID='https://example.org/base/')
+    assert graph.value(URIRef('urn:s'), URIRef('urn:e:p')) == URIRef('https://example.org/base/é%20x')
+
+
 @pytest.mark.parametrize('encoding', ['utf-8', 'utf-16', 'utf-16-le', 'utf-16-be',
                                      'utf-32', 'utf-32-le', 'utf-32-be'])
 @pytest.mark.parametrize('version', ['1.0', '1.1'])

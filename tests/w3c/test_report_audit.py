@@ -42,6 +42,33 @@ def test_compare_preserves_repeated_executions_and_input():
     assert (before, after) == original
 
 
+def test_false_conclusion_interpretation_is_a_changed_execution():
+    from tests.w3c.audit import compare_reports
+    before = sample('passed')
+    after = deepcopy(before)
+    before['suites'][0]['tests'][0]['result_is_false'] = False
+    after['suites'][0]['tests'][0]['result_is_false'] = True
+    result = compare_reports(before, after)
+    assert result['unchanged'] == 0 and len(result['changed']) == 1
+
+
+def test_entailment_option_changes_are_explicit_and_affect_only_semantic_runs():
+    from tests.w3c.audit import compare_reports
+    before = sample('passed')
+    semantics = deepcopy(before['suites'][0])
+    semantics.update(category='entailment', format='semantics')
+    before['suites'].append(semantics)
+    before['entailment_options'] = {'mode': 'proof'}
+    after = deepcopy(before)
+    after['entailment_options'] = {'mode': 'decide'}
+    original = deepcopy((before, after))
+    result = compare_reports(before, after)
+    assert result['entailment_options'] == {'before': {'mode': 'proof'}, 'after': {'mode': 'decide'}}
+    assert result['unchanged'] == 1 and len(result['changed']) == 1
+    assert result['changed'][0]['execution'][0] == 'entailment'
+    assert (before, after) == original
+
+
 def test_compare_keeps_rdf11_and_rdf12_runs_distinct():
     from tests.w3c.audit import compare_reports
     before, after = sample('passed'), sample('passed')

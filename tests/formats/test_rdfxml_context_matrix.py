@@ -73,6 +73,22 @@ def test_profile_override_does_not_enable_annotations_in_basic():
         Graph().parse(data=source, format='application/rdf+xml; version=1.2')
 
 
+@pytest.mark.parametrize('body', [
+    '<rdf:Description rdf:about="s" rdf:version="1.1"><e:p>v</e:p></rdf:Description>',
+    '<rdf:Description rdf:about="s"><e:p rdf:version="1.1">v</e:p></rdf:Description>',
+])
+def test_inherited_direction_cannot_emit_a_directional_literal_in_rdf11(body):
+    with pytest.raises(SAXParseException, match='directional.*1.1'):
+        Graph().parse(data=document(body), format='xml12')
+
+
+def test_rdf11_override_can_explicitly_clear_language_without_losing_sibling_direction():
+    graph = Graph().parse(data=document('<rdf:Description rdf:about="s">'
+        '<e:p rdf:version="1.1" xml:lang="">v</e:p><e:q>v</e:q></rdf:Description>'), format='xml12')
+    assert graph.value(URIRef('https://example/a/s'), URIRef('urn:e:p')) == Literal('v')
+    assert graph.value(URIRef('https://example/a/s'), URIRef('urn:e:q')) == Literal('v', lang='en', direction='rtl')
+
+
 @pytest.mark.parametrize('options', [{'format': 'xml', 'strict': True}, {'format': 'xml12'}])
 def test_normative_property_ids_are_unique(options):
     source = document('<rdf:Description><e:p rdf:ID="x">v</e:p>'

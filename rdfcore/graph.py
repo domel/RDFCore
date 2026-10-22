@@ -366,16 +366,22 @@ class Graph:
             if automatic_format and source.content_type:
                 # Content-Type takes precedence over a URL suffix. Explicit
                 # caller formats still win, including over malformed headers.
-                from .plugin import resolve_format
                 from .exceptions import PluginException
                 media = source.content_type.split(';', 1)[0].strip().lower()
                 try:
-                    get_plugin(media, Parser)
+                    get_plugin(source.content_type, Parser)
                 except PluginException:
-                    pass
+                    # Unknown media parameters do not invalidate a registered
+                    # base type. Exact registry entries and known versioned
+                    # profiles above have priority over this fallback.
+                    try:
+                        get_plugin(media, Parser)
+                    except PluginException:
+                        pass
+                    else:
+                        format = media
                 else:
-                    resolved, version = resolve_format(source.content_type, Parser)
-                    format = source.content_type if ';' in source.content_type else media
+                    format = source.content_type
             plugin = get_plugin(format, Parser)
             parser_class = plugin.getClass()
             parser = parser_class(self)

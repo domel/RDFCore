@@ -1,6 +1,41 @@
 """Serializer base class."""
 
 from io import BufferedIOBase, RawIOBase, TextIOBase
+import codecs
+
+
+class _IncrementalOutput:
+    """Keep one codec state per document without taking ownership of a sink."""
+
+    def __init__(self, stream, encoding, requested):
+        self.stream, self.encoding, self.requested = stream, encoding, requested
+        self.encoder = None
+        self.finished = False
+
+    def _binary(self, text):
+        if self.encoder is None:
+            self.encoder = codecs.getincrementalencoder(self.encoding)()
+        self.finished = False
+        self.stream.write(self.encoder.encode(text))
+
+    def write(self, text):
+        if self.requested is False:
+            self._binary(text)
+        elif self.requested is True:
+            self.stream.write(text)
+        else:
+            # Preserve the direct push API's historical text-first fallback.
+            try:
+                self.stream.write(text)
+            except TypeError:
+                self._binary(text)
+
+    def finish(self):
+        if self.encoder is not None and not self.finished:
+            self.finished = True
+            tail = self.encoder.encode('', final=True)
+            if tail:
+                self.stream.write(tail)
 
 
 def text_output(stream, encoding=None, requested=None):

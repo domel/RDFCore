@@ -122,3 +122,32 @@ def test_accept_extension_is_explicit_and_rejects_header_injection():
         with pytest.raises(ValueError, match='HTTP header'):
             rdfcore.Graph().parse(url+'/data', http_accept='text/turtle\r\nX: y')
         assert len(requests) == 1
+
+
+def test_custom_bare_mime_with_charset_matches_reference(monkeypatch):
+    from rdflib import plugin as reference_plugin
+    from rdflib.parser import Parser as ReferenceParser
+    from rdfcore import plugin
+    from rdfcore.parser import Parser
+    from rdfcore.plugins.parsers.rdfxml import RDFXMLParser
+    name = 'application/x-review-xml'
+    monkeypatch.setitem(plugin._registry, (name, Parser), plugin.Plugin(name, Parser, implementation=RDFXMLParser))
+    monkeypatch.setitem(reference_plugin._plugins, (name, ReferenceParser),
+        reference_plugin.Plugin(name, ReferenceParser, 'rdflib.plugins.parsers.rdfxml', 'RDFXMLParser'))
+    body = b'<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"/>'
+    with server(name+'; charset=utf-8', body) as (url, _):
+        for module in (rdflib, rdfcore):
+            graph = module.Graph()
+            assert graph.parse(url+'/misleading.ttl') is graph
+            assert len(graph) == 0
+
+
+def test_exact_parameterized_custom_http_mime_wins_without_a_bare_plugin(monkeypatch):
+    from rdfcore import plugin
+    from rdfcore.parser import Parser
+    from rdfcore.plugins.parsers.rdfxml import RDFXMLParser
+    name = 'application/x-review-only; profile=custom'
+    monkeypatch.setitem(plugin._registry, (name, Parser), plugin.Plugin(name, Parser, implementation=RDFXMLParser))
+    body = b'<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"/>'
+    with server(name, body) as (url, _):
+        assert len(rdfcore.Graph().parse(url+'/misleading.ttl')) == 0

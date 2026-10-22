@@ -7,7 +7,7 @@ STATUSES = ('passed', 'failed', 'unsupported', 'error')
 
 def _execution_changed(before, after):
     fields = ('status', 'reason', 'action', 'result', 'action_sha256',
-              'result_sha256', 'regime')
+              'result_sha256', 'regime', 'result_is_false')
     if any(before.get(field) != after.get(field) for field in fields):
         return True
     # RDF types and recognized datatypes are sets, not ordered parameters.
@@ -57,8 +57,10 @@ def compare_reports(before, after):
         raise ValueError('cannot compare different execution profiles')
     previous, old_errors = _executions(before)
     current, new_errors = _executions(after)
+    old_options, new_options = before.get('entailment_options'), after.get('entailment_options')
     result = {'before_snapshot': before['snapshot'], 'after_snapshot': after['snapshot'],
               'execution_profile': after.get('execution_profile', 'default'),
+              'entailment_options': {'before': old_options, 'after': new_options},
               'unchanged': 0, 'changed': [], 'added': [], 'removed': [],
               'suite_errors': {'before': old_errors, 'after': new_errors}}
     for key in sorted(previous.keys() | current.keys(), key=repr):
@@ -68,7 +70,8 @@ def compare_reports(before, after):
             result['added'].append(record)
         elif new is None:
             result['removed'].append(record)
-        elif _execution_changed(old, new):
+        elif (_execution_changed(old, new)
+              or key[0] == 'entailment' and old_options != new_options):
             result['changed'].append(record)
         else:
             result['unchanged'] += 1

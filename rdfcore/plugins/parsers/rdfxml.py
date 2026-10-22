@@ -17,6 +17,7 @@ from xml.sax import SAXParseException
 from ...parser import Parser
 from ...exceptions import ParserError
 from ..._datatype_xml import _restricted, xml11_source
+from ..._iri_reference import is_iri_reference
 from ...term import BNode, Literal, TripleTerm, URIRef
 
 RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
@@ -206,6 +207,7 @@ class RDFXMLParser(Parser):
                         if self.rdf_version == '1.2' and any(
                                 _restricted(ord(char)) for char in (attr.value or '').translate(self.restore)):
                             _error('restricted XML characters cannot occur in a namespace IRI')
+                        self._iri((attr.value or '').translate(self.restore))
                         target = getattr(sink, 'graph', getattr(sink, 'dataset', sink))
                         if hasattr(target, 'bind'):
                             target.bind('' if attr.name == 'xmlns' else attr.localName, URIRef(attr.value))
@@ -237,7 +239,7 @@ class RDFXMLParser(Parser):
                 continue
             value = attr.value.translate(self.restore)
             if ns == XML:
-                if attr.localName == 'base': base = urldefrag(urljoin(base, value))[0]
+                if attr.localName == 'base': base = urldefrag(self._iri(value, base))[0]
                 if attr.localName == 'lang': lang = value or None
                 continue
             if (self.rdf_version == '1.2' and attr.prefix
@@ -272,9 +274,19 @@ class RDFXMLParser(Parser):
             self.bnodes[label] = BNode(label) if self.preserve_bnode_ids else BNode()
         return self.bnodes[label]
 
+    def _iri(self, value, base=None):
+        # Validate before resolution too: urljoin may strip control characters.
+        # URIRef and the legacy XML11 compatibility path stay permissive.
+        if self.rdf_version == '1.2' and not is_iri_reference(value):
+            _error('invalid RDF/XML IRI reference')
+        resolved = value if base is None else urljoin(base, value)
+        if self.rdf_version == '1.2' and not is_iri_reference(resolved):
+            _error('invalid resolved RDF/XML IRI')
+        return URIRef(resolved)
+
     def _id(self, value, context, property_id=False):
         if not is_ncname(value): _error('rdf:ID value is not a valid NCName')
-        key = URIRef(urljoin(context[0], '#'+value))
+        key = self._iri('#'+value, context[0])
         if self.compatibility and property_id:
             return key
         if key in self.ids:
@@ -287,7 +299,9 @@ class RDFXMLParser(Parser):
     def _literal(self, value, context, datatype=None):
         value = value.translate(self.restore)
         if datatype is not None:
-            return Literal(value, datatype=URIRef(datatype if self.compatibility else urljoin(context[0], datatype)))
+            return Literal(value, datatype=self._iri(datatype, None if self.compatibility else context[0]))
+        if self.rdf_version == '1.2' and context[3] == '1.1' and context[1] and context[2]:
+            _error('directional literals cannot be emitted in RDF 1.1')
         return Literal(value, lang=context[1], direction=context[2] if context[1] else None)
 
     def _valid_name(self, name, kind, version=None):
@@ -302,7 +316,7 @@ class RDFXMLParser(Parser):
         for key, value in attrs.items():
             self._valid_name(key, 'attribute', context[3])
             raw_type = self.compatibility and empty_property
-            obj = URIRef(value if raw_type else urljoin(context[0], value)) if key == RDF+'type' else self._literal(value, context)
+            obj = self._iri(value, None if raw_type else context[0]) if key == RDF+'type' else self._literal(value, context)
             emit((subject, URIRef(urljoin(context[0], key)) if self.compatibility else URIRef(key), obj))
 
     def _node(self, element, parent, emit):
@@ -317,7 +331,7 @@ class RDFXMLParser(Parser):
         if identity:
             key = identity[0]
             value = attrs.pop(RDF+key)
-            subject = self._id(value, context) if key == 'ID' else self._bnode(value) if key == 'nodeID' else URIRef(urljoin(context[0], value))
+            subject = self._id(value, context) if key == 'ID' else self._bnode(value) if key == 'nodeID' else self._iri(value, context[0])
         if name != RDF+'Description': emit((subject, URIRef(RDF+'type'), URIRef(name)))
         self._attributes(subject, attrs, context, emit)
         self._properties(element, subject, context, emit)
@@ -387,7 +401,7 @@ class RDFXMLParser(Parser):
             elif resource is not None or node is not None or attrs:
                 if _text(element) and not self.compatibility: _error('resource property must be empty')
                 if datatype is not None: _error('datatype and property attributes cannot be combined')
-                obj = URIRef(urljoin(context[0], resource)) if resource is not None else self._bnode(node) if node is not None else BNode()
+                obj = self._iri(resource, context[0]) if resource is not None else self._bnode(node) if node is not None else BNode()
                 self._attributes(obj, attrs, context, emit, empty_property=True)
             else:
                 obj = self._literal(_text(element), context, datatype)
@@ -398,7 +412,7 @@ class RDFXMLParser(Parser):
             for key, value in zip(('subject', 'predicate', 'object'), triple):
                 emit((reified, URIRef(RDF+key), value))
         if annotation is not None or annotation_node is not None:
-            reifier = URIRef(urljoin(context[0], annotation)) if annotation is not None else self._bnode(annotation_node)
+            reifier = self._iri(annotation, context[0]) if annotation is not None else self._bnode(annotation_node)
             emit((reifier, URIRef(RDF+'reifies'), TripleTerm(*triple)))
 
     def _xml_literal(self, element):

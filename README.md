@@ -114,7 +114,9 @@ syntactically valid parameters do not select the RDF version or change decoding.
 For HTTP input, `Graph.parse()` and `Dataset.parse()` select a registered
 `Content-Type`, including its version, ahead of a URL suffix when no
 `format` is supplied. An explicit format takes precedence, including over
-an invalid version header. Redirects use the final URL as the base unless
+an invalid version header. Exact registered MIME names with parameters take
+precedence; otherwise custom registered base types also accept headers with
+parameters such as `charset`. Redirects use the final URL as the base unless
 `publicID` overrides it. As in RDFLib, an explicit empty `publicID` instead
 uses the original request URL as the base. Responses close after success or failure.
 Shared legacy short names send RDFLib 7.6.0's corresponding `Accept` value;
@@ -232,6 +234,12 @@ UTF-16 and UTF-32 bytes, including short reads and UTF-32 byte-order variants.
 The legacy `xml` parser retains RDFLib's UTF-32 byte-input limitation:
 decode that input to text or select `xml12`. Namespace prefixes and
 statement order are not promised to match RDFLib byte for byte.
+The `xml12` parser validates IRI references after XML character-reference expansion and
+before URL resolution, which could otherwise strip invalid control characters.
+This does not change XML11's RDFLib-compatible permissive IRI handling.
+An inherited text direction cannot produce a directional literal inside a
+local `rdf:version="1.1"` scope: the parser raises an error rather than
+silently dropping the direction or emitting a term from the wrong profile.
 For predicates in the reserved XMLNS namespace, `xml12` selects a legal
 QName split or raises `ValueError` before writing. Legacy `xml` retains
 RDFLib 7.6.0's namespace behavior, including its invalid XMLNS binding;
@@ -487,6 +495,10 @@ writers cannot look ahead; select `rdf_version="1.2"` before feeding mixed data.
 `canonical=True` in Turtle12/TriG12 stream mode suppresses version directives
 and lowercases language tags; it does not sort statements or canonicalize
 blank nodes.
+Binary Turtle/TriG streaming uses one incremental encoder per document,
+including UTF-16/UTF-32 BOM handling and stateful-codec finalization. It does
+not close the caller's sink. Non-UTF-8 output is an API encoding option;
+it must be decoded before passing it to UTF-8 RDF syntax parsers.
 
 NT12, NQ12, Turtle12 and TriG12 serializers select standard text/binary sinks
 before writing and propagate sink errors without a retry or stream closure.
@@ -772,6 +784,9 @@ not alter test statuses and returns a nonzero exit status while issues remain.
 Comparison retains repeated executions, format and RDF-version distinctions,
 and reports added, removed and changed cases, including changed fixture bytes,
 action/result IRIs, entailment regimes, test types and recognized datatypes.
+The comparison also checks `result_is_false` and records before/after
+`entailment_options`; changing those options marks matching entailment
+executions as changed, without marking syntax executions as changed.
 Reordering a set of types or recognized datatypes alone is not a semantic change.
 Default and archived-recovery profiles cannot be compared as equivalent runs.
 

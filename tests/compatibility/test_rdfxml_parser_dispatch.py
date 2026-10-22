@@ -58,3 +58,11 @@ def test_node_id_uniqueness_uses_resolved_iri_in_both_libraries():
     for module, error in ((rdflib, ReferenceParserError), (rdfcore, CoreParserError)):
         with pytest.raises(error, match='same ID'):
             module.Graph().parse(data=source, format='xml', publicID='https://example/doc#old')
+
+
+def test_xml11_retains_permissive_reference_iri_behavior():
+    source = document('<rdf:Description rdf:about="urn:s">'
+                      '<e:p rdf:resource="urn:&#127;o"/></rdf:Description>')
+    for module in (rdflib, rdfcore):
+        graph = module.Graph().parse(data=source, format='xml')
+        assert str(next(iter(graph))[2]) == 'urn:\x7fo'

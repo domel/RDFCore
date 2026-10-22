@@ -210,6 +210,8 @@ class TurtleStreamingWriter:
         if text_output is not None and type(text_output) is not bool:
             raise ValueError('text_output must be a boolean or None')
         self.text_output = text_output
+        from .serializer import _IncrementalOutput
+        self._output = _IncrementalOutput(stream, encoding, text_output)
         self.canonical = canonical
         self.encoding = encoding
         self.rdf_version = rdf_version
@@ -248,16 +250,10 @@ class TurtleStreamingWriter:
     def _write(self, text):
         if self.canonical and text.startswith('VERSION '):
             return
-        if self.text_output is not None:
-            self.stream.write(text if self.text_output else text.encode(self.encoding))
-            return
-        try:
-            self.stream.write(text)
-        except TypeError:
-            self.stream.write(text.encode(self.encoding))
+        self._output.write(text)
 
     def close(self):
-        return None
+        self._output.finish()
 
 
 def _turtle_term(term, base=None, safe=True, canonical=False):
@@ -288,6 +284,8 @@ class TriGStreamingWriter:
         if text_output is not None and type(text_output) is not bool:
             raise ValueError('text_output must be a boolean or None')
         self.text_output = text_output
+        from .serializer import _IncrementalOutput
+        self._output = _IncrementalOutput(stream, encoding, text_output)
         self.canonical = canonical
         self.encoding = encoding
         self.rdf_version = rdf_version
@@ -339,18 +337,13 @@ class TriGStreamingWriter:
     def _write(self, text):
         if self.canonical and text.startswith('VERSION '):
             return
-        if self.text_output is not None:
-            self.stream.write(text if self.text_output else text.encode(self.encoding))
-            return
-        try:
-            self.stream.write(text)
-        except TypeError:
-            self.stream.write(text.encode(self.encoding))
+        self._output.write(text)
 
     def close(self):
         if not self._closed and self._graph is not _NO_GRAPH:
             self._write("}\n")
         self._closed = True
+        self._output.finish()
 
 
 def parse_stream(source=None, format=None, sink=None, **kwargs):

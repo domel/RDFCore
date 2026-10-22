@@ -7,7 +7,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | Format dispatch | RDFLib 7.6.0 | RDFCore |
 |---|---|---|
 | MIME `version` parameter | Not registered by default | `1.1`, `1.2-basic`, `1.2`; parsing, serialization, streaming and line-format conversion |
-| HTTP RDF input | URL parser with format-specific Accept and redirect base | ✅ Differential tests for shared short-name Accept, final URL/publicID and bare Content-Type; versioned MIME and `http_accept` are extensions; not a server negotiation implementation |
+| HTTP RDF input | URL parser with format-specific Accept and redirect base | ✅ Differential tests for shared short-name Accept, final URL/publicID and custom base Content-Type with charset; exact parameterized registry entries take priority; versioned MIME and `http_accept` are extensions; not a server negotiation implementation |
 | RDF/XML MIME version | Not registered by default | Explicit dispatch extension; document version announcement remains required |
 | Explicit datatype value identity | No corresponding module | ⚠️ `rdfcore.datatypes`: immutable XSD/JSON/DOM keys, XML 1.1 character handling, optional HTML5 parser; primitive value identity is separate from arithmetic equality; no D-entailment |
 
@@ -123,6 +123,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | RDF/XML 1.1 | ✅ `xml`, `rdfxml` | ⚠️ `xml`, `rdfxml`; secure tree parser, no DTDs |
 | RDF/XML legacy parser dispatch | Executable reference: 7.6.0 | ⚠️ Differential cases cover unqualified attributes/elements, ignored root attributes/resource text, relative datatype/type IRIs and repeated property IDs; `strict=True` retains stricter RDF grammar checks |
 | XML12 document transport | Legacy UTF-32 bytes unsupported | ⚠️ UTF-8/16/32, short reads, XML 1.1 line ends/restricted references, encoding mismatch and DTD rejection tested; buffered tree parser; writer still rejects XML 1.0-forbidden literal characters |
+| XML12 IRI validation and local profiles | XML11 keeps reference-compatible permissive IRI handling | ✅ XML12 validates expanded IRI references before resolution and rejects directional literal emission in a local 1.1 scope |
 | RDF/XML XMLLiteral lexical handling | Executable reference: 7.6.0 | ⚠️ Differential tests cover CR text, CDATA, comments, processing instructions and default namespace undeclarations; XML12 keeps separate lexical rules |
 | RDF/XML 1.2 | ❌ | ⚠️ `xml12`, `xmlrdf12`; same parser, explicit version, triple terms, annotations and direction; full conformance not established |
 | Archived W3C XML recovery | ❌ | ⚠️ Explicit `legacy_w3c=True`; missing-version recovery in `xml12`, empty XMLLiteral element expansion in `xml`/`xml12`; not current-spec conformance |
@@ -154,6 +155,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | Canonical NT/NQ lexical syntax | ⚠️ | ✅ explicit `canonical=True`; not blank-node canonicalization (RDFC-1.0) |
 | RDF12 output sink selection | Shared legacy behavior remains separate | ✅ NT12/NQ12/Turtle12/TriG12 text/binary selection and `text_output`; no retry after sink TypeError; caller streams remain open |
 | Turtle12/TriG12 stream profile | ❌ RDF 1.2 | ✅ Existing graphs select their profile before output; canonical lexical options omit VERSION and lowercase language tags, without statement sorting or RDFC-1.0 |
+| Turtle/TriG binary stream encoding | No shared RDFLib stream mode | ✅ One incremental encoder per document; no repeated UTF-16/32 BOM; stateful finalization and caller-sink ownership tested; decode non-UTF-8 output before RDF parsing |
 | `mode="stream"` | ❌ | ✅ Turtle/TriG |
 | Safe relative IRI output | Prefix stripping can change an IRI on round trip | ⚠️ Legacy Turtle/TriG defaults retained; explicit `safe_iris=True` extension, default in Turtle/TriG 1.2 and direct streaming writers |
 | File-like output | ✅ | ✅ |

@@ -75,8 +75,7 @@ def _scan(source, format, *, operation, **kwargs):
     try:
         parse_stream(stream, format, Sink(), **kwargs)
     finally:
-        if owned:
-            stream.close()
+        _close_stream(stream, owned)
     return count if operation == "count" else True
 
 

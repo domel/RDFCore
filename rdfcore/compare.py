@@ -34,6 +34,19 @@ def isomorphic(left, right) -> bool:
 
 
 def _quads(value):
+    from .dataset import Dataset
+    if isinstance(value, Dataset):
+        # Dataset.graph() deliberately follows RDFLib's base-reset behavior.
+        # Neither quads() nor graphs() is therefore a read-only snapshot API.
+        # Read existing store contexts directly, without creating graph views
+        # or registering contexts as a side effect of comparison.
+        default = value.default_graph.identifier
+        contexts = list(dict.fromkeys(value.store.contexts()))
+        rows = [(*triple, None if context == default else context)
+                for context in contexts
+                for triple, _ in value.store.triples((None, None, None), context)]
+        return rows + [(None if context == default else context,)
+                       for context in dict.fromkeys([*contexts, default])]
     if hasattr(value, "quads"):
         default = value.default_graph.identifier
         return [(*row[:3], None if row[3] == default else row[3]) for row in value.quads()] + [

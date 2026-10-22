@@ -5,6 +5,16 @@ from collections import Counter
 STATUSES = ('passed', 'failed', 'unsupported', 'error')
 
 
+def _execution_changed(before, after):
+    fields = ('status', 'reason', 'action', 'result', 'action_sha256',
+              'result_sha256', 'regime')
+    if any(before.get(field) != after.get(field) for field in fields):
+        return True
+    # RDF types and recognized datatypes are sets, not ordered parameters.
+    return any(frozenset(before.get(field, ())) != frozenset(after.get(field, ()))
+               for field in ('types', 'recognized_datatypes'))
+
+
 def _executions(report):
     executions, suite_errors, seen_suites = {}, [], set()
     if not report['suites']:
@@ -58,8 +68,7 @@ def compare_reports(before, after):
             result['added'].append(record)
         elif new is None:
             result['removed'].append(record)
-        elif any(old.get(field) != new.get(field) for field in
-                 ('status', 'reason', 'action_sha256', 'result_sha256')):
+        elif _execution_changed(old, new):
             result['changed'].append(record)
         else:
             result['unchanged'] += 1

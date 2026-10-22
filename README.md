@@ -352,6 +352,11 @@ number_of_triples = count("large.nt", "nt")
 is_valid = validate("large.nt", "nt")
 ```
 
+`count()` and `validate()` close files they open and any decompression wrappers
+they create, including after a parse error. A stream supplied by the caller
+remains open; closing an internally created wrapper does not transfer ownership
+of that stream.
+
 `parse_stream()` and `convert()` are streamable for N-Triples and N-Quads.
 Bounded reads do not impose a fixed bound on total memory. A parser may
 buffer a whole record or token; its blank-node label map grows with the
@@ -492,6 +497,8 @@ explicitly selects the older behavior; the option requires a boolean.
 false positives when blank nodes occur. Use `rdfcore.compare.isomorphic()`
 for exact graph/dataset comparison. It includes nested triple terms and empty
 named graphs, with one blank-node mapping across data and graph names.
+Comparison reads dataset contexts without changing graph bases, namespace
+bindings or the graph-view cache, including when comparison fails.
 Graphs without blank nodes use set comparison; blank-node matching uses an
 iterative search, though symmetric graphs can still be expensive.
 For RDF 1.2 data, the graph method uses this exact comparison as an extension.
@@ -649,7 +656,9 @@ python -m tests.w3c.audit --before .w3c/previous.json --current conformance-resu
 The audit explains reviewed issues and identifies unreviewed ones. It does
 not alter test statuses and returns a nonzero exit status while issues remain.
 Comparison retains repeated executions, format and RDF-version distinctions,
-and reports added, removed and changed cases, including changed fixture bytes.
+and reports added, removed and changed cases, including changed fixture bytes,
+action/result IRIs, entailment regimes, test types and recognized datatypes.
+Reordering a set of types or recognized datatypes alone is not a semantic change.
 Default and archived-recovery profiles cannot be compared as equivalent runs.
 
 The reviewed issues comprise 79 unsupported semantic executions, 17 XML

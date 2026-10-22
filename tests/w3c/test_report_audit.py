@@ -201,3 +201,34 @@ def test_archived_checkout_requires_an_explicit_lock(tmp_path):
     assert official.verify_checkout(tmp_path, lock=lock) == revision
     with pytest.raises(ValueError, match='locked revision|clean at'):
         official.verify_checkout(tmp_path)
+
+
+@pytest.mark.parametrize('field,before_value,after_value', [
+    ('regime', 'simple', 'rdfs'),
+    ('recognized_datatypes', [], ['urn:datatype']),
+    ('types', ['urn:PositiveEntailmentTest'], ['urn:NegativeEntailmentTest']),
+    ('action', 'urn:old-input', 'urn:new-input'),
+    ('result', 'urn:old-result', 'false'),
+])
+def test_compare_records_changed_execution_meaning_even_when_hashes_and_status_match(
+        field, before_value, after_value):
+    from tests.w3c.audit import compare_reports
+    before, after = sample('passed', 'passed'), sample('passed', 'passed')
+    before['suites'][0]['tests'][1][field] = before_value
+    after['suites'][0]['tests'][1][field] = after_value
+    original = deepcopy((before, after))
+    delta = compare_reports(before, after)
+    assert len(delta['changed']) == 1 and delta['unchanged'] == 1
+    assert delta['changed'][0]['execution'][-1] == 1
+    assert not delta['added'] and not delta['removed']
+    assert (before, after) == original
+
+
+@pytest.mark.parametrize('field', ['types', 'recognized_datatypes'])
+def test_comparison_ignores_only_set_order_not_datatype_or_test_type_changes(field):
+    from tests.w3c.audit import compare_reports
+    before, after = sample('passed'), sample('passed')
+    before['suites'][0]['tests'][0][field] = ['urn:a', 'urn:b']
+    after['suites'][0]['tests'][0][field] = ['urn:b', 'urn:a']
+    delta = compare_reports(before, after)
+    assert delta['unchanged'] == 1 and not delta['changed']

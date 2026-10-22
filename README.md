@@ -208,6 +208,13 @@ For `xml`, caller-supplied output streams must accept bytes, as in RDFLib.
 Text streams raise `TypeError`; sink exceptions propagate without a text retry. File
 paths are opened in binary mode. The low-level XML11 writer also follows
 RDFLib's replacement policy if its `encoding` attribute is changed to ASCII.
+The `xml12` writer selects text output for standard `io.TextIOBase` streams
+(including `StringIO`) before writing. Other sinks receive bytes by default;
+use `text_output=True` for a custom text sink or `text_output=False` to
+require bytes. The option accepts a boolean or `None` for automatic selection.
+Sink errors, including `TypeError` after a partial write, propagate without a
+retry or closing the caller's stream. Text wrappers must use an encoding
+consistent with the XML encoding requested from the serializer.
 Direct serializer calls use the graph's base when `base=None`, as in RDFLib;
 an explicit empty base suppresses it. Writer round-trip tests cover shared
 blank nodes, XMLLiteral lexical forms, Unicode, directional literals, nested

@@ -4,6 +4,7 @@
 explicitly as rdf:reifies properties; no assertion is inferred from them.
 Output ordering and namespace prefixes are not RDF canonicalization.
 """
+from io import TextIOBase
 from xml.sax.saxutils import escape, quoteattr
 
 from ...serializer import Serializer
@@ -34,6 +35,9 @@ class XMLSerializer(Serializer):
         requested = validate_rdf_version(rdf_version)
         from .turtle import _safe_iris
         self.safe_iris = _safe_iris(kwargs, self.rdf_version == '1.2')
+        text_output = kwargs.get('text_output') if self.rdf_version == '1.2' else None
+        if text_output is not None and type(text_output) is not bool:
+            raise ValueError('text_output must be a boolean or None')
         if base is not None:
             self.base = base
         elif self.store.base is not None:
@@ -65,10 +69,12 @@ class XMLSerializer(Serializer):
         if self.rdf_version == '1.1':
             stream.write(value.encode(codec, errors))
             return None
-        try:
-            stream.write(value.encode(codec))
-        except TypeError:
-            stream.write(value)
+        # Never probe a sink by attempting a write: TypeError may be raised
+        # after it has already accepted bytes. Select the protocol up front.
+        payload = value.encode(codec)
+        if text_output is None:
+            text_output = isinstance(stream, TextIOBase)
+        stream.write(value if text_output else payload)
         # RDFLib's XMLSerializer.serialize returns None for supplied streams.
         return None
 

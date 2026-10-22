@@ -141,6 +141,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | TriG 1.2 | ❌ | ✅ `trig12` |
 | RDF/XML 1.1 | ✅ | ⚠️ `xml`, `rdfxml`; semantic round trips tested, not byte-identical output |
 | RDF/XML 1.1 encoding argument | UTF-8 output regardless of argument | ✅ Differential tests cover empty/nonempty graphs, bytes/str returns and caller-owned binary streams |
+| XML12 sink error handling | XML11 requires bytes; sink errors propagate | ✅ TextIOBase selected before writing; custom text sinks use `text_output=True`; no retry on TypeError and no caller-stream closure |
 | Direct RDF/XML serializer base | Graph base when `base=None`; empty string suppresses it | ✅ Executable differential tests against 7.6.0 |
 | Reserved XMLNS predicate output | May emit an invalid namespace binding | ⚠️ Legacy `xml` preserves the reference behavior; `safe_iris=True` selects legal QName splitting or an explicit error; enabled by default in `xml12` |
 | XML12 writer with RDF 1.1 profile | RDF 1.1 vocabulary in `xml` | ✅ Ordinary version/annotation/annotationNodeID predicates tested against the XML11 oracle; no RDF 1.2 terms enabled |

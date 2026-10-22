@@ -16,14 +16,18 @@ Baseline, inspected 2026-10-17:
   a presumed complete appendix algorithm, are the basis of this subset.
 * https://w3c.github.io/rdf-tests/rdf/rdf12/rdf-semantics/ inspected, including
   transparency, shared blank node, non-assertion and inconsistency cases.
+* T37 decision contract reviewed 2026-10-22 against the same published
+  Semantics §§5, 7.1–7.2, 8–9 and the linked ED. No ED-only change is used.
+  Schema WD 2026-10-22 is now published; its full rule audit belongs to T39.
 
 ``entails(S, E)`` decides simple entailment by a blank-node homomorphism.
 Matching descends into triple terms, with one mapping across the whole
 conclusion; embedded triples are never asserted. Literal matching uses RDF
 term identity, not Python value equality (implicit xsd:string is explicit).
 
-For regime='rdf' or 'rdfs', True is a sound proof, but failure to find a proof
-raises UnsupportedEntailment, NEVER False. Supported forward rules: RDF
+In the default mode='proof', for regime='rdf' or 'rdfs', True is a sound proof,
+but failure to find a proof raises UnsupportedEntailment, NEVER False.
+Supported forward rules: RDF
 property typing; RDFS domain/range, subclass/subproperty transitivity and
 propagation, class/property typing and reflexivity, Resource typing,
 ContainerMembershipProperty/Datatype consequences, and typing occurring
@@ -35,11 +39,21 @@ The finite RDF/RDFS axioms are included. Container membership axioms are
 instantiated for IRIs occurring in the premise or conclusion, avoiding an
 infinite materialization. No ordinary graph operation performs inference.
 
-NOT implemented: datatype value entailment/recognition, inconsistency
-detection or explosion, exhaustive proposition generation, dataset entailment,
-or a complete official W3C manifest run. Positive proofs remain valid even
-for inconsistent premises; no consistency conclusion is drawn. ``datatypes``
-is reserved: any supplied value raises explicitly rather than being ignored.
+Explicit mode='decide' recognizes a supplied set of datatype IRIs through
+datatypes.py (RDF/RDFS always include string/langString/dirLangString).
+It validates literals even inside triple terms, proves explosion from an
+ill-typed recognized premise literal and matches recognized literal values.
+The literal False as conclusion asks whether the premise is inconsistent.
+False decisions require a countermodel certificate: ordinary ground RDF(S)
+graphs without reserved vocabulary (RDF also permits type/Property), or the
+simple-D fragment without triple terms or explicit recognized datatype IRIs
+in subject/predicate/object positions. Literal objects are allowed. Missing
+certificates raise UnsupportedEntailment; no proof failure implies False.
+
+NOT implemented: full datatype membership/inconsistency reasoning,
+exhaustive proposition generation, dataset entailment, or complete RDF 1.2
+Semantics conformance. In proof mode, ``datatypes`` remains reserved and any
+supplied value still raises explicitly rather than being ignored.
 The rules are monotonic and optional; no Graph methods or inputs are mutated.
 
 Inputs must be finite RDF graphs (Graph or iterable of triples). Space is
@@ -81,6 +95,7 @@ class EntailmentResourceLimit(UnsupportedEntailment):
 
 
 _budget: ContextVar[list[int] | None] = ContextVar('entailment_budget', default=None)
+_recognized: ContextVar[frozenset[URIRef] | None] = ContextVar('entailment_datatypes', default=None)
 
 
 def _step() -> None:
@@ -139,9 +154,127 @@ def _key(term: Term) -> tuple:
     if isinstance(term, TripleTerm):
         return (TripleTerm, *(_key(component) for component in term))
     if isinstance(term, Literal):
+        recognized = _recognized.get()
+        if recognized is not None and _literal_datatype(term) in recognized:
+            return ('datatype-value', _value(term))
         return (Literal, str(term), term.datatype or _XSD_STRING,
                 (term.language or "").lower(), term.direction)
     return type(term), str(term)
+
+
+def _literal_datatype(term: Literal) -> URIRef:
+    if term.direction:
+        return RDF.dirLangString
+    if term.language:
+        return RDF.langString
+    return term.datatype or _XSD_STRING
+
+
+def _value(literal: Literal):
+    from .datatypes import datatype_value, DatatypeResourceLimit, UnsupportedDatatype
+    try:
+        return datatype_value(literal)
+    except DatatypeResourceLimit as exc:
+        raise EntailmentResourceLimit(str(exc)) from exc
+    except UnsupportedDatatype as exc:
+        raise UnsupportedEntailment(str(exc)) from exc
+
+
+def _recognition(regime, datatypes) -> frozenset[URIRef]:
+    from .datatypes import SUPPORTED_DATATYPES
+    if isinstance(datatypes, str):
+        raise TypeError('datatypes must be an iterable of URIRef terms or None')
+    result = set()
+    for datatype in (() if datatypes is None else datatypes):
+        _step()
+        if not isinstance(datatype, URIRef):
+            raise TypeError('recognized datatype must be a URIRef')
+        if str(datatype) not in SUPPORTED_DATATYPES:
+            raise UnsupportedEntailment(f'unsupported recognized datatype: {datatype}')
+        result.add(datatype)
+    if regime != 'simple':
+        result.update((_XSD_STRING, RDF.langString, RDF.dirLangString))
+    return frozenset(result)
+
+
+def _ill_typed(graph, recognized) -> bool:
+    from .datatypes import InvalidLexicalForm
+    for triple in graph:
+        for root in triple:
+            for term in _terms(root):
+                if isinstance(term, Literal) and _literal_datatype(term) in recognized:
+                    try:
+                        _value(term)
+                    except InvalidLexicalForm:
+                        return True
+    return False
+
+
+def _ordinary_ground(graph, regime) -> bool:
+    """Certificate for a deliberately small countermodel fragment.
+
+    Give ordinary IRIs distinct fresh nonliteral resources, recognized literal
+    objects their fixed values, opaque literals fresh resources, and each
+    ordinary predicate exactly its asserted pairs. Extend with the RDF(S)
+    vocabulary, mandatory datatype value spaces and axioms. No input refers
+    to those fixed resources, so a missing ordinary edge remains false.
+    RDF additionally permits type/Property: its only applicable condition is
+    property typing, which _closure already implements. RDFS does not get
+    this exception (class/schema interactions require a stronger certificate).
+    """
+    allowed = {RDF.type, RDF.Property} if regime == 'rdf' else set()
+    namespaces = (str(RDF), str(RDFS), 'http://www.w3.org/2001/XMLSchema#')
+    for triple in graph:
+        for term in triple:
+            _step()
+            if isinstance(term, Literal):
+                continue
+            if not isinstance(term, URIRef):
+                return False
+            if str(term).startswith(namespaces) and term not in allowed:
+                return False
+    return True
+
+
+def _simple_value_fragment(graph, recognized) -> bool:
+    # Datatype IRIs themselves denote fixed datatypes, not freely chosen
+    # resources. Triple-term/value interactions are left to T38/T39.
+    for triple in graph:
+        for term in triple:
+            _step()
+            if isinstance(term, TripleTerm) or (isinstance(term, URIRef) and term in recognized):
+                return False
+    return True
+
+
+def _decide(source, target, regime, recognized) -> bool:
+    if _ill_typed(source, recognized):
+        return True  # Includes the explicit False conclusion: ex falso.
+    consistent = regime == 'simple' or _ordinary_ground(source, regime)
+    if target is None:
+        if consistent:
+            return False
+        raise UnsupportedEntailment('premise consistency is not decided for this RDF/RDFS fragment')
+    if _ill_typed(target, recognized):
+        if consistent:
+            return False
+        raise UnsupportedEntailment('ill-typed conclusion but premise consistency is unknown')
+    seed = source.copy()
+    if regime != 'simple':
+        for triple in source:
+            for root in triple:
+                for term in _terms(root):
+                    if isinstance(term, Literal) and _literal_datatype(term) in recognized:
+                        seed.add((term, RDF.type, _literal_datatype(term)))
+    if _homomorphism(_closure(seed, regime, target), target):
+        return True
+    if regime == 'simple':
+        if not recognized or (_simple_value_fragment(source, recognized)
+                              and _simple_value_fragment(target, recognized)):
+            return False
+    elif consistent and _ordinary_ground(target, regime):
+        return False
+    raise UnsupportedEntailment('no proof or countermodel certificate for this entailment fragment')
 
 
 def _match(pattern: Term, value: Term, bindings: dict) -> bool:
@@ -323,21 +456,43 @@ def entailment_closure(
 
 
 def entails(
-    premise: Iterable[Triple], conclusion: Iterable[Triple], *,
+    premise: Iterable[Triple], conclusion: Iterable[Triple] | bool, *,
     regime: str = "simple", datatypes: object = None,
     max_steps: int | None = None,
+    mode: str = 'proof',
 ) -> bool:
     """Decide simple entailment, or prove a supported RDF/RDFS entailment.
 
-    RDF/RDFS return only True or raise UnsupportedEntailment; a failed proof
-    is unknown, not False. Blank nodes in conclusion are existential and have
+    Default proof mode RDF/RDFS return only True or raise
+    UnsupportedEntailment; a failed proof is unknown, not False.
+    Blank nodes in conclusion are existential and have
     an independent scope from premise, even when their labels coincide.
     Invalid RDF input raises TypeError; unknown regimes raise ValueError.
     ``max_steps`` limits internal work, not time or memory. Exhaustion raises
     EntailmentResourceLimit, never False. None preserves unlimited work.
+
+    Explicit mode='decide' supports datatype value matching, recognized
+    ill-typed premise inconsistency and countermodel-certified negatives in
+    the module's documented fragments. datatypes is an iterable of URIRef;
+    None/empty means no additional recognized types (RDF/RDFS add mandatory
+    types). Unknown requested types raise UnsupportedEntailment; unrecognized
+    literal types remain opaque. conclusion=False asks about inconsistency,
+    not the empty graph. Outside supported fragments the result is unknown,
+    never an assumed False. This is not a complete RDF/RDFS decision mode.
     """
-    _options(regime, datatypes)
+    if mode not in ('proof', 'decide'):
+        raise ValueError("mode must be 'proof' or 'decide'")
+    _options(regime, datatypes if mode == 'proof' else None)
     with _limited(max_steps):
+        if mode == 'decide':
+            recognized = _recognition(regime, datatypes)
+            source = _snapshot(premise)
+            target = None if conclusion is False else _snapshot(conclusion)
+            token = _recognized.set(recognized)
+            try:
+                return _decide(source, target, regime, recognized)
+            finally:
+                _recognized.reset(token)
         source, target = _snapshot(premise), _snapshot(conclusion)
         if _homomorphism(_closure(source, regime, target), target):
             return True

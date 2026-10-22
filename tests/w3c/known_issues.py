@@ -34,15 +34,15 @@ SEMANTIC_11 = {
         'The same "flargh" literal with xsd:integer recognized is expected '
         'to entail false; recognition changes the satisfiability question.'),
     'datatypes-semantic-equivalence-within-type-1': (
-        'S11 T38', 'datatype-entailment',
+        'S11 T38', 'D_entailment',
         'Recognized xsd:integer maps lexical "010" to the value of "10"; '
         'the positive conclusion is value entailment, not term equality.'),
     'datatypes-semantic-equivalence-within-type-2': (
-        'S11 T38', 'datatype-entailment',
+        'S11 T38', 'D_entailment',
         'The reverse recognized integer entailment is "10" to "010"; '
         'normalizing parser output is not a D-interpretation decision.'),
     'datatypes-semantic-equivalence-between-datatypes': (
-        'S11 T38', 'datatype-entailment',
+        'S11 T38', 'D_entailment',
         'Recognized integer "10" entails decimal "10.0" by shared numeric '
         'value across two datatypes, not identical RDF literals.'),
     'datatypes-range-clash': (
@@ -54,9 +54,9 @@ SEMANTIC_11 = {
         'Plain string "25" is forced into recognized xsd:integer by range; '
         'the manifest expects false, not conversion of the string to an integer.'),
     'datatypes-plain-literal-and-xsd-string': (
-        'S11 T38', 'datatype-entailment',
+        'S11 T38', 'D_entailment',
         'Plain "a string" and explicit xsd:string share the string value; '
-        'the runner currently rejects the explicit recognized datatype request.'),
+        'the historical runner rejected the explicit recognized datatype request.'),
     'horst-01-subClassOf-intensional': (
         'S11 T39', 'rdfs_interpretations',
         'A class x and rdf:type domain y constrain class extensions but do '
@@ -147,7 +147,7 @@ for _kind, _precision, _different, _same in (
         'infinity': 'Lexical 1E400 and 1E401 overflow to the same positive infinity; the manifest expects positive entailment.',
     }.items():
         SEMANTIC_11[_kind + '-' + _case] = (
-            'S11 T38', 'datatype-entailment',
+            'S11 T38', 'D_entailment',
             f'Recognized xsd:{_kind} uses {_precision}. {_detail}')
 
 SEMANTIC_12 = {
@@ -304,11 +304,10 @@ def classify_issue(report, suite, test):
         name = identifier.removeprefix(prefix)
         if identifier.startswith(prefix) and name in catalogue:
             task, anchor, reason = catalogue[name]
-            blocker = ('official.semantic_result currently preflights recognized datatypes '
-                       'or false conclusions before calling entails.'
-                       if test.get('recognized_datatypes') or test.get('result') in ('', 'false')
-                       else 'entails RDF/RDFS currently raises UnsupportedEntailment '
-                       'when the partial positive proof search finds no proof.')
+            blocker = ('official.semantic_result uses explicit mode=decide and manifest '
+                       'datatype recognition. Unsupported means the requested facility '
+                       'is unavailable or neither a proof nor a countermodel/consistency '
+                       'certificate was established; see the per-test semantic_plan.')
             return _record('missing-functionality', task, document + '#' + anchor,
                            reason, evidence + '; ' + blocker
                            + ' No semantic verdict is inferred from an unsupported execution.')

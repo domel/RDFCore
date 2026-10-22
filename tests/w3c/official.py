@@ -16,7 +16,7 @@ import subprocess
 from urllib.parse import unquote, urlparse
 
 import rdflib
-from rdflib import Graph, RDF, URIRef
+from rdflib import Graph, Literal, RDF, URIRef, XSD
 
 from tests.w3c.runner import run_manifest
 
@@ -88,10 +88,14 @@ def inventory(manifest, ancestors=()):
     for subject in manifests:
         for head in graph.objects(subject, URIRef(MF + "entries")):
             for entry in graph.items(head):
+                result = graph.value(entry, URIRef(MF + 'result'))
                 records.append({"id": str(entry), "name": str(graph.value(entry, URIRef(MF + "name"), default=entry)),
                                 "types": sorted(map(str, graph.objects(entry, RDF.type))),
                                 "action": str(graph.value(entry, URIRef(MF + "action")) or ""),
-                                'result': str(graph.value(entry, URIRef(MF + 'result')) or ''),
+                                'result': str(result) if result is not None else '',
+                                'result_is_false': (isinstance(result, Literal)
+                                                    and result.datatype == XSD.boolean
+                                                    and result.toPython() is False),
                                 'regime': str(graph.value(entry, URIRef(MF + 'entailmentRegime')) or 'simple').lower(),
                                 'recognized_datatypes': [str(item) for item in graph.items(graph.value(entry, URIRef(MF + 'recognizedDatatypes')))],
                                 "manifest": str(manifest)})
@@ -162,8 +166,8 @@ def report_suite(manifest, format, *, legacy_w3c=False):
 def semantic_result(entry):
     from rdfcore.semantics import entails, UnsupportedEntailment, EntailmentResourceLimit
     from tests.w3c.runner import _parse
-    if entry['recognized_datatypes'] or entry['result'] in ('', 'false'):
-        return 'unsupported', 'datatype recognition or inconsistency reasoning is not implemented'
+    if not entry['result'] or not entry['action']:
+        return 'unsupported', 'missing premise or conclusion'
     kinds = {MF+'PositiveEntailmentTest': True, MF+'NegativeEntailmentTest': False}
     expected = next((result for kind, result in kinds.items() if kind in entry['types']), None)
     if expected is None:
@@ -175,7 +179,10 @@ def semantic_result(entry):
             raise UnsupportedEntailment('unsupported premise/conclusion format')
         return _parse(path, format)
     try:
-        actual = entails(parse(entry['action']), parse(entry['result']), regime=entry['regime'])
+        from rdfcore import URIRef as CoreURIRef
+        target = False if entry.get('result_is_false') else parse(entry['result'])
+        actual = entails(parse(entry['action']), target, regime=entry['regime'], mode='decide',
+                         datatypes={CoreURIRef(value) for value in entry['recognized_datatypes']})
     except EntailmentResourceLimit as error:
         return 'unsupported', f'EntailmentResourceLimit: {error}'
     except UnsupportedEntailment as error:
@@ -207,11 +214,21 @@ def build_report(checkout, *, legacy_w3c=False, lock=None):
         for directory in ("rdf-mt" if version == "rdf11" else "rdf-semantics",):
             suite = report_suite(checkout / "rdf" / version / directory / "manifest.ttl", 'semantics')
             suite.update(reference_document=REFERENCES['semantics11' if index == 0 else 'semantics12'],
-                         rdf_version=version, category='entailment', reference_reviewed='2026-10-18')
+                         rdf_version=version, category='entailment', reference_reviewed='2026-10-22')
             suites.append(suite)
     # Relativize the temporary checkout location while retaining entry identity.
     encoded = json.dumps(suites).replace(checkout.as_uri() + "/", "https://w3c.github.io/rdf-tests/")
     encoded = encoded.replace(str(checkout) + "/", "")
+    reported_suites = json.loads(encoded)
+    from tests.w3c.known_issues import REVIEWED_SNAPSHOTS
+    from tests.w3c.semantic_contract import semantic_plan
+    if pin in REVIEWED_SNAPSHOTS:
+        for suite in reported_suites:
+            if suite['category'] == 'entailment':
+                for test in suite['tests']:
+                    plan = semantic_plan(test['id'], suite['reference_document'])
+                    if plan is not None:
+                        test['semantic_plan'] = plan
     changed = git(ROOT, "status", "--porcelain")
     tracked_diff = subprocess.check_output(["git", "-C", str(ROOT), "diff", "--binary", "HEAD"])
     untracked_paths = subprocess.check_output(
@@ -231,6 +248,7 @@ def build_report(checkout, *, legacy_w3c=False, lock=None):
             "manifest_lock_sha256": file_sha256(LOCK if lock is None else lock),
             "execution_profile": 'legacy-w3c-xml' if legacy_w3c else 'default',
             "parser_options": {'legacy_w3c': True} if legacy_w3c else {},
+            "entailment_options": {'mode': 'decide', 'datatypes': 'manifest plus mandatory RDF datatypes'},
             "rdfcore_revision": git(ROOT, "rev-parse", "HEAD"), "worktree_status": changed,
             "tracked_diff_sha256": hashlib.sha256(tracked_diff).hexdigest(),
             "untracked_file_sha256": untracked,
@@ -243,7 +261,7 @@ def build_report(checkout, *, legacy_w3c=False, lock=None):
                 "Published reference_document metadata does not mean the pinned snapshot covers that revision.",
                 "Passing a pinned snapshot cannot verify requirements absent from its fixtures or later changes.",
                 "The legacy-w3c-xml profile accepts unannounced XML 1.2 and expands empty XMLLiteral elements; it is not current-spec conformance."],
-            "suites": json.loads(encoded)}
+            "suites": reported_suites}
 
 
 def main(argv=None):

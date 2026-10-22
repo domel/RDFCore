@@ -39,6 +39,58 @@ def test_semantic_resource_limit_is_reported_distinctly(tmp_path, monkeypatch):
     assert report['tests'][0]['reason'] == 'EntailmentResourceLimit: test work limit'
 
 
+def test_false_conclusion_and_missing_conclusion_are_not_conflated(tmp_path):
+    path = manifest(tmp_path, '<#false> <#missing>', '''
+<#false> a mf:NegativeEntailmentTest ; mf:action <x.nt> ; mf:result false .
+<#missing> a mf:PositiveEntailmentTest ; mf:action <x.nt> .''')
+    (tmp_path / 'x.nt').write_text('<urn:s> <urn:p> <urn:o> .')
+    first, second = inventory(path)
+    assert first['result'] == 'false'
+    assert first['result_is_false'] is True
+    assert second['result'] == ''
+    assert second['result_is_false'] is False
+    report = report_suite(path, 'semantics')
+    assert report['counts'] == {'passed': 1, 'failed': 0, 'unsupported': 1, 'error': 0}
+    assert 'missing' in report['tests'][1]['reason']
+
+
+def test_semantic_runner_forwards_recognition_and_uses_explicit_mode(tmp_path, monkeypatch):
+    from rdfcore import semantics, URIRef
+
+    path = manifest(tmp_path, '<#p>', '''
+<#p> a mf:PositiveEntailmentTest ; mf:action <x.nt> ; mf:result <x.nt> ;
+  mf:recognizedDatatypes ( <http://www.w3.org/2001/XMLSchema#integer> ) .''')
+    (tmp_path / 'x.nt').write_text('<urn:s> <urn:p> <urn:o> .')
+    observed = []
+
+    def record(*args, **kwargs):
+        observed.append(kwargs)
+        return True
+
+    monkeypatch.setattr(semantics, 'entails', record)
+    assert report_suite(path, 'semantics')['counts']['passed'] == 1
+    assert observed == [{'regime': 'simple', 'mode': 'decide',
+                         'datatypes': {URIRef('http://www.w3.org/2001/XMLSchema#integer')}}]
+
+
+def test_semantic_plans_are_attached_after_checkout_ids_are_relativized(tmp_path, monkeypatch):
+    from tests.w3c import official
+
+    monkeypatch.setattr(official, 'verify_checkout', lambda path: 'd5d930b03ee6b63b388d0bb28fdb29ee78a59ec0')
+
+    def suite(path, format, **kwargs):
+        identifier = (tmp_path / 'rdf/rdf11/rdf-mt/manifest.ttl').as_uri() + '#rdf-charmod-uris-test003'
+        return {'counts': {}, 'tests': [{'id': identifier}] if format == 'semantics' else []}
+
+    monkeypatch.setattr(official, 'report_suite', suite)
+    report = official.build_report(tmp_path)
+    semantic = [s for s in report['suites'] if s['category'] == 'entailment']
+    for s in semantic:
+        plan = s['tests'][0]['semantic_plan']
+        assert plan['task'] == 'S11 T37'
+        assert plan['reference'].startswith(s['reference_document'])
+
+
 def test_duplicate_names_are_executed_independently(tmp_path):
     path = manifest(tmp_path, "<#a> <#b>", '''
 <#a> a rt:TestNTriplesPositiveSyntax ; mf:name "same" ; mf:action <x.nt> .

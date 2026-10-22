@@ -300,10 +300,31 @@ in `.rdf` or `.xml` select the RDF 1.1 parser unless a format is supplied.
 `rdfcore.semantics.entails()` decides simple graph entailment, including
 blank nodes inside triple terms. The `rdf` and `rdfs` regimes can prove a
 subset of entailments using finite vocabulary axioms and forward rules.
-When they cannot prove a conclusion, they raise `UnsupportedEntailment`;
-this does not mean the conclusion is false. Datatype reasoning and
-inconsistency detection are not implemented. Graph operations never infer
-additional triples automatically.
+The default `mode="proof"` raises `UnsupportedEntailment` when RDF/RDFS
+rules cannot prove a conclusion. Graph operations never infer additional
+triples automatically.
+
+Explicit `mode="decide"` adds datatype value matching and detection of
+ill-typed recognized literals, including those inside triple terms. Supply
+`datatypes={XSD.integer, RDF.JSON}` to recognize additional types;
+RDF/RDFS always recognize `xsd:string`, `rdf:langString` and
+`rdf:dirLangString`. Other literal types remain opaque. An unknown requested
+datatype raises `UnsupportedEntailment`. HTML value mapping requires the
+optional HTML extra described above.
+
+In decision mode, `conclusion=False` asks whether the premise is
+inconsistent; an empty graph is a different conclusion. A recognized
+ill-typed premise entails any conclusion, without asserting embedded
+triples. Negative decisions require a countermodel certificate. Supported
+RDF/RDFS negative cases are ground graphs with ordinary IRIs and literal
+objects, without RDF/RDFS/XSD vocabulary in subject/predicate/object
+positions (RDF also permits `rdf:type` and `rdf:Property`). Simple-D
+negatives support graphs without triple terms or recognized datatype IRIs
+in those positions; simple entailment without datatype recognition retains
+its existing coverage. Other undecided cases raise `UnsupportedEntailment`,
+never an assumed `False`. Full datatype membership, schema consistency and
+RDF 1.2 Semantics remain incomplete. Dataset inputs are rejected; select an
+explicit graph instead.
 
 Both `entails()` and `entailment_closure()` accept `max_steps=None` (the
 default) or a non-negative integer work budget. Exhaustion raises
@@ -320,6 +341,15 @@ from rdfcore.semantics import entails
 premise = Graph().add((URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")))
 conclusion = [(URIRef("urn:p"), RDF.type, RDF.Property)]
 assert entails(premise, conclusion, regime="rdf")
+
+from rdfcore import Literal, XSD
+
+source = [(URIRef("urn:s"), URIRef("urn:p"),
+           Literal("01", datatype=XSD.integer, normalize=False))]
+target = [(URIRef("urn:s"), URIRef("urn:p"),
+           Literal("1", datatype=XSD.integer, normalize=False))]
+assert entails(source, target, datatypes={XSD.integer}, mode="decide")
+assert entails(source, False, datatypes={XSD.integer}, mode="decide") is False
 ```
 
 ## Graphs and datasets
@@ -693,8 +723,9 @@ status or fixture bytes; no test is removed.
 
 | Snapshot | Passed | Failed | Unsupported | Error |
 |---|---:|---:|---:|---:|
-| Previous, default profile | 2345 | 23 | 79 | 0 |
-| Current, default profile | 2350 | 23 | 79 | 0 |
+| Previous, before T37 | 2345 | 23 | 79 | 0 |
+| Current, before T37 | 2350 | 23 | 79 | 0 |
+| Current, explicit decision mode (T37) | 2401 | 23 | 28 | 0 |
 
 These totals count executions across suites, including repeated RDF 1.1
 cases. The current snapshot contains 2452 executions and 1411 unique test IDs.
@@ -721,12 +752,19 @@ action/result IRIs, entailment regimes, test types and recognized datatypes.
 Reordering a set of types or recognized datatypes alone is not a semantic change.
 Default and archived-recovery profiles cannot be compared as equivalent runs.
 
-The reviewed issues comprise 79 unsupported semantic executions, 17 XML
+The historical reviewed backlog comprises 79 semantic executions, 17 XML
 announcement conflicts, four XMLLiteral lexical conflicts with the pinned
 RDFLib behavior, and two disputed XML fixtures. The four lexical executions
 reuse two test IDs across XML11 and XML12. Fixture-conflict explanations for
 the two disputed cases require matching reviewed input and result hashes;
 an unknown snapshot or changed disputed fixture remains unreviewed.
+
+T37 resolves 51 of the historical 79 semantic executions; 28 remain
+unsupported. The report records `entailment_options` and a `semantic_plan`
+for each historical execution, linking its requirement to an offline minimal
+regression and implementation route. Passing an unsupported-boundary
+regression does not count as passing that W3C test. Boolean false conclusions
+are recorded separately from missing conclusions.
 
 The XML conflict regressions run offline, independently of the official checkout.
 They cover each of the 17 annotation constructions with separate default,
@@ -772,7 +810,8 @@ Two XML 1.2 failures remain: `rdf12-xml-tt-01` has an empty expected file,
 and `rdf12-xml-dir-02` expects a literal without the input's direction.
 Recovery does not discard either triple terms or direction to match those
 expectations. Results in this mode are archived-fixture compatibility evidence,
-not current RDF 1.2 conformance. The 79 unsupported reasoning cases remain.
+not current RDF 1.2 conformance. The reasoning limits above also apply in
+this recovery profile.
 
 The separate **W3C conformance** workflow runs weekly, on relevant pull
 requests and `v*` release tags, and can be started manually. It fetches or

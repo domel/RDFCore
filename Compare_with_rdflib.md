@@ -7,6 +7,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | Format dispatch | RDFLib 7.6.0 | RDFCore |
 |---|---|---|
 | MIME `version` parameter | Not registered by default | `1.1`, `1.2-basic`, `1.2`; parsing, serialization, streaming and line-format conversion |
+| HTTP RDF input | URL parser with format-specific Accept and redirect base | ✅ Differential tests for shared short-name Accept, final URL/publicID and bare Content-Type; versioned MIME and `http_accept` are extensions; not a server negotiation implementation |
 | RDF/XML MIME version | Not registered by default | Explicit dispatch extension; document version announcement remains required |
 | Explicit datatype value identity | No corresponding module | ⚠️ `rdfcore.datatypes`: immutable XSD/JSON/DOM keys, XML 1.1 character handling, optional HTML5 parser; primitive value identity is separate from arithmetic equality; no D-entailment |
 
@@ -151,6 +152,8 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | RDF/XML writer round trips | RDF 1.1 reference | ✅ Tested XML11 reference parsing and XML12 profiles, Unicode, XMLLiteral, shared BNodes, nested terms and reifiers; XML12 accepts UTF-32 bytes, legacy XML requires decoding; no byte-parity claim |
 | JSON-LD | ✅ | ❌ |
 | Canonical NT/NQ lexical syntax | ⚠️ | ✅ explicit `canonical=True`; not blank-node canonicalization (RDFC-1.0) |
+| RDF12 output sink selection | Shared legacy behavior remains separate | ✅ NT12/NQ12/Turtle12/TriG12 text/binary selection and `text_output`; no retry after sink TypeError; caller streams remain open |
+| Turtle12/TriG12 stream profile | ❌ RDF 1.2 | ✅ Existing graphs select their profile before output; canonical lexical options omit VERSION and lowercase language tags, without statement sorting or RDFC-1.0 |
 | `mode="stream"` | ❌ | ✅ Turtle/TriG |
 | Safe relative IRI output | Prefix stripping can change an IRI on round trip | ⚠️ Legacy Turtle/TriG defaults retained; explicit `safe_iris=True` extension, default in Turtle/TriG 1.2 and direct streaming writers |
 | File-like output | ✅ | ✅ |

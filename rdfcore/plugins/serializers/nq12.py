@@ -1,7 +1,7 @@
 """RDF 1.2 N-Quads serializer."""
 
 from ...dataset import DATASET_DEFAULT_GRAPH_ID
-from ...serializer import Serializer
+from ...serializer import Serializer, write_output
 from ..serializers.nt12 import _term
 
 
@@ -27,11 +27,7 @@ class NQuads12Serializer(Serializer):
             value = lines[0] + value
         if stream is None:
             return value.encode(encoding) if encoding else value
-        payload = value.encode(encoding) if encoding else value
-        try:
-            stream.write(payload)
-        except TypeError:
-            stream.write(value)
+        write_output(stream, value, encoding, kwargs.get('text_output'))
         return stream
 
 

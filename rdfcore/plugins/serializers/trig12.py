@@ -1,7 +1,7 @@
 """RDF 1.2 TriG serializer."""
 
 from ...dataset import DATASET_DEFAULT_GRAPH_ID
-from ...serializer import Serializer
+from ...serializer import Serializer, text_output, write_output
 from ...term import URIRef
 from .turtle12 import _term
 from .turtle import _safe_iris
@@ -14,13 +14,17 @@ class TriG12Serializer(Serializer):
             base = self.store.base
         if mode == "stream":
             from ...streaming import TriGStreamingWriter
+            from ...rdf_version import required_rdf_version
+            stream_version = required_rdf_version(self.store) if rdf_version == 'auto' else rdf_version
             if stream is None:
                 from io import BytesIO, StringIO
                 stream = BytesIO() if encoding else StringIO()
                 capture = True
             else:
                 capture = False
-            writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=rdf_version, base=base, safe_iris=safe)
+            use_text = text_output(stream, encoding, kwargs.get('text_output'))
+            writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=stream_version,
+                                         base=base, safe_iris=safe, text_output=use_text, canonical=canonical)
             for quad in self.store.quads():
                 writer.add(quad)
             writer.close()
@@ -61,11 +65,7 @@ class TriG12Serializer(Serializer):
         value = "".join(lines)
         if stream is None:
             return value.encode(encoding) if encoding else value
-        payload = value.encode(encoding) if encoding else value
-        try:
-            stream.write(payload)
-        except TypeError:
-            stream.write(value)
+        write_output(stream, value, encoding, kwargs.get('text_output'))
         return stream
 
 

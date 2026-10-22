@@ -201,12 +201,16 @@ class NQStreamingWriter:
 class TurtleStreamingWriter:
     """Write Turtle statements immediately, without prefix/global sorting."""
 
-    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto", base=None, safe_iris=True):
+    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto", base=None, safe_iris=True, text_output=None, canonical=False):
         from .plugins.serializers.turtle import _safe_iris
         self.safe_iris = _safe_iris({'safe_iris': safe_iris}, True)
         if rdf_version not in ("auto", "1.1", "1.2-basic", "1.2"):
             raise ValueError(f"unsupported rdf_version {rdf_version!r}")
         self.stream = stream
+        if text_output is not None and type(text_output) is not bool:
+            raise ValueError('text_output must be a boolean or None')
+        self.text_output = text_output
+        self.canonical = canonical
         self.encoding = encoding
         self.rdf_version = rdf_version
         self.base = base
@@ -238,10 +242,15 @@ class TurtleStreamingWriter:
             self._emitted_version = version
         if self._emitted_version == "1.2-basic" and required == "1.2":
             raise ValueError("cannot upgrade a started Turtle stream from RDF 1.2-basic to RDF 1.2")
-        self._write(f"{_turtle_term(subject, self.base, self.safe_iris)} {_turtle_term(predicate, self.base, self.safe_iris)} {_turtle_term(obj, self.base, self.safe_iris)} .\n")
+        self._write(f"{_turtle_term(subject, self.base, self.safe_iris, self.canonical)} {_turtle_term(predicate, self.base, self.safe_iris, self.canonical)} {_turtle_term(obj, self.base, self.safe_iris, self.canonical)} .\n")
         self._started = True
 
     def _write(self, text):
+        if self.canonical and text.startswith('VERSION '):
+            return
+        if self.text_output is not None:
+            self.stream.write(text if self.text_output else text.encode(self.encoding))
+            return
         try:
             self.stream.write(text)
         except TypeError:
@@ -251,28 +260,35 @@ class TurtleStreamingWriter:
         return None
 
 
-def _turtle_term(term, base=None, safe=True):
+def _turtle_term(term, base=None, safe=True, canonical=False):
     if isinstance(term, URIRef):
         from .plugins.serializers.turtle import _relativize
         return _relativize(term, base, safe).n3()
     if isinstance(term, BNode):
         return term.n3()
     if isinstance(term, Literal):
+        if canonical and term.language is not None:
+            from .plugins.serializers.nt12 import _term as canonical_term
+            return canonical_term(term, canonical=True)
         return term.n3()
     if isinstance(term, TripleTerm):
-        return "<<( " + " ".join(_turtle_term(item, base, safe) for item in term) + " )>>"
+        return "<<( " + " ".join(_turtle_term(item, base, safe, canonical) for item in term) + " )>>"
     raise TypeError(f"unsupported RDF term: {term!r}")
 
 
 class TriGStreamingWriter:
     """Write quads as contiguous TriG blocks without grouping the dataset."""
 
-    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto", base=None, safe_iris=True):
+    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto", base=None, safe_iris=True, text_output=None, canonical=False):
         from .plugins.serializers.turtle import _safe_iris
         self.safe_iris = _safe_iris({'safe_iris': safe_iris}, True)
         if rdf_version not in ("auto", "1.1", "1.2-basic", "1.2"):
             raise ValueError(f"unsupported rdf_version {rdf_version!r}")
         self.stream = stream
+        if text_output is not None and type(text_output) is not bool:
+            raise ValueError('text_output must be a boolean or None')
+        self.text_output = text_output
+        self.canonical = canonical
         self.encoding = encoding
         self.rdf_version = rdf_version
         self.base = base
@@ -312,15 +328,20 @@ class TriGStreamingWriter:
             if graph is None:
                 self._write("{\n")
             else:
-                self._write(f"{_turtle_term(graph, self.base, self.safe_iris)} {{\n")
+                self._write(f"{_turtle_term(graph, self.base, self.safe_iris, self.canonical)} {{\n")
             self._graph = graph
-        self._write(f"  {_turtle_term(subject, self.base, self.safe_iris)} {_turtle_term(predicate, self.base, self.safe_iris)} {_turtle_term(obj, self.base, self.safe_iris)} .\n")
+        self._write(f"  {_turtle_term(subject, self.base, self.safe_iris, self.canonical)} {_turtle_term(predicate, self.base, self.safe_iris, self.canonical)} {_turtle_term(obj, self.base, self.safe_iris, self.canonical)} .\n")
 
     def _close_graph(self):
         if self._graph is not _NO_GRAPH:
             self._write("}\n")
 
     def _write(self, text):
+        if self.canonical and text.startswith('VERSION '):
+            return
+        if self.text_output is not None:
+            self.stream.write(text if self.text_output else text.encode(self.encoding))
+            return
         try:
             self.stream.write(text)
         except TypeError:

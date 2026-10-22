@@ -360,13 +360,22 @@ class Graph:
             validate_rdf_version(args["rdf_version"])
         if format is None:
             format = _format_from_location(location or source)
-        source = create_input_source(source, publicID, location, file, data, format, **args)
+        source = create_input_source(source, publicID, location, file, data,
+                                     None if automatic_format else format, **args)
         try:
             if automatic_format and source.content_type:
-                from .media import resolve_format
-                _, media_version = resolve_format(source.content_type)
-                if media_version is not None:
-                    format = source.content_type
+                # Content-Type takes precedence over a URL suffix. Explicit
+                # caller formats still win, including over malformed headers.
+                from .plugin import resolve_format
+                from .exceptions import PluginException
+                media = source.content_type.split(';', 1)[0].strip().lower()
+                try:
+                    get_plugin(media, Parser)
+                except PluginException:
+                    pass
+                else:
+                    resolved, version = resolve_format(source.content_type, Parser)
+                    format = source.content_type if ';' in source.content_type else media
             plugin = get_plugin(format, Parser)
             parser_class = plugin.getClass()
             parser = parser_class(self)

@@ -1,6 +1,6 @@
 """RDF 1.2 N-Triples serializer."""
 
-from ...serializer import Serializer
+from ...serializer import Serializer, write_output
 from ...term import BNode, Literal, TripleTerm, URIRef
 
 
@@ -25,11 +25,7 @@ class NT12Serializer(Serializer):
         value = "".join(lines)
         if stream is None:
             return value.encode(encoding) if encoding else value
-        payload = value.encode(encoding) if encoding else value
-        try:
-            stream.write(payload)
-        except TypeError:
-            stream.write(value)
+        write_output(stream, value, encoding, kwargs.get('text_output'))
         return stream
 
 

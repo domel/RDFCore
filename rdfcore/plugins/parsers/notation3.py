@@ -10,7 +10,16 @@ from ...parser import Parser
 from ...term import BNode, Literal, TripleTerm, URIRef
 from ...namespace import RDF
 from ...tokenizer import TokenReader
-from .ntriples import _unescape
+from .ntriples import _unescape, _PN_BASE, _PN_CHARS
+
+_PREFIX12 = re.compile('['+_PN_BASE+'](?:['+_PN_CHARS+'.]*['+_PN_CHARS+'])?')
+
+
+def _rdf12_iri(value):
+    if any(ord(char) <= 0x20 or char in '<>"\\^`{}|' or 0xD800 <= ord(char) <= 0xDFFF
+           for char in value):
+        raise BadSyntax('invalid RDF 1.2 IRI')
+    return value
 
 
 class TurtleParser(Parser):
@@ -145,10 +154,15 @@ class TurtleParser(Parser):
         token = self._next()
         if token is None:
             raise self._error(f"missing {role}")
+        if self.allow_rdf12 and role == 'datatype' and (
+                token.startswith('_:') or not (token.startswith('<') or ':' in token)):
+            raise self._error('datatype must be an IRI')
         if token.startswith("<"):
             if not token.endswith(">"):
                 raise self._error("unterminated IRI")
             value = _unescape(token[1:-1], self._line())
+            if self.allow_rdf12:
+                _rdf12_iri(value)
             if any(ord(char) <= 0x20 or char in "<>\\^`{}|" for char in value):
                 raise self._error("invalid IRI")
             return URIRef(_resolve_iri(self.base or "", value))
@@ -208,9 +222,12 @@ class TurtleParser(Parser):
         if not iri.endswith(">"):
             raise self._error("unterminated prefix IRI")
         label = prefix[:-1]
+        if self.allow_rdf12 and label and not _PREFIX12.fullmatch(label):
+            raise self._error('invalid prefix label')
         if label and (label.startswith('.') or label.endswith('.') or not _valid_pname_prefix(label)):
             raise self._error("invalid prefix label")
-        self.prefixes[label] = _resolve_iri(self.base or "", _unescape(iri[1:-1], self._line()))
+        value = _unescape(iri[1:-1], self._line())
+        self.prefixes[label] = _resolve_iri(self.base or "", _rdf12_iri(value) if self.allow_rdf12 else value)
         if directive.lower() == "@prefix":
             self._expect(".")
 
@@ -221,7 +238,8 @@ class TurtleParser(Parser):
             raise self._error("expected base IRI")
         if not iri.endswith(">"):
             raise self._error("unterminated base IRI")
-        self.base = _resolve_iri(self.base or "", _unescape(iri[1:-1], self._line()))
+        value = _unescape(iri[1:-1], self._line())
+        self.base = _resolve_iri(self.base or "", _rdf12_iri(value) if self.allow_rdf12 else value)
         if directive.lower() == "@base":
             self._expect(".")
 
@@ -383,8 +401,10 @@ class _StreamingTokens:
     """Lazy Turtle token sequence with only parser look-ahead in memory."""
 
     def __init__(self, stream, legacy=False):
+        self._legacy = legacy
         self._tokens = iter((_LegacyTokenReader if legacy else TokenReader)(stream))
         self._buffer = []
+        self._positions = []
         self._offset = 0
         self._done = False
         self.trailing_ignored = False
@@ -398,9 +418,13 @@ class _StreamingTokens:
             except StopIteration:
                 self._done = True
                 break
+            if not self._legacy and token.kind == 'whitespace' and any(
+                    char not in ' \t\r\n' for char in token.value):
+                raise BadSyntax('invalid RDF 1.2 whitespace')
             if token.kind not in ("whitespace", "comment"):
                 self.trailing_ignored = False
                 self._buffer.append(token.value)
+                self._positions.append(token)
             else:
                 self.trailing_ignored = True
         relative = index - self._offset
@@ -410,7 +434,14 @@ class _StreamingTokens:
         count = max(0, min(index - self._offset, len(self._buffer)))
         if count:
             del self._buffer[:count]
+            del self._positions[:count]
             self._offset += count
+
+    def adjacent(self, left, right):
+        self[right]  # Fill the bounded look-ahead before inspecting positions.
+        first = self._positions[left-self._offset]
+        second = self._positions[right-self._offset]
+        return first.line == second.line and first.column+len(first.value) == second.column
 
 
 def _read_text_chunks(stream, chunk_size=64 * 1024):

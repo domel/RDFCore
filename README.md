@@ -111,8 +111,17 @@ version parameters and conflicts with an explicit `rdf_version` raise
 `ValueError`. `auto` is an API option, not a media version label. Other
 syntactically valid parameters do not select the RDF version or change decoding.
 
-For HTTP input, `Graph.parse()` uses a versioned `Content-Type` when no
-`format` is supplied. An explicit format takes precedence. RDF/XML MIME
+For HTTP input, `Graph.parse()` and `Dataset.parse()` select a registered
+`Content-Type`, including its version, ahead of a URL suffix when no
+`format` is supplied. An explicit format takes precedence, including over
+an invalid version header. Redirects use the final URL as the base unless
+`publicID` overrides it. As in RDFLib, an explicit empty `publicID` instead
+uses the original request URL as the base. Responses close after success or failure.
+Shared legacy short names send RDFLib 7.6.0's corresponding `Accept` value;
+explicit RDF 1.2 names request the versioned media type. An explicit
+`http_accept="text/turtle; version=1.2-basic"` overrides that request header.
+This is client-side selection, not a server-side negotiation service.
+RDF/XML MIME
 version dispatch is an RDFCore extension: it does not replace the required
 in-document `rdf:version` announcement for RDF 1.2 constructs.
 
@@ -411,7 +420,23 @@ graph.serialize("output.ttl", format="turtle12", mode="stream")
 
 Streaming serializers write statements as they are processed. They do not
 provide the prefix grouping, complete-graph sorting, or formatting used by
-the default pretty serializers.
+the default pretty serializers. For an existing graph or dataset, the RDF 1.2
+serializer scans the required profile before starting `mode="stream"`, so
+mixed RDF 1.1/1.2 statements do not depend on iteration order. Direct push
+writers cannot look ahead; select `rdf_version="1.2"` before feeding mixed data.
+`canonical=True` in Turtle12/TriG12 stream mode suppresses version directives
+and lowercases language tags; it does not sort statements or canonicalize
+blank nodes.
+
+NT12, NQ12, Turtle12 and TriG12 serializers select standard text/binary sinks
+before writing and propagate sink errors without a retry or stream closure.
+For custom sinks, `text_output=True` or `False` selects the protocol explicitly;
+otherwise the default follows whether `encoding` was supplied. Direct Turtle
+and TriG push writers also accept `text_output`; leaving it unset preserves
+their older text-first fallback behavior. NT12/NQ12 input accepts CR, LF and
+CRLF records and Unicode blank-node labels, with incremental UTF-8 decoding.
+Records and blank-node maps can still grow with the input; this is not a hard
+bound on total memory.
 
 Convert N-Triples and N-Quads through a streaming pipeline:
 

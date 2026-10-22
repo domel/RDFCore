@@ -12,6 +12,11 @@ from ...term import BNode, Literal, TripleTerm, URIRef
 
 _IRI = re.compile(r"<((?:[^<>]|\\.)*)>")
 _BNODE = re.compile(r"_:([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?)")
+_PN_BASE = ('A-Za-z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u02ff\u0370-\u037d'
+            '\u037f-\u1fff\u200c-\u200d\u2070-\u218f\u2c00-\u2fef'
+            '\u3001-\ud7ff\uf900-\ufdcf\ufdf0-\ufffd\U00010000-\U000effff')
+_PN_CHARS = _PN_BASE + '_0-9\u00b7\u0300-\u036f\u203f-\u2040-'
+_BNODE12 = re.compile(r'_:(['+_PN_BASE+r'_0-9](?:['+_PN_CHARS+r'.]*['+_PN_CHARS+r'])?)')
 _LANG = re.compile(r"@[A-Za-z]+(?:-[A-Za-z0-9]+)*(?:--(?:ltr|rtl))?")
 
 
@@ -30,7 +35,8 @@ class NTParser(Parser):
         if stream is None:
             raise ParserError("N-Triples source has no readable stream")
         bnode_map = _PreservedBNodes() if kwargs.get('preserve_bnode_ids', False) else {}
-        for line_number, raw_line in enumerate(stream, 1):
+        lines = _rdf12_lines(stream) if self.rdf_version == '1.2' else stream
+        for line_number, raw_line in enumerate(lines, 1):
             try:
                 if isinstance(raw_line, bytes):
                     raw_line = raw_line.decode("utf-8")
@@ -81,7 +87,7 @@ class NT12Parser(NTParser):
         return super().parse(source, sink, **kwargs)
 
     def _parse_line(self, line, sink, line_number, bnode_map):
-        text = line.strip()
+        text = _rdf12_line(line, line_number)
         if not text or text.startswith("#"):
             return
         if text.startswith("VERSION"):
@@ -107,10 +113,13 @@ class NT12Parser(NTParser):
         sink.add((subject, predicate, obj))
 
     def _parse_version(self, text, line_number):
-        match = re.fullmatch(r'VERSION\s+"(1\.1|1\.2-basic|1\.2)"(?:\s+#.*)?', text)
+        match = re.fullmatch(r'VERSION[ \t]*("(?:[^"\\\r\n]|\\.)*")[ \t]*(?:#.*)?', text)
         if match is None:
             raise ParserError(f"line {line_number}: invalid VERSION declaration")
-        self._announced_version = match.group(1)
+        version, _ = _literal(match.group(1), 0, line_number)
+        if version not in {'1.1', '1.2-basic', '1.2'}:
+            raise ParserError(f'line {line_number}: unsupported VERSION declaration')
+        self._announced_version = version
 
     def _validate_rdf_version(self, term, line_number):
         from ...rdf_version import version_allows
@@ -136,6 +145,55 @@ def _spaces(text, position):
     while position < len(text) and text[position].isspace():
         position += 1
     return position
+
+
+def _rdf12_lines(stream):
+    """Incremental UTF-8 records; CR, LF and CRLF are EOL, never whitespace."""
+    from ...tokenizer import ChunkReader
+    pieces, trailing_cr = [], False
+    try:
+        for chunk in ChunkReader(stream):
+            if trailing_cr and chunk.startswith('\n'):
+                chunk = chunk[1:]
+            trailing_cr = chunk.endswith('\r')
+            parts = chunk.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+            pieces.append(parts[0])
+            if len(parts) > 1:
+                yield ''.join(pieces)
+                yield from parts[1:-1]
+                pieces = [parts[-1]]
+        if pieces and any(pieces):
+            yield ''.join(pieces)
+    except UnicodeError as error:
+        raise ParserError('invalid UTF-8 input') from error
+
+
+def _rdf12_line(line, line_number):
+    """Validate scalar values and horizontal space without touching literals."""
+    if any(0xD800 <= ord(char) <= 0xDFFF for char in line):
+        raise ParserError(f'line {line_number}: surrogate code point')
+    index, state = 0, None
+    while index < len(line):
+        char = line[index]
+        if state:
+            if char == '\\':
+                index += 2
+                continue
+            if char == state:
+                state = None
+        elif char == '#':
+            break
+        elif line.startswith('<<(', index):
+            index += 3
+            continue
+        elif char == '<':
+            state = '>'
+        elif char == '"':
+            state = '"'
+        elif char.isspace() and char not in ' \t\r\n':
+            raise ParserError(f'line {line_number}: only horizontal XML whitespace is allowed')
+        index += 1
+    return line.strip(' \t\r\n')
 
 
 def _required_spaces(text, position, line_number):
@@ -176,7 +234,7 @@ def _term(text, position, line_number, role, bnode_map, allow_rdf12=False):
             raise ParserError(f"line {line_number}: invalid IRI")
         return URIRef(value), match.end()
     if text.startswith("_:", position):
-        match = _BNODE.match(text, position)
+        match = (_BNODE12 if allow_rdf12 else _BNODE).match(text, position)
         if not match:
             raise ParserError(f"line {line_number}: invalid blank node")
         label = match.group(1)

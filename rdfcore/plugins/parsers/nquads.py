@@ -5,7 +5,7 @@ from __future__ import annotations
 from ...exceptions import ParserError
 from ...parser import Parser
 from ...term import BNode, URIRef
-from .ntriples import _spaces, _term, _required_spaces, _PreservedBNodes
+from .ntriples import _spaces, _term, _required_spaces, _PreservedBNodes, _rdf12_line, _rdf12_lines
 
 
 class NQuadsParser(Parser):
@@ -17,7 +17,8 @@ class NQuadsParser(Parser):
         if stream is None:
             raise ParserError("N-Quads source has no readable stream")
         bnode_map = _PreservedBNodes() if kwargs.get('preserve_bnode_ids', False) else {}
-        for line_number, raw_line in enumerate(stream, 1):
+        lines = _rdf12_lines(stream) if self.allow_rdf12 else stream
+        for line_number, raw_line in enumerate(lines, 1):
             try:
                 if isinstance(raw_line, bytes):
                     raw_line = raw_line.decode("utf-8")
@@ -29,7 +30,7 @@ class NQuadsParser(Parser):
         return sink
 
     def _parse_line(self, line, sink, line_number, bnode_map):
-        text = line.strip()
+        text = _rdf12_line(line, line_number) if self.allow_rdf12 else line.strip()
         if not text or text.startswith("#"):
             return
         position = 0

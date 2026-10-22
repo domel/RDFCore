@@ -16,7 +16,8 @@ class NQuads12Parser(NQuadsParser):
         return super().parse(source, sink, **kwargs)
 
     def _parse_line(self, line, sink, line_number, bnode_map):
-        text = line.strip()
+        from .ntriples import _rdf12_line
+        text = _rdf12_line(line, line_number)
         if text.startswith("VERSION"):
             NT12Parser._parse_version(self, text, line_number)
             return

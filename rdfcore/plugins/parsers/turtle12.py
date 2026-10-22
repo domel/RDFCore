@@ -13,12 +13,22 @@ class Turtle12Parser(TurtleParser):
     def _term(self, role):
         if self._peek() != "<<":
             return super()._term(role)
+        if role == 'datatype':
+            raise self._error('datatype must be an IRI')
+        if self._peek(1) == '(' and not self.tokens.adjacent(self.index, self.index+1):
+            raise self._error('triple term opening delimiter must be contiguous')
         self._next()
         parenthesized = self._accept("(")
         if self._requested_version not in ("auto", "1.2"):
             raise self._error("triple terms require rdf_version='1.2'")
         self._require_version('1.2')
-        subject = self._subject() if self._peek() == '[' else self._term("triple subject")
+        if parenthesized and self._peek() == '<<':
+            raise self._error('triple term subject must be an IRI or blank node')
+        if self._accept('['):
+            self._expect(']')
+            subject = BNode()
+        else:
+            subject = self._term("triple subject")
         predicate = self._predicate()
         if self._peek() == '(':
             raise self._error('collection is not allowed inside a triple term or reified triple')
@@ -27,11 +37,15 @@ class Turtle12Parser(TurtleParser):
             self._expect(']')
             obj = BNode()
         else:
+            if parenthesized and self._peek() == '<<' and self._peek(1) != '(':
+                raise self._error('reified triple is not allowed inside a triple term')
             obj = self._term('triple object')
         reifier = None
         if not parenthesized and self._accept('~'):
             reifier = self._reifier()
         if parenthesized:
+            if self._peek() == ')' and self._peek(1) == '>>' and not self.tokens.adjacent(self.index, self.index+1):
+                raise self._error('triple term closing delimiter must be contiguous')
             self._expect(")")
         self._expect(">>")
         if not isinstance(subject, (URIRef, BNode)) or not isinstance(predicate, URIRef):

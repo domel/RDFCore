@@ -193,8 +193,8 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `external_sort()` | External-memory sorting |
 | `statement_key()` | Stable sorting key |
 | `benchmark_parse()` | Benchmark with peak RSS |
-| `semantics.entails()` | Simple entailment and partial positive RDF/RDFS proofs; unsupported decisions raise |
-| `semantics.entailment_closure()` | Optional finite RDF/RDFS axioms and rules; no automatic Graph inference |
+| `semantics.entails()` | Simple entailment and partial positive RDF/RDFS proofs; unsupported decisions raise; optional `max_steps`, distinct `EntailmentResourceLimit` |
+| `semantics.entailment_closure()` | Optional finite RDF/RDFS axioms and rules; no automatic Graph inference; optional work budget (not a time/memory bound) |
 | `BoundedReadStream` | Bounded reads |
 | `BoundedWriteStream` | Bounded writes with partial-write retries and progress validation, including compressed output |
 | `ChunkReader` | Chunked UTF-8 reader |

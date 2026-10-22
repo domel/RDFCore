@@ -160,7 +160,7 @@ def report_suite(manifest, format, *, legacy_w3c=False):
 
 
 def semantic_result(entry):
-    from rdfcore.semantics import entails, UnsupportedEntailment
+    from rdfcore.semantics import entails, UnsupportedEntailment, EntailmentResourceLimit
     from tests.w3c.runner import _parse
     if entry['recognized_datatypes'] or entry['result'] in ('', 'false'):
         return 'unsupported', 'datatype recognition or inconsistency reasoning is not implemented'
@@ -176,6 +176,8 @@ def semantic_result(entry):
         return _parse(path, format)
     try:
         actual = entails(parse(entry['action']), parse(entry['result']), regime=entry['regime'])
+    except EntailmentResourceLimit as error:
+        return 'unsupported', f'EntailmentResourceLimit: {error}'
     except UnsupportedEntailment as error:
         return 'unsupported', str(error)
     except Exception as error:

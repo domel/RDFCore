@@ -45,7 +45,11 @@ The rules are monotonic and optional; no Graph methods or inputs are mutated.
 Inputs must be finite RDF graphs (Graph or iterable of triples). Space is
 proportional to the materialized input/closure; closure uses repeated joins,
 and existential matching can take exponential time. Excessive nesting/search
-depth raises UnsupportedEntailment instead of returning a negative result.
+depth raises EntailmentResourceLimit (an UnsupportedEntailment subclass)
+instead of returning a negative result. Optional max_steps limits internal
+validation, term traversal, matching and rule-join work. It is not a wall-clock
+or memory bound; input iteration itself can block and individual terms can be
+large. The default None leaves the work budget unlimited.
 This module is a partial facility, not a full RDF 1.2 conformance claim.
 """
 
@@ -53,13 +57,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from collections import defaultdict
+from contextlib import contextmanager
+from contextvars import ContextVar
 import re
 
 from .dataset import ConjunctiveGraph, Dataset
 from .namespace import RDF, RDFS
 from .term import BNode, Literal, TripleTerm, URIRef
 
-__all__ = ["UnsupportedEntailment", "entails", "entailment_closure"]
+__all__ = ["UnsupportedEntailment", "EntailmentResourceLimit", "entails", "entailment_closure"]
 
 Term = URIRef | BNode | Literal | TripleTerm
 Triple = tuple[Term, Term, Term]
@@ -70,6 +76,37 @@ class UnsupportedEntailment(NotImplementedError):
     """The requested entailment cannot be decided by this partial facility."""
 
 
+class EntailmentResourceLimit(UnsupportedEntailment):
+    """Evaluation exhausted its work budget or Python recursion depth."""
+
+
+_budget: ContextVar[list[int] | None] = ContextVar('entailment_budget', default=None)
+
+
+def _step() -> None:
+    remaining = _budget.get()
+    if remaining is not None:
+        if remaining[0] == 0:
+            raise EntailmentResourceLimit('entailment max_steps exceeded')
+        remaining[0] -= 1
+
+
+@contextmanager
+def _limited(max_steps):
+    if max_steps is not None:
+        if type(max_steps) is not int:
+            raise TypeError('max_steps must be an integer or None')
+        if max_steps < 0:
+            raise ValueError('max_steps must be non-negative')
+    token = _budget.set(None if max_steps is None else [max_steps])
+    try:
+        yield
+    except RecursionError as exc:
+        raise EntailmentResourceLimit('entailment nesting/search limit exceeded') from exc
+    finally:
+        _budget.reset(token)
+
+
 def _options(regime: str, datatypes: object) -> None:
     if regime not in ("simple", "rdf", "rdfs"):
         raise ValueError("regime must be 'simple', 'rdf', or 'rdfs'")
@@ -78,6 +115,7 @@ def _options(regime: str, datatypes: object) -> None:
 
 
 def _validate(triple: object) -> Triple:
+    _step()
     if not isinstance(triple, (tuple, list)) or len(triple) != 3:
         raise TypeError("expected an RDF triple of three terms")
     s, p, o = triple
@@ -97,6 +135,7 @@ def _snapshot(graph: Iterable[Triple]) -> set[Triple]:
 
 
 def _key(term: Term) -> tuple:
+    _step()
     if isinstance(term, TripleTerm):
         return (TripleTerm, *(_key(component) for component in term))
     if isinstance(term, Literal):
@@ -106,6 +145,7 @@ def _key(term: Term) -> tuple:
 
 
 def _match(pattern: Term, value: Term, bindings: dict) -> bool:
+    _step()
     if isinstance(pattern, BNode):
         key = _key(value)
         if pattern in bindings:
@@ -132,6 +172,7 @@ def _homomorphism(source: set[Triple], target: set[Triple]) -> bool:
     choices.sort(key=lambda entry: len(entry[1]))
 
     def search(index: int, bindings: dict) -> bool:
+        _step()
         if index == len(choices):
             return True
         pattern, candidates = choices[index]
@@ -146,6 +187,7 @@ def _homomorphism(source: set[Triple], target: set[Triple]) -> bool:
 
 
 def _terms(term: Term):
+    _step()
     yield term
     if isinstance(term, TripleTerm):
         for component in term:
@@ -207,10 +249,12 @@ def _closure(source: set[Triple], regime: str, vocabulary=()) -> set[Triple]:
         by_subject_predicate = defaultdict(list)
         by_predicate_object = defaultdict(list)
         for a, b, c in result:
+            _step()
             by_predicate[b].append((a, b, c))
             by_subject_predicate[(a, b)].append(c)
             by_predicate_object[(b, c)].append(a)
         for s, p, o in result:
+            _step()
             additions.add((p, RDF.type, RDF.Property))
             if regime != "rdfs":
                 continue
@@ -238,6 +282,7 @@ def _closure(source: set[Triple], regime: str, vocabulary=()) -> set[Triple]:
                 additions.update(((s, RDF.type, RDF.Property), (o, RDF.type, RDFS.Class)))
             if p in (RDFS.domain, RDFS.range, RDFS.subPropertyOf):
                 for a, b, c in by_predicate.get(s, ()):
+                    _step()
                     if p == RDFS.domain:
                         additions.add((a, RDF.type, o))
                     elif p == RDFS.range:
@@ -246,9 +291,11 @@ def _closure(source: set[Triple], regime: str, vocabulary=()) -> set[Triple]:
                         additions.add((a, o, c))
             if p in (RDFS.subPropertyOf, RDFS.subClassOf):
                 for c in by_subject_predicate.get((o, p), ()):
+                    _step()
                     additions.add((s, p, c))
             if p == RDFS.subClassOf:
                 for a in by_predicate_object.get((RDF.type, s), ()):
+                    _step()
                     additions.add((a, RDF.type, o))
         additions.difference_update(result)
         if not additions:
@@ -258,6 +305,7 @@ def _closure(source: set[Triple], regime: str, vocabulary=()) -> set[Triple]:
 
 def entailment_closure(
     graph: Iterable[Triple], *, regime: str = "rdfs", datatypes: object = None,
+    max_steps: int | None = None,
 ) -> frozenset[Triple]:
     """Return a finite, sound but incomplete rule closure, including input.
 
@@ -265,17 +313,19 @@ def entailment_closure(
     subjects or blank-node predicates), unsuitable for ``Graph.add``. Absence
     from this partial closure does NOT establish non-entailment. No datatype
     recognition or full axiomatic closure is performed.
+
+    ``max_steps`` is an optional non-negative internal work budget, not a
+    time/memory limit. Exhaustion raises EntailmentResourceLimit.
     """
     _options(regime, datatypes)
-    try:
+    with _limited(max_steps):
         return frozenset(_closure(_snapshot(graph), regime))
-    except RecursionError as exc:
-        raise UnsupportedEntailment("entailment nesting limit exceeded") from exc
 
 
 def entails(
     premise: Iterable[Triple], conclusion: Iterable[Triple], *,
     regime: str = "simple", datatypes: object = None,
+    max_steps: int | None = None,
 ) -> bool:
     """Decide simple entailment, or prove a supported RDF/RDFS entailment.
 
@@ -283,16 +333,16 @@ def entails(
     is unknown, not False. Blank nodes in conclusion are existential and have
     an independent scope from premise, even when their labels coincide.
     Invalid RDF input raises TypeError; unknown regimes raise ValueError.
+    ``max_steps`` limits internal work, not time or memory. Exhaustion raises
+    EntailmentResourceLimit, never False. None preserves unlimited work.
     """
     _options(regime, datatypes)
-    try:
+    with _limited(max_steps):
         source, target = _snapshot(premise), _snapshot(conclusion)
         if _homomorphism(_closure(source, regime, target), target):
             return True
         if regime == "simple":
             return False
-    except RecursionError as exc:
-        raise UnsupportedEntailment("entailment nesting/search limit exceeded") from exc
     raise UnsupportedEntailment(
         f"{regime} proof not found: datatype, axiomatic, proposition and "
         "inconsistency reasoning are incomplete; non-entailment is unknown"

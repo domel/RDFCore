@@ -23,6 +23,22 @@ def test_unknown_type_and_missing_action_are_not_success(tmp_path):
     assert report["total"] == 2
 
 
+def test_semantic_resource_limit_is_reported_distinctly(tmp_path, monkeypatch):
+    from rdfcore import semantics
+
+    path = manifest(tmp_path, '<#p>', '''
+<#p> a mf:PositiveEntailmentTest ; mf:action <x.nt> ; mf:result <x.nt> .''')
+    (tmp_path / 'x.nt').write_text('<urn:s> <urn:p> <urn:o> .')
+
+    def exhausted(*args, **kwargs):
+        raise semantics.EntailmentResourceLimit('test work limit')
+
+    monkeypatch.setattr(semantics, 'entails', exhausted)
+    report = report_suite(path, 'semantics')
+    assert report['counts'] == {'passed': 0, 'failed': 0, 'unsupported': 1, 'error': 0}
+    assert report['tests'][0]['reason'] == 'EntailmentResourceLimit: test work limit'
+
+
 def test_duplicate_names_are_executed_independently(tmp_path):
     path = manifest(tmp_path, "<#a> <#b>", '''
 <#a> a rt:TestNTriplesPositiveSyntax ; mf:name "same" ; mf:action <x.nt> .

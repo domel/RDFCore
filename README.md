@@ -305,6 +305,14 @@ this does not mean the conclusion is false. Datatype reasoning and
 inconsistency detection are not implemented. Graph operations never infer
 additional triples automatically.
 
+Both `entails()` and `entailment_closure()` accept `max_steps=None` (the
+default) or a non-negative integer work budget. Exhaustion raises
+`EntailmentResourceLimit`, a subclass of `UnsupportedEntailment`; it never
+returns `False`. Python recursion exhaustion raises the same exception.
+The budget counts internal validation, matching and rule-join work, not
+seconds or bytes. It cannot interrupt a blocked input iterator or bound the
+size of an individual term. Exact step counts may change between releases.
+
 ```python
 from rdfcore import Graph, RDF, URIRef
 from rdfcore.semantics import entails

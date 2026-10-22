@@ -120,6 +120,8 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | TriG 1.1 | ✅ `trig` | ✅ `trig`, `trig11` |
 | TriG 1.2 | ❌ | ✅ `trig12` |
 | RDF/XML 1.1 | ✅ `xml`, `rdfxml` | ⚠️ `xml`, `rdfxml`; secure tree parser, no DTDs |
+| RDF/XML legacy parser dispatch | Executable reference: 7.6.0 | ⚠️ Differential cases cover unqualified attributes/elements, ignored root attributes/resource text, relative datatype/type IRIs and repeated property IDs; `strict=True` retains stricter RDF grammar checks |
+| XML12 document transport | Legacy UTF-32 bytes unsupported | ⚠️ UTF-8/16/32, short reads, XML 1.1 line ends/restricted references, encoding mismatch and DTD rejection tested; buffered tree parser; writer still rejects XML 1.0-forbidden literal characters |
 | RDF/XML XMLLiteral lexical handling | Executable reference: 7.6.0 | ⚠️ Differential tests cover CR text, CDATA, comments, processing instructions and default namespace undeclarations; XML12 keeps separate lexical rules |
 | RDF/XML 1.2 | ❌ | ⚠️ `xml12`, `xmlrdf12`; same parser, explicit version, triple terms, annotations and direction; full conformance not established |
 | Archived W3C XML recovery | ❌ | ⚠️ Explicit `legacy_w3c=True`; missing-version recovery in `xml12`, empty XMLLiteral element expansion in `xml`/`xml12`; not current-spec conformance |
@@ -146,7 +148,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | Reserved XMLNS predicate output | May emit an invalid namespace binding | ⚠️ Legacy `xml` preserves the reference behavior; `safe_iris=True` selects legal QName splitting or an explicit error; enabled by default in `xml12` |
 | XML12 writer with RDF 1.1 profile | RDF 1.1 vocabulary in `xml` | ✅ Ordinary version/annotation/annotationNodeID predicates tested against the XML11 oracle; no RDF 1.2 terms enabled |
 | RDF/XML 1.2 | ❌ | ⚠️ `xml12`, `xmlrdf12`; same serializer, announces `1.2` by default, respects explicit `1.1` / `1.2-basic` profiles |
-| RDF/XML writer round trips | RDF 1.1 reference | ✅ Tested XML11 reference parsing and XML12 profiles, Unicode, XMLLiteral, shared BNodes, nested terms and reifiers; UTF-32 requires explicit input decoding; no byte-parity claim |
+| RDF/XML writer round trips | RDF 1.1 reference | ✅ Tested XML11 reference parsing and XML12 profiles, Unicode, XMLLiteral, shared BNodes, nested terms and reifiers; XML12 accepts UTF-32 bytes, legacy XML requires decoding; no byte-parity claim |
 | JSON-LD | ✅ | ❌ |
 | Canonical NT/NQ lexical syntax | ⚠️ | ✅ explicit `canonical=True`; not blank-node canonicalization (RDFC-1.0) |
 | `mode="stream"` | ❌ | ✅ Turtle/TriG |

@@ -218,9 +218,10 @@ consistent with the XML encoding requested from the serializer.
 Direct serializer calls use the graph's base when `base=None`, as in RDFLib;
 an explicit empty base suppresses it. Writer round-trip tests cover shared
 blank nodes, XMLLiteral lexical forms, Unicode, directional literals, nested
-triple terms and multiple reifiers. UTF-8 and UTF-16 output can be parsed
-directly. UTF-32 output must be decoded to text before parsing because the
-current XML parser does not accept UTF-32 byte input. Namespace prefixes and
+triple terms and multiple reifiers. The `xml12` parser accepts UTF-8,
+UTF-16 and UTF-32 bytes, including short reads and UTF-32 byte-order variants.
+The legacy `xml` parser retains RDFLib's UTF-32 byte-input limitation:
+decode that input to text or select `xml12`. Namespace prefixes and
 statement order are not promised to match RDFLib byte for byte.
 For predicates in the reserved XMLNS namespace, `xml12` selects a legal
 QName split or raises `ValueError` before writing. Legacy `xml` retains
@@ -239,10 +240,29 @@ Outside XML literals, `xml12` accepts only XML whitespace between RDF
 elements; `xml` preserves RDFLib's broader Unicode whitespace handling.
 The XML12 event mapping ignores reserved `xml*` element and attribute names,
 except inside XML literals. XML11 retains the reference's legacy handling.
+Its default mode also preserves RDFLib 7.6.0's unqualified attributes,
+ignored `rdf:RDF` root attributes, ignored text on resource properties,
+relative datatype IRIs and position-dependent `rdf:type` resolution.
+Use `strict=True` with `xml` for the existing stricter RDF grammar checks;
+`xml12` always applies its separate grammar checks. Neither option is a
+claim of complete W3C conformance.
+
+With an XML 1.1 declaration, `xml12` normalizes XML 1.1 line ends and accepts
+restricted characters through character references, not raw characters.
+XML literals preserve those references where needed to retain their infoset.
+Detected UTF-16/32 byte-order and encoding-declaration mismatches raise
+`SAXParseException`. An unsupported
+UTF-32 byte transport in legacy `xml` has an explicit unsupported-input
+message, not a claim that the XML document is malformed. XML12 serialization
+still rejects literal characters forbidden in XML 1.0 with `ValueError`;
+it does not yet produce XML 1.1 documents for those literals.
 
 Both parsers reject DTD declarations before processing RDF or accessing
 external entities, including declarations split across input chunks or
-encoded as UTF-16. XML nesting is limited to 256 elements, including the
+encoded as UTF-16, and UTF-32 in `xml12`. XML12 buffers and adapts the
+document transport before the DTD/depth guard and DOM parsing; it emits no
+RDF statements before the guard succeeds. XML nesting is limited to 256
+elements, including the
 RDF wrapper and XML literal content. The XML12 writer rejects more than
 126 nested triple terms so that its output stays within the parser's limit.
 Input streams supplied by the caller remain open after success or failure.

@@ -215,6 +215,13 @@ triple terms and multiple reifiers. UTF-8 and UTF-16 output can be parsed
 directly. UTF-32 output must be decoded to text before parsing because the
 current XML parser does not accept UTF-32 byte input. Namespace prefixes and
 statement order are not promised to match RDFLib byte for byte.
+For predicates in the reserved XMLNS namespace, `xml12` selects a legal
+QName split or raises `ValueError` before writing. Legacy `xml` retains
+RDFLib 7.6.0's namespace behavior, including its invalid XMLNS binding;
+use `safe_iris=True` to select the corrected writer explicitly.
+An XML12 writer with `rdf_version="1.1"` accepts the RDF 1.1 vocabulary,
+including ordinary `rdf:version`, `rdf:annotation` and `rdf:annotationNodeID`
+predicates. This does not enable RDF 1.2 terms in that profile.
 
 The `xml` parser follows RDFLib's XMLLiteral handling, including CDATA,
 omission of comments and processing instructions, CR text normalization,
@@ -470,6 +477,16 @@ Turtle and RDF/XML use the default graph unless `default_union=True`.
 Serialization uses `Graph.base` when `base` is omitted. Turtle and TriG pretty
 and streaming output emit the base declaration and relativize eligible IRIs;
 RDF/XML emits `xml:base`. An explicit `base` overrides the graph's base.
+
+Turtle/TriG 1.2 writers only shorten an IRI when resolving the shortened
+form against the base reproduces the original IRI exactly. This applies to
+pretty and streaming output, graph names and nested triple terms. Legacy
+`turtle`/`trig` keep RDFLib-compatible prefix stripping by default, including
+its known round-trip defect when the base is a partial path prefix. Select
+the corrected behavior with `graph.serialize(format="turtle", safe_iris=True)`
+(also available for `trig`). Direct `TurtleStreamingWriter` and
+`TriGStreamingWriter` calls use safe handling by default. `safe_iris=False`
+explicitly selects the older behavior; the option requires a boolean.
 
 `Graph.isomorphic()` follows RDFLib's approximate RDF 1.1 check and can return
 false positives when blank nodes occur. Use `rdfcore.compare.isomorphic()`

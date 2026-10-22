@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from urllib.parse import urljoin
+
 from ...serializer import Serializer
 from ...term import BNode, Literal, URIRef
 
 
 class TurtleSerializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, mode="pretty", **kwargs):
+        safe = _safe_iris(kwargs, False)
         if base is None:
             base = self.store.base
         if mode == "stream":
@@ -18,7 +21,7 @@ class TurtleSerializer(Serializer):
                 capture = True
             else:
                 capture = False
-            writer = TurtleStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version="1.1", base=base)
+            writer = TurtleStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version="1.1", base=base, safe_iris=safe)
             for triple in self.store.triples((None, None, None)):
                 writer.add(triple)
             writer.close()
@@ -34,7 +37,7 @@ class TurtleSerializer(Serializer):
             lines.append("\n")
         triples = sorted(self.store.triples((None, None, None)), key=lambda triple: tuple(str(item) for item in triple))
         lines.extend(
-            f"{_term(subject, manager, base)} {_term(predicate, manager, base)} {_term(obj, manager, base)} .\n"
+            f"{_term(subject, manager, base, safe)} {_term(predicate, manager, base, safe)} {_term(obj, manager, base, safe)} .\n"
             for subject, predicate, obj in triples
         )
         value = "".join(lines)
@@ -48,16 +51,25 @@ class TurtleSerializer(Serializer):
         return stream
 
 
-def _relativize(term, base):
+def _safe_iris(options, default):
+    value = options.get('safe_iris', default)
+    if type(value) is not bool:
+        raise ValueError('safe_iris must be a boolean')
+    return value
+
+
+def _relativize(term, base, safe=False):
     if (base is not None and term.startswith(base)
             and '#' not in term.replace(base, '') and '/' not in term.replace(base, '')):
-        return URIRef(term.replace(base, '', 1))
+        relative = term.replace(base, '', 1)
+        if not safe or urljoin(str(base), relative) == str(term):
+            return URIRef(relative)
     return term
 
 
-def _term(term, manager, base=None):
+def _term(term, manager, base=None, safe=False):
     if isinstance(term, URIRef):
-        relative = _relativize(term, base)
+        relative = _relativize(term, base, safe)
         if relative != term:
             return relative.n3()
         return manager.normalizeUri(term)

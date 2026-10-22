@@ -2,11 +2,12 @@
 
 from ...serializer import Serializer
 from ...term import BNode, Literal, TripleTerm, URIRef
-from .turtle import _relativize
+from .turtle import _relativize, _safe_iris
 
 
 class Turtle12Serializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, canonical=False, rdf_version="auto", mode="pretty", **kwargs):
+        safe = _safe_iris(kwargs, True)
         if base is None:
             base = self.store.base
         if mode == "stream":
@@ -17,7 +18,7 @@ class Turtle12Serializer(Serializer):
                 capture = True
             else:
                 capture = False
-            writer = TurtleStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=rdf_version, base=base)
+            writer = TurtleStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=rdf_version, base=base, safe_iris=safe)
             for triple in self.store.triples((None, None, None)):
                 writer.add(triple)
             writer.close()
@@ -43,8 +44,8 @@ class Turtle12Serializer(Serializer):
             lines.append("\n")
         triples = sorted(self.store.triples((None, None, None)), key=lambda triple: tuple(str(item) for item in triple))
         lines.extend(
-            f"{_term(subject, manager, canonical, base)} {_term(predicate, manager, canonical, base)} "
-            f"{_term(obj, manager, canonical, base)} .\n"
+            f"{_term(subject, manager, canonical, base, safe)} {_term(predicate, manager, canonical, base, safe)} "
+            f"{_term(obj, manager, canonical, base, safe)} .\n"
             for subject, predicate, obj in triples
         )
         value = "".join(lines)
@@ -58,16 +59,16 @@ class Turtle12Serializer(Serializer):
         return stream
 
 
-def _term(term, manager, canonical=False, base=None):
+def _term(term, manager, canonical=False, base=None, safe=True):
     if isinstance(term, URIRef):
-        relative = _relativize(term, base)
+        relative = _relativize(term, base, safe)
         if relative != term:
             return relative.n3()
         return manager.normalizeUri(term)
     if isinstance(term, BNode):
         return term.n3()
     if isinstance(term, TripleTerm):
-        return "<<( " + " ".join(_term(item, manager, canonical, base) for item in term) + " )>>"
+        return "<<( " + " ".join(_term(item, manager, canonical, base, safe) for item in term) + " )>>"
     if isinstance(term, Literal):
         text = term.n3(manager)
         if term.language is not None and canonical:

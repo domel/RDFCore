@@ -32,6 +32,8 @@ class XMLSerializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, rdf_version='auto', **kwargs):
         from ...rdf_version import validate_rdf_version
         requested = validate_rdf_version(rdf_version)
+        from .turtle import _safe_iris
+        self.safe_iris = _safe_iris(kwargs, self.rdf_version == '1.2')
         if base is not None:
             self.base = base
         elif self.store.base is not None:
@@ -90,13 +92,15 @@ class XMLSerializer(Serializer):
     def _qname(self, iri):
         value = _xml(iri)
         excluded = CORE | OLD | {'Description', 'li'}
-        if self.rdf_version == '1.2': excluded |= {'version', 'annotation', 'annotationNodeID'}
+        if self._output_version != '1.1': excluded |= {'version', 'annotation', 'annotationNodeID'}
         if value.startswith(RDF) and value[len(RDF):] in excluded:
             raise ValueError('predicate cannot be represented in RDF/XML: '+value)
         # Choose the longest NCName suffix, as RDFLib's split_uri does.
         for index in range(1, len(value)):
             if is_ncname(value[index:]):
                 ns, local = value[:index], value[index:]
+                if self.safe_iris and ns in {XML, 'http://www.w3.org/2000/xmlns/'}:
+                    continue
                 if ns not in self.namespaces:
                     self.namespaces[ns] = 'ns'+str(len(self.namespaces))
                 return self.namespaces[ns]+':'+local

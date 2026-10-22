@@ -199,9 +199,9 @@ class RDFXMLParser(Parser):
             return Literal(value, datatype=URIRef(urljoin(context[0], datatype)))
         return Literal(value, lang=context[1], direction=context[2] if context[1] else None)
 
-    def _valid_name(self, name, kind):
+    def _valid_name(self, name, kind, version=None):
         excluded = CORE | OLD
-        if self.rdf_version == '1.2': excluded |= {'version', 'annotation', 'annotationNodeID'}
+        if self.rdf_version == '1.2' and version != '1.1': excluded |= {'version', 'annotation', 'annotationNodeID'}
         if kind != 'node': excluded |= {'Description'}
         if kind != 'property': excluded |= {'li'}
         if name.startswith(RDF) and name[len(RDF):] in excluded:
@@ -209,14 +209,14 @@ class RDFXMLParser(Parser):
 
     def _attributes(self, subject, attrs, context, emit):
         for key, value in attrs.items():
-            self._valid_name(key, 'attribute')
+            self._valid_name(key, 'attribute', context[3])
             obj = URIRef(urljoin(context[0], value)) if key == RDF+'type' else self._literal(value, context)
             emit((subject, URIRef(key), obj))
 
     def _node(self, element, parent, emit):
         context, attrs = self._context(element, parent)
         name = self._name(element)
-        self._valid_name(name, 'node')
+        self._valid_name(name, 'node', context[3])
         identity = [key for key in ('about', 'ID', 'nodeID') if RDF+key in attrs]
         if len(identity) > 1: _error('conflicting node identity attributes')
         subject = BNode()
@@ -240,8 +240,8 @@ class RDFXMLParser(Parser):
             self._property(child, subject, URIRef(name), context, emit)
 
     def _property(self, element, subject, predicate, parent, emit):
-        self._valid_name(str(predicate), 'property')
         context, attrs = self._context(element, parent)
+        self._valid_name(str(predicate), 'property', context[3])
         identifier = attrs.pop(RDF+'ID', None)
         reified = self._id(identifier, context) if identifier is not None else None
         annotation = attrs.pop(RDF+'annotation', None) if self.rdf_version == '1.2' else None

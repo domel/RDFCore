@@ -4,10 +4,12 @@ from ...dataset import DATASET_DEFAULT_GRAPH_ID
 from ...serializer import Serializer
 from ...term import URIRef
 from .turtle12 import _term
+from .turtle import _safe_iris
 
 
 class TriG12Serializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, canonical=False, rdf_version="auto", mode="pretty", **kwargs):
+        safe = _safe_iris(kwargs, True)
         if base is None:
             base = self.store.base
         if mode == "stream":
@@ -18,7 +20,7 @@ class TriG12Serializer(Serializer):
                 capture = True
             else:
                 capture = False
-            writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=rdf_version, base=base)
+            writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=rdf_version, base=base, safe_iris=safe)
             for quad in self.store.quads():
                 writer.add(quad)
             writer.close()
@@ -48,14 +50,14 @@ class TriG12Serializer(Serializer):
         for graph in sorted(groups, key=lambda item: str(item)):
             triples = sorted(groups[graph], key=lambda triple: tuple(str(item) for item in triple))
             body = "".join(
-                f"  {_term(subject, manager, canonical, base)} {_term(predicate, manager, canonical, base)} "
-                f"{_term(obj, manager, canonical, base)} .\n"
+                f"  {_term(subject, manager, canonical, base, safe)} {_term(predicate, manager, canonical, base, safe)} "
+                f"{_term(obj, manager, canonical, base, safe)} .\n"
                 for subject, predicate, obj in triples
             )
             if graph == DATASET_DEFAULT_GRAPH_ID or graph is None:
                 lines.append("{\n" + body + "}\n")
             else:
-                lines.append(f"{_term(graph, manager, canonical, base)} {{\n" + body + "}\n")
+                lines.append(f"{_term(graph, manager, canonical, base, safe)} {{\n" + body + "}\n")
         value = "".join(lines)
         if stream is None:
             return value.encode(encoding) if encoding else value

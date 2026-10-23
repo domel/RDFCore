@@ -201,15 +201,13 @@ def test_new_assignment_values_receive_all_recognized_memberships():
                   regime='rdf', datatypes={XSD.byte, XSD.integer}) is True
 
 
-def test_typed_names_inside_propositions_are_not_rewritten_to_illegal_terms():
+def test_typed_names_inside_propositions_keep_semantic_value_assignments():
     source = [(V, RDF.type, XSD.boolean)]
-    with pytest.raises(UnsupportedEntailment):
-        decide(source, [(S, P, TripleTerm(V, Q, O))], regime='rdf', datatypes={XSD.boolean})
+    assert decide(source, [(S, P, TripleTerm(V, Q, O))], regime='rdf', datatypes={XSD.boolean}) is False
 
 
-def test_fixed_vocabulary_aliasing_is_outside_the_candidate_model_fragment():
-    with pytest.raises(UnsupportedEntailment):
-        decide([(RDF.type, RDF.type, XSD.boolean)], False, regime='rdf', datatypes={XSD.boolean})
+def test_fixed_vocabulary_aliasing_has_a_checked_candidate_model():
+    assert decide([(RDF.type, RDF.type, XSD.boolean)], False, regime='rdf', datatypes={XSD.boolean}) is False
 
 
 @pytest.mark.parametrize('backend', ['memory', 'sqlite'])

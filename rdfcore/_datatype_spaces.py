@@ -291,3 +291,127 @@ def countermodel_witnesses(datatypes, recognized, occupied, *, step):
                 if include(Literal(text, datatype=datatype, normalize=False)):
                     return list(selected.values())
     return list(selected.values())
+
+
+def membership_regions(recognized, *, step):
+    """One witness for every nonempty exact membership region of our D-set.
+
+    This is a partition by datatype membership, NOT an enumeration of values.
+    Integer facets change only at their inclusive bounds; noninteger decimals
+    form the remaining numeric region. String facets form the normalization /
+    token / NMTOKEN / Name / NCName / language chain. DateTimeStamp separates
+    timezone-present dateTimes. Durations have four month/second profiles.
+    All other supported primitive families have constant membership; JSON
+    unions its own structural family with string, boolean and double, and
+    HTML/XMLLiteral share a DOM family. These facts exhaust SUPPORTED_DATATYPES.
+    No conclusion about arbitrary datatype extensions is made.
+    """
+    recognized = set(map(str, recognized))
+    for datatype in recognized:
+        families(datatype)  # Reject unimplemented spaces, not an empty region.
+    samples = [sample for datatype in recognized for sample in witnesses({datatype})[0]]
+    bounds = {0, 1, -1}
+    for datatype in recognized:
+        for bound in _INTEGER_BOUNDS.get(datatype, ()):
+            if bound is not None:
+                bounds.update((bound-1, bound, bound+1))
+    samples.extend(Literal(str(n), datatype=XSD+'integer', normalize=False) for n in sorted(bounds))
+    samples.append(Literal('0.5', datatype=XSD+'decimal', normalize=False))
+    samples.extend(Literal(s, datatype=XSD+'string', normalize=False)
+                   for s in ('a', '', ' a', 'a\tb', '1', 'a:b', 'a_b'))
+    samples.extend((Literal('2026-10-22T00:00:00', datatype=XSD+'dateTime', normalize=False),
+                    Literal('P1MT1S', datatype=XSD+'duration', normalize=False)))
+    regions = {}
+    for sample in samples:
+        step()
+        value = datatype_value(sample)
+        profile = frozenset(d for d in recognized if contains(value, d))
+        if profile and profile not in regions:
+            regions[profile] = _recognized_witness(sample, profile)
+    return tuple(regions.items())
+
+
+def infinite_region(profile, recognized):
+    """Cardinality of a nonempty exact membership region, not its samples."""
+    profile, recognized = set(map(str, profile)), set(map(str, recognized))
+    common = set.intersection(*(families(d) for d in profile))
+    if common == {'numeric'}:
+        integers = profile & _INTEGER_DATATYPES
+        if not integers:
+            return True  # Arbitrarily precise noninteger decimal values.
+        lower = [b[0] for d in integers if (b := _INTEGER_BOUNDS.get(d, (None, None)))[0] is not None]
+        upper = [b[1] for d in integers if (b := _INTEGER_BOUNDS.get(d, (None, None)))[1] is not None]
+        excluded = [_INTEGER_BOUNDS.get(d, (None, None))
+                    for d in (recognized-profile) & _INTEGER_DATATYPES]
+        return ((not upper and not any(hi is None for _, hi in excluded))
+                or (not lower and not any(lo is None for lo, _ in excluded)))
+    if common <= {'boolean', 'float', 'double', 'temporal-gMonth',
+                  'temporal-gDay', 'temporal-gMonthDay'}:
+        return False
+    if {XSD+'yearMonthDuration', XSD+'dayTimeDuration'} <= profile:
+        return False
+    return True
+
+
+def fresh_image_witness(types, recognized, occupied, *, step):
+    """Find an unused value in an infinite eligible membership region.
+
+    Fast facet witnesses precede a fair ASCII lexical enumeration. Every
+    infinite region of the supported spaces has infinitely many ASCII
+    lexical representatives (language literals use fixed en/ltr metadata).
+    Thus finite occupied values cannot exhaust this search. The caller's
+    work budget still applies; exhaustion never means an empty space.
+    """
+    types = set(map(str, types))
+    regions = membership_regions(recognized, step=step)
+    if not any(types <= profile and infinite_region(profile, recognized) for profile, _ in regions):
+        return None
+
+    def eligible(sample):
+        value = datatype_value(sample)
+        profile = frozenset(str(d) for d in recognized if contains(value, d))
+        return value not in occupied and types <= profile and infinite_region(profile, recognized)
+
+    candidates = [sample for _, sample in regions]
+    candidates += countermodel_witnesses(types, recognized, occupied, step=step)
+    for sample in candidates:
+        step()
+        if eligible(sample):
+            return sample
+    numeric_base = max([0] + [abs(bound) for d in recognized
+                             for bound in _INTEGER_BOUNDS.get(str(d), ()) if bound is not None]
+                       + [int(abs(v.key))+1 for v in occupied if v.family == 'numeric'])+1
+    index = 0
+    while True:
+        step()
+        # Bijective base-128 enumeration: no queue or retained search history.
+        code, text = index, ''
+        while code:
+            code, digit = divmod(code-1, 128)
+            text = chr(digit)+text
+        for datatype in sorted(types):
+            name = datatype.removeprefix(XSD)
+            year = str(2000+index)
+            temporal = {'dateTime': year+'-01-01T00:00:00Z',
+                        'dateTimeStamp': year+'-01-01T00:00:00Z',
+                        'date': year+'-01-01Z', 'gYear': year+'Z',
+                        'gYearMonth': year+'-01Z', 'time': f'00:00:00.{index+1}Z'}
+            encoded = index.to_bytes(max(1, (index.bit_length()+7)//8), 'big')
+            variants = [str(index), str(index)+'.1', str(numeric_base+index),
+                        str(-numeric_base-index), 'a'+'-a'*index, text,
+                        'urn:value:'+str(index), 'text'+str(index),
+                        f'P{index+1}MT{index+1}S', f'P{index+1}M', f'PT{index+1}S',
+                        json.dumps([index]), encoded.hex(), b64encode(encoded).decode()]
+            if name in temporal:
+                variants += [temporal[name], temporal[name].removesuffix('Z')]
+            for lexical in variants:
+                step()
+                sample = (Literal(lexical, lang='en', direction='ltr' if datatype == RDF+'dirLangString' else None)
+                          if datatype in {RDF+'langString', RDF+'dirLangString'}
+                          else Literal(lexical, datatype=datatype, normalize=False))
+                try:
+                    if eligible(sample):
+                        return sample
+                except InvalidLexicalForm:
+                    pass
+        index += 1

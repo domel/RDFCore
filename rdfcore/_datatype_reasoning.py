@@ -62,7 +62,7 @@ def evaluate(source, target, regime, recognized):
         if assignments and not (conclusion and isinstance(term, BNode)):
             term = assignments.get(sem._key(term), term)
         if isinstance(term, TripleTerm):
-            return TripleTerm(*(canonical(t, assignments, conclusion=conclusion) for t in term))
+            return sem._InterpretedTriple(*(canonical(t, assignments, conclusion=conclusion) for t in term))
         if isinstance(term, Literal) and sem._literal_datatype(term) in recognized:
             return interner.setdefault(sem._key(term), term)
         return term
@@ -150,6 +150,10 @@ def evaluate(source, target, regime, recognized):
                     and o in recognized and not spaces.subset(s, o)):
                 return True
         for node, types in constraints(graph).items():
+            if node in recognized:
+                # D fixes this name to a datatype object (LS, VS, L2V),
+                # not a primitive/JSON/DOM value of any supported datatype.
+                return True
             if isinstance(node, Literal) and sem._literal_datatype(node) in recognized:
                 if any(not spaces.contains(sem._value(node), datatype) for datatype in types):
                     return True
@@ -180,9 +184,6 @@ def evaluate(source, target, regime, recognized):
                                                        {sem._value(t) for t in literals}, step=sem._step)
         variable_domains.append((sem._key(node), samples))
         complete &= exhaustive
-    if variable_domains and any(isinstance(t, TripleTerm)
-                                for graph in (source, target or ()) for row in graph for t in row):
-        return None
     certified = _fragment(source, recognized, regime)
     target_fragment = target is None or target_bad or _fragment(target, recognized, regime)
     proof_in_every_branch = True

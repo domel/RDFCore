@@ -196,7 +196,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `external_sort()` | External-memory sorting |
 | `statement_key()` | Stable sorting key |
 | `benchmark_parse()` | Benchmark with peak RSS |
-| `semantics.entails()` | Legacy proof mode retained; explicit decision mode adds datatype constraints, ill-typed explosion, inconsistency queries, guarded schema/reification countermodels, nested predicate typing and selected proposition/constructor witnesses; unknown decisions raise; resource limits stay distinct; general RDF/RDFS reasoning remains incomplete |
+| `semantics.entails()` | Legacy proof mode retained; decision mode adds datatype constraints and membership regions, guarded countermodels, vocabulary value aliases, IT congruence/injectivity and infinite-image cardinality checks; syntax constructors unchanged; unknown decisions and resource limits stay distinct; general RDF/RDFS reasoning remains incomplete |
 | `semantics.entailment_closure()` | Optional finite RDF/RDFS axioms and rules; no automatic Graph inference; optional work budget (not a time/memory bound) |
 | `BoundedReadStream` | Bounded reads |
 | `BoundedWriteStream` | Bounded writes with partial-write retries and progress validation, including compressed output |

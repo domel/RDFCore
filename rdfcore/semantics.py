@@ -77,6 +77,13 @@ does not make individual propositions disjoint from literal values. General
 fixed-vocabulary aliases, overlapping spaces and constructor/schema queries
 can still be unsupported. Constructor witness search allows 4096 assignments.
 
+Decision branches also interpret vocabulary names through their assigned
+values, partition overlapping supported datatype spaces, and apply IT
+congruence/injectivity. Equal results can force equal component resources;
+no unique-name or acyclicity assumption is imposed. Private interpreted
+applications permit value-valued components while public syntax stays strict.
+Each public call has its own recognition and application context.
+
 NOT implemented: general RDF/RDFS decision procedures, exhaustive
 proposition generation, dataset entailment, or complete RDF 1.2
 Semantics conformance. In proof mode, ``datatypes`` remains reserved and any
@@ -113,6 +120,20 @@ Triple = tuple[Term, Term, Term]
 _XSD_STRING = URIRef("http://www.w3.org/2001/XMLSchema#string")
 
 
+class _InterpretedTriple(TripleTerm):
+    """An IT application to semantic resources, not an RDF syntax object.
+
+    An IRI in a legal TripleTerm can denote a literal value or proposition.
+    Interpretation must allow those resources as components without relaxing
+    the public constructor's grammar. These objects never leave decide mode.
+    """
+    __slots__ = ()
+
+    def __init__(self, subject, predicate, object):
+        self.subject, self.predicate, self.object = subject, predicate, object
+        self._hash = hash((subject, predicate, object))
+
+
 class UnsupportedEntailment(NotImplementedError):
     """The requested entailment cannot be decided by this partial facility."""
 
@@ -123,6 +144,39 @@ class EntailmentResourceLimit(UnsupportedEntailment):
 
 _budget: ContextVar[list[int] | None] = ContextVar('entailment_budget', default=None)
 _recognized: ContextVar[frozenset[URIRef] | None] = ContextVar('entailment_datatypes', default=None)
+_applications: ContextVar[tuple[dict, dict] | None] = ContextVar('entailment_applications', default=None)
+
+
+@contextmanager
+def _interpreted_applications(applications):
+    forward, inverse = {}, {}
+    for value, components in applications:
+        forward[tuple(_key(c) for c in components)] = value
+        inverse[_key(value)] = components
+    token = _applications.set((forward, inverse))
+    try:
+        yield
+    finally:
+        _applications.reset(token)
+
+
+def _application_value(term):
+    applications = _applications.get()
+    if applications is not None:
+        return applications[0].get(tuple(_key(c) for c in term), term)
+    return term
+
+
+@contextmanager
+def _public_interpretation():
+    """Nested public calls start with their own recognition and IT mapping."""
+    datatype_token = _recognized.set(None)
+    application_token = _applications.set(None)
+    try:
+        yield
+    finally:
+        _applications.reset(application_token)
+        _recognized.reset(datatype_token)
 
 
 def _step() -> None:
@@ -179,6 +233,9 @@ def _snapshot(graph: Iterable[Triple]) -> set[Triple]:
 def _key(term: Term) -> tuple:
     _step()
     if isinstance(term, TripleTerm):
+        value = _application_value(term)
+        if value is not term:
+            return _key(value)
         return (TripleTerm, *(_key(component) for component in term))
     if isinstance(term, Literal):
         recognized = _recognized.get()
@@ -302,6 +359,9 @@ def _decide(source, target, regime, recognized) -> bool:
             if result is None:
                 from ._schema_reasoning import evaluate as evaluate_schema
                 result = evaluate_schema(source, target, regime, recognized)
+            if result is None:
+                from ._alias_reasoning import evaluate as evaluate_aliases
+                result = evaluate_aliases(source, target, regime, recognized)
         except DatatypeResourceLimit as exc:
             raise EntailmentResourceLimit(str(exc)) from exc
         except UnsupportedDatatype as exc:
@@ -344,9 +404,10 @@ def _match(pattern: Term, value: Term, bindings: dict) -> bool:
         bindings[pattern] = key
         return True
     if isinstance(pattern, TripleTerm):
-        return isinstance(value, TripleTerm) and all(
-            _match(p, v, bindings) for p, v in zip(pattern, value)
-        )
+        applications = _applications.get()
+        inverse = None if applications is None else applications[1].get(_key(value))
+        components = inverse if inverse is not None else value if isinstance(value, TripleTerm) else None
+        return components is not None and all(_match(p, v, bindings) for p, v in zip(pattern, components))
     return _key(pattern) == _key(value)
 
 
@@ -428,12 +489,31 @@ def _axioms(regime: str, vocabulary: set[Term]) -> set[Triple]:
     return result
 
 
-def _closure(source: set[Triple], regime: str, vocabulary=()) -> set[Triple]:
-    result = source.copy()
+class _Vocabulary:
+    """Interpret vocabulary names through a branch's equality quotient."""
+
+    def __init__(self, namespace, canonical):
+        self.namespace, self.canonical = namespace, canonical
+
+    def __getattr__(self, name):
+        return self.canonical(getattr(self.namespace, name))
+
+    def __getitem__(self, name):
+        return self.canonical(self.namespace[name])
+
+    def __str__(self):
+        return str(self.namespace)
+
+
+def _closure(source: set[Triple], regime: str, vocabulary=(), *, canonical=None) -> set[Triple]:
+    rdf = RDF if canonical is None else _Vocabulary(RDF, canonical)
+    rdfs = RDFS if canonical is None else _Vocabulary(RDFS, canonical)
+    result = source.copy() if canonical is None else {tuple(map(canonical, row)) for row in source}
     if regime == "simple":
         return result
     terms = {term for triple in (*source, *vocabulary) for root in triple for term in _terms(root)}
-    result.update(_axioms(regime, terms))
+    axioms = _axioms(regime, terms)
+    result.update(axioms if canonical is None else {tuple(map(canonical, row)) for row in axioms})
     while True:
         additions = set()
         by_predicate = defaultdict(list)
@@ -446,48 +526,48 @@ def _closure(source: set[Triple], regime: str, vocabulary=()) -> set[Triple]:
             by_predicate_object[(b, c)].append(a)
         for s, p, o in result:
             _step()
-            additions.add((p, RDF.type, RDF.Property))
+            additions.add((p, rdf.type, rdf.Property))
             if regime != "rdfs":
                 continue
             for root in (s, p, o):
                 for term in _terms(root):
-                    additions.add((term, RDF.type, RDFS.Resource))
+                    additions.add((term, rdf.type, rdfs.Resource))
                     if isinstance(term, TripleTerm):
-                        additions.add((term, RDF.type, RDFS.Proposition))
-            if p == RDF.type:
-                additions.add((o, RDF.type, RDFS.Class))
-                if o == RDF.Property:
-                    additions.add((s, RDFS.subPropertyOf, s))
-                if o == RDFS.Class:
-                    additions.update(((s, RDFS.subClassOf, s),
-                                      (s, RDFS.subClassOf, RDFS.Resource)))
-                if o == RDFS.ContainerMembershipProperty:
-                    additions.add((s, RDFS.subPropertyOf, RDFS.member))
-                if o == RDFS.Datatype:
-                    additions.add((s, RDFS.subClassOf, RDFS.Literal))
-            if p == RDFS.subClassOf:
-                additions.update(((s, RDF.type, RDFS.Class), (o, RDF.type, RDFS.Class)))
-            if p == RDFS.subPropertyOf:
-                additions.update(((s, RDF.type, RDF.Property), (o, RDF.type, RDF.Property)))
-            if p in (RDFS.domain, RDFS.range):
-                additions.update(((s, RDF.type, RDF.Property), (o, RDF.type, RDFS.Class)))
-            if p in (RDFS.domain, RDFS.range, RDFS.subPropertyOf):
+                        additions.add((term, rdf.type, rdfs.Proposition))
+            if p == rdf.type:
+                additions.add((o, rdf.type, rdfs.Class))
+                if o == rdf.Property:
+                    additions.add((s, rdfs.subPropertyOf, s))
+                if o == rdfs.Class:
+                    additions.update(((s, rdfs.subClassOf, s),
+                                      (s, rdfs.subClassOf, rdfs.Resource)))
+                if o == rdfs.ContainerMembershipProperty:
+                    additions.add((s, rdfs.subPropertyOf, rdfs.member))
+                if o == rdfs.Datatype:
+                    additions.add((s, rdfs.subClassOf, rdfs.Literal))
+            if p == rdfs.subClassOf:
+                additions.update(((s, rdf.type, rdfs.Class), (o, rdf.type, rdfs.Class)))
+            if p == rdfs.subPropertyOf:
+                additions.update(((s, rdf.type, rdf.Property), (o, rdf.type, rdf.Property)))
+            if p in (rdfs.domain, rdfs.range):
+                additions.update(((s, rdf.type, rdf.Property), (o, rdf.type, rdfs.Class)))
+            if p in (rdfs.domain, rdfs.range, rdfs.subPropertyOf):
                 for a, b, c in by_predicate.get(s, ()):
                     _step()
-                    if p == RDFS.domain:
-                        additions.add((a, RDF.type, o))
-                    elif p == RDFS.range:
-                        additions.add((c, RDF.type, o))
-                    else:
+                    if p == rdfs.domain:
+                        additions.add((a, rdf.type, o))
+                    if p == rdfs.range:
+                        additions.add((c, rdf.type, o))
+                    if p == rdfs.subPropertyOf:
                         additions.add((a, o, c))
-            if p in (RDFS.subPropertyOf, RDFS.subClassOf):
+            if p in (rdfs.subPropertyOf, rdfs.subClassOf):
                 for c in by_subject_predicate.get((o, p), ()):
                     _step()
                     additions.add((s, p, c))
-            if p == RDFS.subClassOf:
-                for a in by_predicate_object.get((RDF.type, s), ()):
+            if p == rdfs.subClassOf:
+                for a in by_predicate_object.get((rdf.type, s), ()):
                     _step()
-                    additions.add((a, RDF.type, o))
+                    additions.add((a, rdf.type, o))
         additions.difference_update(result)
         if not additions:
             return result
@@ -509,7 +589,7 @@ def entailment_closure(
     time/memory limit. Exhaustion raises EntailmentResourceLimit.
     """
     _options(regime, datatypes)
-    with _limited(max_steps):
+    with _limited(max_steps), _public_interpretation():
         return frozenset(_closure(_snapshot(graph), regime))
 
 
@@ -546,7 +626,7 @@ def entails(
     if mode not in ('proof', 'decide'):
         raise ValueError("mode must be 'proof' or 'decide'")
     _options(regime, datatypes if mode == 'proof' else None)
-    with _limited(max_steps):
+    with _limited(max_steps), _public_interpretation():
         if mode == 'decide':
             recognized = _recognition(regime, datatypes)
             source = _snapshot(premise)

@@ -6,7 +6,7 @@ The explicit decision mode is not a complete RDF/RDFS reasoner.
 
 import pytest
 
-from rdfcore import BNode, ConjunctiveGraph, Dataset, Literal, RDF, TripleTerm, URIRef, XSD
+from rdfcore import BNode, ConjunctiveGraph, Dataset, Literal, RDF, RDFS, TripleTerm, URIRef, XSD
 from rdfcore.datatypes import DatatypeResourceLimit, UnsupportedDatatype
 from rdfcore import semantics
 
@@ -75,8 +75,8 @@ def test_invalid_conclusion_is_false_only_if_premise_consistency_is_known():
     target = [(S, P, typed('invalid'))]
     assert semantics.entails([], target, datatypes={XSD.integer}, mode='decide') is False
     with pytest.raises(semantics.UnsupportedEntailment):
-        semantics.entails([(RDF.type, RDF.type, XSD.integer)], target,
-                         regime='rdf', datatypes={XSD.integer}, mode='decide')
+        semantics.entails([(RDFS.Class, RDFS.subClassOf, RDF.Property)], target,
+                         regime='rdfs', datatypes={XSD.integer}, mode='decide')
 
 
 @pytest.mark.parametrize('regime', ['rdf', 'rdfs'])

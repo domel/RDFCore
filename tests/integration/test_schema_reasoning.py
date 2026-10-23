@@ -133,9 +133,7 @@ def test_an_infinite_proposition_image_cannot_be_a_finite_datatype_class(datatyp
                   datatypes={datatype}) is True
 
 
-def test_genuinely_unresolved_fixed_datatype_and_constructor_queries_stay_unknown():
-    with pytest.raises(UnsupportedEntailment):
-        decide([(RDF.type, RDF.type, XSD.boolean)], False, datatypes={XSD.boolean})
+def test_genuinely_unresolved_constructor_queries_stay_unknown():
     with pytest.raises(UnsupportedEntailment):
         decide([(RDFS.Resource, RDFS.subClassOf, RDFS.Class)],
                [(BNode('c'), RDFS.subClassOf, TripleTerm(BNode('s'), P, O))])

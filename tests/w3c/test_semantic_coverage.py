@@ -17,8 +17,8 @@ def test_all_green_fixtures_do_not_prove_full_profile():
     report = coverage_report(suites)
     assert report['official_semantics_passed'] is True
     assert report['full_profile_verified'] is False
-    assert all(p['status'] in {'unsupported', 'resource-limit'}
-               for p in report['additional_probes'])
+    assert [p['status'] for p in report['additional_probes'][:3]] == ['passed'] * 3
+    assert report['additional_probes'][3]['status'] in {'unsupported', 'resource-limit'}
     assert len(report['schema_sections']) == len(SCHEMA_SECTIONS) == 41
     assert all(r['status'] == 'partial' and r['evidence'] and r['limitation']
                for r in report['schema_sections'])

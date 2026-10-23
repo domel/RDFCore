@@ -13,13 +13,15 @@ Class/property overlap is allowed. Additional proposition members get fresh
 preimages with predicates outside the finite query vocabulary, not invented
 assertions or a functional rdf:reifies relation.
 
-The guard rejects new fixed-vocabulary schema links (except ordinary domains
-and ranges of rdf:type), forced named/constructor datatype values and
-overlapping recognized datatype spaces. Finite datatype assignments belong to T38. Constructor
-queries are negative-certified only on finite property extensions, never on
-the infinite typing/subclass/subproperty relations. Unsupported diagrams
-remain unknown even if a Horn proof is absent. These restrictions are part
-of the certificate, NOT a claim of complete RDF/RDFS decision support.
+Overlapping supported spaces are partitioned by exact datatype membership.
+Value assignments and constructor equations are checked by the companion
+datatype/alias evaluators. An infinite eligible value region can supply the
+constructor image; that model choice is never used as a universal proof.
+The guard still rejects unhandled vocabulary links. Constructor queries are
+negative-certified only on finite property extensions, not on arbitrary
+infinite typing/subclass/subproperty relations. Unsupported diagrams remain
+unknown even if a Horn proof is absent. This is not a claim of complete
+RDF/RDFS decision support.
 """
 from . import _datatype_spaces as spaces
 from .namespace import RDF, RDFS, XSD
@@ -32,11 +34,7 @@ _INFINITE = (RDF.type, RDFS.subClassOf, RDFS.subPropertyOf)
 
 
 def _separate_spaces(recognized):
-    """The representative model supports disjoint value families only.
-
-    Overlapping numeric facets, strings and JSON still use T38's guarded
-    assignments. Merely finding a witness for an intersection is insufficient.
-    """
+    """Disjoint spaces need no additional membership-region partition."""
     types = list(recognized)
     return all(not spaces.families(a) & spaces.families(b)
                for i, a in enumerate(types) for b in types[i+1:])
@@ -59,19 +57,37 @@ def _ordinary(term):
         (str(RDF), str(RDFS), str(XSD)))
 
 
-def _schema_guard(model, standard, step):
+def _schema_guard(model, standard, step, canonical=None, recognized=frozenset()):
+    from .semantics import _Vocabulary
+    rdf = RDF if canonical is None else _Vocabulary(RDF, canonical)
+    rdfs = RDFS if canonical is None else _Vocabulary(RDFS, canonical)
+    schema = _SCHEMA if canonical is None else set(map(canonical, _SCHEMA))
     for s, p, o in model:
         step()
-        if p not in _SCHEMA or _ordinary(s) or (s, p, o) in standard:
+        if p not in schema or _ordinary(s) or (s, p, o) in standard:
             continue
-        if p == RDFS.subClassOf and o in (s, RDFS.Resource, RDFS.Literal):
+        if p == rdfs.subClassOf and o in (s, rdfs.Resource, rdfs.Literal):
             # Reflexivity, the universal superclass, and datatype->Literal.
-            if o != RDFS.Literal or (s, RDF.type, RDFS.Datatype) in model:
+            if o != rdfs.Literal or (s, rdf.type, rdfs.Datatype) in model:
                 continue
-        if p == RDFS.subPropertyOf and (s == o or o == RDFS.member
-                and (s, RDF.type, RDFS.ContainerMembershipProperty) in model):
+        if p == rdfs.subClassOf and o in {
+                rdfs.Class, rdf.Property, rdfs.Literal, rdfs.Proposition} and (
+                s == rdfs.Resource or (rdfs.Resource, rdfs.subClassOf, o) in model):
+            # Lift Resource's cluster together with its added unary role.
             continue
-        if s == RDF.type and p in (RDFS.domain, RDFS.range) and _ordinary(o):
+        if p == rdfs.subClassOf and s == rdfs.Proposition and o in recognized:
+            # The model phase separately supplies an infinite value region
+            # for the constructor image; a finite sample cannot certify this.
+            continue
+        if p == rdfs.subClassOf and s == rdfs.Proposition and o == rdfs.Literal and any(
+                (s, rdfs.subClassOf, d) in model for d in recognized):
+            continue
+        if p == rdfs.subPropertyOf and (s == o or o == rdfs.member
+                and (s, rdf.type, rdfs.ContainerMembershipProperty) in model):
+            continue
+        if s == rdf.type and p in (rdfs.domain, rdfs.range) and _ordinary(o):
+            continue
+        if s == rdf.type and p == rdfs.subPropertyOf and _ordinary(o):
             continue
         return False
     return True
@@ -82,9 +98,8 @@ def _constructor_proof(proof, query, regime, recognized, fresh, sem):
 
     Only already proven properties can be constructor predicates. Correlated
     variables use one mapping from the nonconstructor part of the query.
-    No constructed triple is asserted. Public TripleTerm cannot represent
-    literal/proposition subjects after substitution; those cases are skipped,
-    not treated as negative entailments.
+    No constructed triple is asserted. Interpreted applications admit literal
+    and proposition resources without changing public TripleTerm grammar.
     """
     patterns = [row for row in query if not any(isinstance(t, TripleTerm) for t in row)]
     choices = [(row, [candidate for candidate in proof if all(sem._match(p, v, {})
@@ -125,9 +140,7 @@ def _constructor_proof(proof, query, regime, recognized, fresh, sem):
             if term.predicate not in properties:
                 raise ValueError('constructor predicate is not known to be a property')
             s, p, o = (instantiate(t) for t in term)
-            if not isinstance(s, (URIRef, BNode)):
-                raise ValueError('generalized constructor subject requires a separate representation')
-            value = TripleTerm(s, p, o)
+            value = sem._InterpretedTriple(s, p, o)
             additions.add((value, RDF.type, RDFS.Proposition))
             return value
 
@@ -143,16 +156,21 @@ def _constructor_proof(proof, query, regime, recognized, fresh, sem):
     return False
 
 
-def evaluate(source, target, regime, recognized):
+def evaluate(source, target, regime, recognized, *, aliases=None, applications=()):
     from . import semantics as sem
 
     target_bad = target is not None and sem._ill_typed(target, recognized)
     valid_target = () if target_bad or target is None else target
     interner = {}
+    vocabulary = source | set(valid_target)
+    if aliases:
+        vocabulary |= {(name, RDF.type, RDF.Property) for name in aliases}
 
     def canonical(term):
+        if aliases and isinstance(term, URIRef):
+            term = aliases.get(term, term)
         if isinstance(term, TripleTerm):
-            return TripleTerm(*(canonical(t) for t in term))
+            term = sem._application_value(sem._InterpretedTriple(*(canonical(t) for t in term)))
         if isinstance(term, Literal) and sem._literal_datatype(term) in recognized:
             return interner.setdefault(sem._key(term), term)
         return term
@@ -160,8 +178,15 @@ def evaluate(source, target, regime, recognized):
     def mapped(graph):
         return {tuple(canonical(t) for t in row) for row in graph}
 
+    rdf = RDF if not aliases else sem._Vocabulary(RDF, canonical)
+    rdfs = RDFS if not aliases else sem._Vocabulary(RDFS, canonical)
+
+    def close(graph):
+        return sem._closure(graph, regime, vocabulary, canonical=canonical if aliases else None)
+
     source, query = mapped(source), mapped(valid_target)
     terms = {t for graph in (source, query) for row in graph for root in row for t in sem._terms(root)}
+    terms.update(canonical(t) for value, components in applications for t in (value, *components))
     occupied = set(terms)
 
     def fresh():
@@ -172,24 +197,30 @@ def evaluate(source, target, regime, recognized):
                 occupied.add(node)
                 return node
 
-    axioms = {(fresh(), RDF.type, RDF.Property)}
+    property_witness = fresh()
+    proposition_witness = fresh() if regime == 'rdfs' else None
+    axioms = {(property_witness, rdf.type, rdf.Property)}
     if regime == 'rdfs':
-        axioms.update(((fresh(), RDF.type, RDFS.Class),
-                       (fresh(), RDF.type, RDFS.Resource),
-                       (fresh(), RDF.type, RDFS.Proposition)))
+        axioms.update(((fresh(), rdf.type, rdfs.Class),
+                       (fresh(), rdf.type, rdfs.Resource),
+                       (proposition_witness, rdf.type, rdfs.Proposition)))
         # One unmentioned member represents the remaining infinite family.
         number = 1
-        while RDF['_'+str(number)] in occupied:
+        while rdf['_'+str(number)] in occupied:
             sem._step()
             number += 1
-        axioms.add((RDF['_'+str(number)], RDF.type, RDFS.ContainerMembershipProperty))
-        axioms.update((datatype, RDF.type, RDFS.Datatype) for datatype in recognized)
+        axioms.add((rdf['_'+str(number)], rdf.type, rdfs.ContainerMembershipProperty))
+        axioms.update((datatype, rdf.type, rdfs.Datatype) for datatype in recognized)
         # IRIs always denote resources; target-only opaque literals need not
         # denote in every interpretation and are added only to the model.
-        axioms.update((term, RDF.type, RDFS.Resource) for term in terms if isinstance(term, URIRef))
+        axioms.update((term, rdf.type, rdfs.Resource) for term in terms if isinstance(term, URIRef))
 
     values = {term for term in terms if isinstance(term, Literal)
               and sem._literal_datatype(term) in recognized}
+    regions = ()
+    if not _separate_spaces(recognized):
+        regions = spaces.membership_regions(recognized, step=sem._step)
+        values.update(canonical(sample) for _, sample in regions)
     for datatype in recognized:
         sem._step()
         samples, _ = spaces.witnesses({datatype})
@@ -198,23 +229,27 @@ def evaluate(source, target, regime, recognized):
         for datatype in recognized:
             sem._step()
             if spaces.contains(sem._value(value), datatype):
-                axioms.add((value, RDF.type, datatype))
+                axioms.add((value, rdf.type, datatype))
     seed = source | axioms
+    for value, components in applications:
+        seed.add((canonical(components[1]), rdf.type, rdf.Property))
+        if regime == 'rdfs':
+            seed.add((canonical(value), rdf.type, rdfs.Proposition))
     for row in source:
         for root in row:
             for term in sem._terms(root):
                 if isinstance(term, TripleTerm):
-                    seed.add((term.predicate, RDF.type, RDF.Property))
+                    seed.add((term.predicate, rdf.type, rdf.Property))
                     if regime == 'rdfs':
-                        seed.add((term, RDF.type, RDFS.Proposition))
-    proof = sem._closure(seed, regime, query)
+                        seed.add((term, rdf.type, rdfs.Proposition))
+    proof = close(seed)
 
     if regime == 'rdfs':
         # IR includes three mandatory infinite spaces and IP is nonempty.
         # Injective IT therefore has an infinite image, even if the graph is
         # finite. This is a cardinality argument, not finite sample coverage.
-        for cls in _MANDATORY | {RDFS.Resource, RDFS.Proposition}:
-            types = {d for d in recognized if (cls, RDFS.subClassOf, d) in proof}
+        for cls in _MANDATORY | {rdfs.Resource, rdfs.Proposition}:
+            types = {d for d in recognized if (cls, rdfs.subClassOf, d) in proof}
             if types and _finite_intersection(types):
                 return True
 
@@ -223,44 +258,78 @@ def evaluate(source, target, regime, recognized):
     # a literal value. Likewise, propositions are not disjoint from values.
     for node, p, datatype in proof:
         sem._step()
-        if (p == RDF.type and datatype in recognized and isinstance(node, Literal)
+        if p == rdf.type and datatype in recognized and node in recognized:
+            return True
+        if (p == rdf.type and datatype in recognized and isinstance(node, Literal)
                 and sem._literal_datatype(node) in recognized
                 and not spaces.contains(sem._value(node), datatype)):
             return True
     if target is not None and not target_bad and sem._homomorphism(proof, query):
         return True
-    if regime == 'rdfs' and any(isinstance(o, TripleTerm) and p in _SCHEMA | {RDF.type}
+    if regime == 'rdfs' and any(isinstance(o, TripleTerm) and p in _SCHEMA | {rdf.type}
                                for _, p, o in query):
         if _constructor_proof(proof, query, regime, recognized, fresh, sem):
             return True
 
-    if not _separate_spaces(recognized):
+    # Only a candidate interpretation is allowed to choose particular literal
+    # values for propositions. Such a choice must never prove that literal
+    # is necessarily a proposition. The image needs an INFINITE eligible
+    # region, even if one finite space happens to contain the sample value.
+    model_seed = proof
+    image_types = {d for d in recognized if (proposition_witness, rdf.type, d) in proof}
+    if image_types:
+        if _finite_intersection(image_types):
+            return True
+        regions = regions or spaces.membership_regions(recognized, step=sem._step)
+        distinguished = {sem._value(t) for t in terms if isinstance(t, Literal)
+                         and sem._literal_datatype(t) in recognized}
+        sample = spaces.fresh_image_witness(image_types, recognized, distinguished, step=sem._step)
+        if sample is None:
+            return None
+        selected = canonical(sample)
+        model_seed = {tuple(selected if t == proposition_witness else t for t in row) for row in proof}
+        model_seed |= {(selected, rdf.type, d) for d in recognized
+                       if spaces.contains(sem._value(selected), d)}
+        model_seed = close(model_seed)
+
+    standard = close(axioms)
+    if not _schema_guard(model_seed, standard, sem._step, canonical if aliases else None, recognized):
         return None
-    standard = sem._closure(axioms, regime, query)
-    if not _schema_guard(proof, standard, sem._step):
-        return None
-    for node, p, datatype in proof:
+    for profile, _ in regions:
+        # A fresh symbol is universally instantiable with any member of this
+        # nonempty region. Check the entire profile, not just a sample value.
+        marker = fresh()
+        virtual = close(proof | {(marker, rdf.type, URIRef(d)) for d in profile})
+        if any(s == marker and p == rdf.type and o in recognized and str(o) not in profile
+               for s, p, o in virtual):
+            return True
+        if not _schema_guard(virtual, standard, sem._step, canonical if aliases else None, recognized):
+            return None
+    for node, p, datatype in model_seed:
         sem._step()
-        if p == RDF.type and datatype in recognized:
+        if p == rdf.type and datatype in recognized:
             if not isinstance(node, Literal) or sem._literal_datatype(node) not in recognized:
                 return None
+            if not spaces.contains(sem._value(node), datatype):
+                return None  # A failed candidate choice is not an inconsistency proof.
 
-    model = proof
+    model = model_seed
     if regime == 'rdfs':
-        model = sem._closure(proof | {(t, RDF.type, RDFS.Resource) for t in terms
-                                     if isinstance(t, Literal)}, regime, query)
-        if not _schema_guard(model, standard, sem._step):
+        model = close(model_seed | {(t, rdf.type, rdfs.Resource) for t in terms
+                               if isinstance(t, Literal)})
+        if not _schema_guard(model, standard, sem._step, canonical if aliases else None, recognized):
             return None
         # Opaque target literals can be assigned fresh nonliteral resources,
         # but not assumed to have arbitrary fixed datatype values.
-        if any(p == RDF.type and o in recognized and (not isinstance(s, Literal)
-               or sem._literal_datatype(s) not in recognized) for s, p, o in model):
+        if any(p == rdf.type and o in recognized and (not isinstance(s, Literal)
+               or sem._literal_datatype(s) not in recognized
+               or not spaces.contains(sem._value(s), o)) for s, p, o in model):
             return None
     if target is None or target_bad:
         return False
     for _, p, obj in query:
         sem._step()
-        if isinstance(obj, TripleTerm) and (p in _SCHEMA or p == RDF.type
-                or any((q, RDFS.subPropertyOf, p) in model for q in _INFINITE)):
+        if isinstance(obj, TripleTerm) and (p in _SCHEMA or p == rdf.type
+                or any((q, rdfs.subPropertyOf, p) in model for q in _INFINITE)):
             return None
     return None if sem._homomorphism(model, query) else False

@@ -344,9 +344,14 @@ domain/range, containers, class/property overlap, lists and reification without
 asserting embedded triples. Nested triple-term predicates are properties;
 proposition existence and selected constructor witnesses are supported.
 Propositions may overlap literal values, but their infinite extension cannot
-fit inside a finite recognized datatype. Arbitrary fixed-vocabulary aliasing,
-overlapping datatype constraints and constructor/schema interactions can still
-be undecided. The earlier ordinary-ground certificate remains available. Simple-D
+fit inside a finite recognized datatype. Supported overlapping datatype spaces
+use exact membership regions. Decision branches can assign values to vocabulary
+names while retaining their semantic roles, including names inside triple terms.
+IT congruence and injectivity can force component names to denote the same
+resource; self-referential denotations are allowed. Public `TripleTerm` syntax
+validation remains unchanged. Arbitrary vocabulary constraints and existential
+constructor/schema queries can still be undecided. The earlier ordinary-ground
+certificate remains available. Simple-D
 negatives also support transparent nested triple terms, provided recognized
 datatype IRIs do not themselves occur in subject/predicate/object positions
 or as triple-term components. Other undecided cases

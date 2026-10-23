@@ -3,7 +3,7 @@
 This is a coverage inventory, not a completeness theorem. A section marked
 partial cannot pass release acceptance merely because its fixtures pass.
 """
-from rdfcore import RDF, RDFS, URIRef, XSD
+from rdfcore import BNode, RDF, RDFS, TripleTerm, URIRef, XSD
 from rdfcore.semantics import EntailmentResourceLimit, UnsupportedEntailment, entails
 
 SCHEMA = 'https://www.w3.org/TR/2026/WD-rdf12-schema-20261022/'
@@ -41,9 +41,9 @@ def _schema_reference(section, name):
     return SCHEMA + '#' + ('x' if section[0].isdigit() else '') + number + '-' + slug
 
 
-def _probe(name, premise, datatypes):
+def _probe(name, premise, datatypes, target=False):
     try:
-        actual = entails(premise, False, regime='rdfs', mode='decide',
+        actual = entails(premise, target, regime='rdfs', mode='decide',
                          datatypes=datatypes, max_steps=100000)
     except EntailmentResourceLimit as exc:
         return dict(id=name, status='resource-limit', expected=False, reason=str(exc))
@@ -70,24 +70,35 @@ def coverage_report(suites):
                [(RDF.type, RDF.type, XSD.boolean)], {XSD.boolean}),
         _probe('proposition-overlapping-string-spaces',
                [(s, RDF.type, RDFS.Proposition), (s, RDF.type, XSD.token)], {XSD.token}),
+        _probe('infinite-proposition-image',
+               [(RDFS.Proposition, RDFS.subClassOf, XSD.string)], set()),
+        _probe('constructor-schema-cycle-query',
+               [(RDFS.Resource, RDFS.subClassOf, RDFS.Class)], set(),
+               [(BNode('x'), RDFS.subClassOf,
+                 TripleTerm(BNode('x'), RDF.type, BNode('x')))]),
+    ]
+    requirements = [dict(section=n, requirement=name, status='partial',
+                         reference=_schema_reference(n, name),
+                         implementation='rdfcore/semantics.py; rdfcore/_schema_reasoning.py',
+                         evidence='tests/integration/test_semantic_models.py; tests/integration/test_semantics.py; tests/integration/test_schema_reasoning.py; tests/integration/test_datatype_entailment.py; tests/compatibility/test_schema_registry.py; tests/w3c/test_semantics_contract.py',
+                         limitation='Vocabulary/rule evidence does not establish all arbitrary schema interactions.')
+                    for n, name in SCHEMA_SECTIONS.items()]
+    blockers = [
+        'No completeness argument for arbitrary schema/constructor queries.',
+        'Some vocabulary constraints still lack an interpretation certificate.',
+        'Clause-level Semantics/Schema audit remains incomplete.',
     ]
     return {
         'reviewed': '2026-10-23', 'schema_reference': SCHEMA,
         'semantics_reference': SEMANTICS,
         'probe_options': {'regime': 'rdfs', 'mode': 'decide', 'max_steps': 100000},
-        'schema_sections': [dict(section=n, requirement=name, status='partial',
-                                reference=_schema_reference(n, name),
-                                implementation='rdfcore/semantics.py; rdfcore/_schema_reasoning.py',
-                                evidence='tests/integration/test_semantics.py; tests/integration/test_schema_reasoning.py; tests/integration/test_datatype_entailment.py; tests/compatibility/test_schema_registry.py; tests/w3c/test_semantics_contract.py',
-                                limitation='Vocabulary/rule evidence does not establish all arbitrary schema interactions.')
-                            for n, name in SCHEMA_SECTIONS.items()],
+        'schema_sections': requirements,
         'official_semantics_passed': suite_passed,
         'additional_probes': probes,
-        'full_profile_verified': False,
-        'blockers': [
-            'General fixed-vocabulary datatype aliasing is not decided.',
-            'Overlapping datatype spaces with arbitrary proposition constraints remain guarded.',
-            'No completeness argument for all constructor/schema interactions.',
-        ],
+        'full_profile_verified': bool(suite_passed and not blockers
+                                      and all(p['status'] == 'passed' for p in probes)
+                                      and all(r['status'] in {'implemented', 'not-applicable-with-reason'}
+                                              for r in requirements)),
+        'blockers': blockers,
         'scope': 'Manifest results and requirement inventory are separate; full Semantics/Schema acceptance remains open.',
     }

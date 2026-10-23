@@ -210,6 +210,7 @@ def _split_uri(uri):
 RDF = DefinedNamespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
 RDF._TERMS = frozenset({"type", "Property", "subject", "predicate", "object", "Statement", "value", "langString", "dirLangString", "reifies", "PropositionForm", "propositionFormSubject", "propositionFormPredicate", "propositionFormObject", "HTML", "XMLLiteral", "JSON", "first", "rest", "nil"})
 RDF._TERMS |= frozenset({'List', 'Alt', 'Bag', 'Seq'})
+RDF._TERMS |= frozenset({'CompoundLiteral', 'direction', 'language', 'PlainLiteral', 'langRange'})
 RDFS = DefinedNamespace("http://www.w3.org/2000/01/rdf-schema#")
 RDFS._TERMS = frozenset({"Resource", "Class", "subClassOf", "subPropertyOf", "domain", "range", "label", "comment", "member", "seeAlso", "isDefinedBy", "Literal", "Datatype", "Container", "ContainerMembershipProperty", "Proposition"})
 XSD = Namespace("http://www.w3.org/2001/XMLSchema#")

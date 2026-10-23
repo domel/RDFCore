@@ -63,7 +63,7 @@ for name, value, datatype in (
 add('datatypes-plain-literal-and-xsd-string', [(S, P, Literal('a string'))],
     [(S, P, literal('a string', XSD.string))], regime='rdfs', datatypes={XSD.string})
 add('horst-01-subClassOf-intensional', [(C, RDF.type, RDFS.Class), (RDF.type, RDFS.domain, D)],
-    [(C, RDFS.subClassOf, D)], regime='rdfs', expected=False, supported=False,
+    [(C, RDFS.subClassOf, D)], regime='rdfs', expected=False,
     implementation='T39: intensional RDFS countermodel; extension inclusion must not assert a schema edge.')
 add('horst-01-subPropertyOf-intensional',
     [(P, RDF.type, RDF.Property), (P, RDFS.range, XSD.integer),
@@ -79,20 +79,20 @@ for name, left, right in (
         [(URIRef('http://example.org/#'+right), P, Literal('2000'))], expected=False,
         implementation='T37: ordinary-ground countermodel certificate; preserve exact IRI identity.')
 add('rdfs-container-membership-superProperty-test001', [(S, RDFS.member, O)],
-    [(S, RDF['_1'], O)], regime='rdfs', expected=False, supported=False,
+    [(S, RDF['_1'], O)], regime='rdfs', expected=False,
     implementation='T39: finite query-targeted container axioms and one-way subproperty countermodel.')
 for suffix, predicate in (('range', RDFS.range), ('domain', RDFS.domain)):
     add('rdfs-domain-and-range-intensionality-'+suffix,
         [(C, RDF.type, RDFS.Class), (C, RDFS.subClassOf, D), (D, RDF.type, RDFS.Class),
          (P, RDF.type, URIRef(str(RDFS)+'Property')), (P, predicate, C)],
         [(D, RDF.type, RDFS.Class), (P, RDF.type, URIRef(str(RDFS)+'Property')), (P, predicate, D)],
-        regime='rdfs', expected=False, supported=False,
+        regime='rdfs', expected=False,
         implementation='T39: intensional domain/range countermodel; do not propagate schema range/domain through subclass edges.')
 add('rdfs-entailment-test001', [(P, RDFS.range, RDF.XMLLiteral), (S, P, literal('<', RDF.XMLLiteral))],
     False, regime='rdfs', datatypes={RDF.XMLLiteral},
     implementation='T28/T37: secure XML lexical validation; malformed recognized literal proves inconsistency.')
 add('rdfs-subClassOf-a-Property-test001', [(C, RDF.type, RDF.Property), (D, RDFS.subClassOf, C)],
-    False, regime='rdfs', expected=False, supported=False,
+    False, regime='rdfs', expected=False,
     implementation='T39: construct consistent RDFS model allowing class/property overlap.')
 for number in range(1, 5):
     if number in (1, 3):
@@ -109,7 +109,7 @@ for number in range(1, 5):
             (RDF.type, RDF.Statement), (RDF.subject, S), (RDF.predicate, P), (RDF.object, O))]
         route = 'T39: existential reification requires all four correlated edges; asserted SPO does not generate rdf:Statement.'
     add(f'statement-entailment-test{number:03}', premise, conclusion,
-        regime='rdfs' if number == 3 else 'rdf', expected=False, supported=False, implementation=route)
+        regime='rdfs' if number == 3 else 'rdf', expected=False, implementation=route)
 add('xmlsch-02-whitespace-facet-1', [(S, P, literal('3', XSD.int))],
     [(S, P, literal(' 3 ', XSD.int))], regime='rdfs', datatypes={XSD.int}, expected=False,
     implementation='T38: preserve raw lexical input and review the historical whitespace expectation against the selected lexical space.')

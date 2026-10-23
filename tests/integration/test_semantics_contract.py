@@ -57,29 +57,25 @@ def test_transparent_values_do_not_assert_inner_triples():
     left, right = TripleTerm(S, Q, typed('042')), TripleTerm(S, Q, typed('42'))
     assert semantics.entails([(S, P, left)], [(S, P, right)],
                             datatypes={XSD.integer}, mode='decide') is True
-    with pytest.raises(semantics.UnsupportedEntailment):
-        semantics.entails([(S, P, left)], [(S, Q, typed('42'))],
-                         regime='rdf', datatypes={XSD.integer}, mode='decide')
+    assert semantics.entails([(S, P, left)], [(S, Q, typed('42'))],
+                             regime='rdf', datatypes={XSD.integer}, mode='decide') is False
 
 
-def test_negative_certificate_is_not_assumed_for_full_rdfs_or_rdf():
-    # Proposition constraints still need T39; finite booleans are covered by T38.
+def test_proposition_consistency_and_negative_certificates_do_not_assert_content():
     from rdfcore import RDFS
     premise = [(S, RDF.type, RDFS.Proposition)]
     for regime in ('rdf', 'rdfs'):
-        with pytest.raises(semantics.UnsupportedEntailment):
-            semantics.entails(premise, [(S, P, O)], regime=regime,
-                             datatypes={XSD.boolean}, mode='decide')
-        with pytest.raises(semantics.UnsupportedEntailment):
-            semantics.entails(premise, False, regime=regime,
-                             datatypes={XSD.boolean}, mode='decide')
+        assert semantics.entails(premise, [(S, P, O)], regime=regime,
+                                 datatypes={XSD.boolean}, mode='decide') is False
+        assert semantics.entails(premise, False, regime=regime,
+                                 datatypes={XSD.boolean}, mode='decide') is False
 
 
 def test_invalid_conclusion_is_false_only_if_premise_consistency_is_known():
     target = [(S, P, typed('invalid'))]
     assert semantics.entails([], target, datatypes={XSD.integer}, mode='decide') is False
     with pytest.raises(semantics.UnsupportedEntailment):
-        semantics.entails([(S, RDF.type, XSD.boolean)], target,
+        semantics.entails([(RDF.type, RDF.type, XSD.integer)], target,
                          regime='rdf', datatypes={XSD.integer}, mode='decide')
 
 

@@ -243,12 +243,14 @@ def build_report(checkout, *, legacy_w3c=False, lock=None):
                                if path.is_symlink() else file_sha256(path))
     totals = {status: sum(suite['counts'].get(status, 0) for suite in suites)
               for status in ('passed', 'failed', 'unsupported', 'error')}
+    from tests.w3c.semantic_coverage import coverage_report
     return {"schema_version": 1, "generated_at": datetime.now(timezone.utc).isoformat(),
             "snapshot": pin, "python": platform.python_version(), "rdflib": rdflib.__version__,
             "manifest_lock_sha256": file_sha256(LOCK if lock is None else lock),
             "execution_profile": 'legacy-w3c-xml' if legacy_w3c else 'default',
             "parser_options": {'legacy_w3c': True} if legacy_w3c else {},
             "entailment_options": {'mode': 'decide', 'datatypes': 'manifest plus mandatory RDF datatypes'},
+            "semantic_coverage": coverage_report(reported_suites),
             "rdfcore_revision": git(ROOT, "rev-parse", "HEAD"), "worktree_status": changed,
             "tracked_diff_sha256": hashlib.sha256(tracked_diff).hexdigest(),
             "untracked_file_sha256": untracked,

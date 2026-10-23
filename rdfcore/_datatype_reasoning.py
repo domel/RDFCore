@@ -198,6 +198,18 @@ def evaluate(source, target, regime, recognized):
         # countermodel until all its required values have actually been fixed.
         fixed = all(isinstance(node, Literal) and sem._literal_datatype(node) in recognized
                     for node in constraints(branch))
+        if variable_domains and (not certified or not target_fragment):
+            from ._schema_reasoning import evaluate as evaluate_schema
+            branch_target = (None if target is None or target_bad
+                             else mapped(target, assignments, conclusion=True))
+            # Use the schema certificate on a concrete assignment, not on
+            # unassigned names. It independently checks newly activated
+            # constraints and may return unknown instead of a negative.
+            verdict = evaluate_schema(branch, branch_target, regime, recognized)
+            if verdict is False:
+                return False
+            if verdict is True:
+                continue
         if target is None or target_bad:
             if certified and fixed:
                 return False

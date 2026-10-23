@@ -140,8 +140,9 @@ def test_intersection_checks_integer_bounds_and_domain_propagation():
 def test_unrecognized_range_and_explicit_d_set_do_not_guess_inconsistency():
     source = [(S, P, lit('flargh', XSD.integer)), (P, RDFS.range, URIRef('urn:datatype'))]
     assert decide(source, []) is True
-    with pytest.raises(UnsupportedEntailment):
-        decide(source, False)
+    # T39's free-extension model can certify consistency without recognizing
+    # either the opaque literal's datatype or the custom range class.
+    assert decide(source, False) is False
     # An unrecognized literal can denote a string even if its lexical form
     # would be invalid were its datatype recognized.
     source = [(S, P, lit('flargh', XSD.integer)), (P, RDFS.range, XSD.string)]
@@ -167,8 +168,8 @@ def test_typing_axioms_and_intersection_witnesses_do_not_assert_embedded_triples
     source = [(S, P, TripleTerm(O, Q, lit('01', XSD.integer)))]
     assert decide(source, [(x, RDF.type, XSD.decimal)], regime='rdf',
                   datatypes={XSD.integer, XSD.decimal}) is True
-    with pytest.raises(UnsupportedEntailment):
-        decide(source, [(O, Q, lit('1', XSD.integer))], regime='rdf', datatypes={XSD.integer})
+    assert decide(source, [(O, Q, lit('1', XSD.integer))],
+                  regime='rdf', datatypes={XSD.integer}) is False
 
 
 def test_work_limit_is_not_a_datatype_verdict():

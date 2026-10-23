@@ -68,6 +68,15 @@ larger spaces supply existence witnesses only. At most 4096 assignment
 combinations are explored; exceeding this raises EntailmentResourceLimit.
 New unresolved constraints prevent a countermodel certificate.
 
+A separate guarded schema certificate covers intensional domain/range,
+containers, class/property overlap and nonfunctional reification. It includes
+nested triple-term predicate typing, proposition existence and selected
+IT-totality witnesses, never assertions of embedded triples. An infinite
+proposition extension cannot fit inside a finite recognized datatype; this
+does not make individual propositions disjoint from literal values. General
+fixed-vocabulary aliases, overlapping spaces and constructor/schema queries
+can still be unsupported. Constructor witness search allows 4096 assignments.
+
 NOT implemented: general RDF/RDFS decision procedures, exhaustive
 proposition generation, dataset entailment, or complete RDF 1.2
 Semantics conformance. In proof mode, ``datatypes`` remains reserved and any
@@ -290,6 +299,9 @@ def _decide(source, target, regime, recognized) -> bool:
         from .datatypes import DatatypeResourceLimit, UnsupportedDatatype
         try:
             result = evaluate(source, target, regime, recognized)
+            if result is None:
+                from ._schema_reasoning import evaluate as evaluate_schema
+                result = evaluate_schema(source, target, regime, recognized)
         except DatatypeResourceLimit as exc:
             raise EntailmentResourceLimit(str(exc)) from exc
         except UnsupportedDatatype as exc:

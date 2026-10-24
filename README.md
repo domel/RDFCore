@@ -375,7 +375,9 @@ The operation snapshots its inputs and accepts `max_steps`; it is not streaming.
 
 ## Graphs and datasets
 
-Use `Graph` for one graph; `Dataset` adds named graphs:
+Use `Graph` for one graph and `Dataset` for named graphs. For a union view,
+set `Dataset(default_union=True)`. The RDFLib-compatible `ConjunctiveGraph`
+also reads the union, but is deprecated; prefer `Dataset`.
 
 ```python
 from rdfcore import Dataset, Literal, URIRef
@@ -388,10 +390,20 @@ named.add((URIRef("urn:s"), URIRef("urn:p"), Literal("named")))
 
 for subject, predicate, obj, graph_name in dataset.quads():
     print(subject, predicate, obj, graph_name)
+
+assert len(named) == 1                       # One named graph.
+assert len(list(dataset.triples((None, None, None)))) == 1  # Default graph.
+dataset.default_union = True
+assert len(list(dataset.triples((None, None, None)))) == 2  # Union.
+dataset.remove_context(named)               # Clear triples; retain the graph.
+assert len(named) == 0
 ```
 
 `dataset.remove((s, p, o))` removes matches from all graphs, as in RDFLib.
 Use a graph's `remove()` or a four-item pattern to restrict the context.
+
+`graph.value(s, p, default=...)` returns one matching object or the default.
+Use `any=False` to require uniqueness and raise `UniquenessError` on ambiguity.
 
 Use `Graph.resource()` and `Graph.collection()` for convenience wrappers:
 

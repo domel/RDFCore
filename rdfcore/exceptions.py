@@ -16,6 +16,11 @@ class ObjectTypeError(Error):
 class UniquenessError(Error):
     """Raised when an operation requires a unique result but gets several."""
 
+    def __init__(self, values):
+        super().__init__(
+            'Uniqueness assumption is not fulfilled. Multiple values are: %s' % values
+        )
+
 
 class ModificationException(Error):
     """Raised when a store cannot be modified."""

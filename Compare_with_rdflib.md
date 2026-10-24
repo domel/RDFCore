@@ -46,7 +46,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `predicate_objects` | ✅ | ✅ |
 | `subject_predicates` | ✅ | ✅ |
 | `subject_objects` | ✅ | ✅ |
-| `value` | ✅ | ✅ |
+| `value` | ✅ | ⚠️ `tests/compatibility/test_graph_value.py` runs both libraries: valid-term Graph/Dataset context matrices, Memory/SQLite, default identity, duplicates, repeat calls, lazy access and uniqueness diagnostics; invalid selectors remain store-dependent |
 | `set` | ✅ | ✅ |
 | `parse` | ✅ | ✅ |
 | `serialize` | ✅ | ✅ base fallback/override tested against RDFLib; format-specific output parity remains scoped |

@@ -50,3 +50,139 @@ def test_value_consumes_only_required_matches(unique):
                 graph.value(module.URIRef('urn:s'), module.URIRef('urn:p'), any=False)
         else:
             assert graph.value(module.URIRef('urn:s'), module.URIRef('urn:p')) == module.Literal('first')
+
+
+@pytest.mark.parametrize('accessor,missing', [
+    ('objects', 'object'), ('subjects', 'subject'), ('predicates', 'predicate'),
+])
+@pytest.mark.parametrize('second', [None, False, 0, ''])
+def test_value_uniqueness_counts_falsey_iterator_values(accessor, missing, second):
+    # Overridden accessors must retain next()/StopIteration semantics, even
+    # when their result is not a regular stored RDF term.
+    for module in (rdflib, rdfcore):
+        def values(self, *args):
+            yield module.URIRef('urn:first')
+            yield second
+            raise AssertionError('read beyond second match')
+        controlled = type('ControlledGraph', (module.Graph,), {accessor: values})
+        kwargs = dict(subject=module.URIRef('urn:s'), predicate=module.URIRef('urn:p'),
+                      object=module.URIRef('urn:o'), any=False)
+        kwargs[missing] = None
+        with pytest.raises(module.exceptions.UniquenessError):
+            controlled().value(**kwargs)
+
+
+@pytest.mark.parametrize('backend', ['memory', 'sqlite'])
+@pytest.mark.parametrize('view', ['graph', 'default', 'named', 'union'])
+@pytest.mark.parametrize('missing', ['subject', 'predicate', 'object'])
+@pytest.mark.parametrize('size', [0, 1, 2])
+def test_value_context_store_and_default_identity(backend, view, missing, size):
+    def observe(module):
+        store = module.SQLiteStore(':memory:') if module is rdfcore and backend == 'sqlite' else 'default'
+        dataset = module.Dataset(store=store, default_union=view == 'union')
+        named = dataset.graph(module.URIRef('urn:named'))
+        graph = (module.Graph(store=dataset.store, identifier=module.URIRef('urn:graph'))
+                 if view == 'graph' else named if view == 'named' else dataset)
+        target = (graph if view in ('graph', 'named') else dataset.default_graph)
+        s, p, o = module.URIRef('urn:s'), module.URIRef('urn:p'), module.Literal('')
+        base = [s, p, o]
+        position = {'subject': 0, 'predicate': 1, 'object': 2}[missing]
+        triples = []
+        for index in range(size):
+            triple = list(base)
+            if index:
+                triple[position] = module.Literal('other') if missing == 'object' else module.URIRef('urn:other')
+            triples.append(tuple(triple))
+            target.add(tuple(triple))
+            target.add(tuple(triple))  # Duplicates must not create ambiguity.
+        # The other context must not affect a selected graph. In the union,
+        # it repeats a logical triple instead of adding a new candidate.
+        if view in ('default', 'union'):
+            named.add(triples[0] if triples else (s, p, module.Literal('unrelated')))
+        kwargs = dict(subject=s, predicate=p, object=o)
+        kwargs[missing] = None
+        results = []
+        try:
+            for fallback in (None, False, 0, '', object()):
+                for flag in (True, False, 0, None, ''):
+                    for _ in range(2):
+                        try:
+                            result = graph.value(**kwargs, default=fallback, any=flag)
+                        except module.exceptions.UniquenessError as error:
+                            assert flag is False
+                            message = str(error)
+                            assert 'Uniqueness assumption is not fulfilled.' in message
+                            assert 'While trying to find a value for' in message
+                            assert 'urn:s' in message and 'urn:p' in message
+                            results.append('nonunique')
+                        else:
+                            pattern = [None if i == position else term for i, term in enumerate(base)]
+                            candidates = {t[position] for t in graph.triples(tuple(pattern))}
+                            if not candidates:
+                                assert result is fallback
+                                results.append('default')
+                            else:
+                                assert result in candidates
+                                assert type(result) in (module.URIRef, module.Literal)
+                                results.append(('term', type(result).__name__) if len(candidates) > 1 else
+                                               ('term', type(result).__name__, result.n3()))
+            assert len(target) == size
+            return results
+        finally:
+            dataset.close()
+    assert observe(rdfcore) == observe(rdflib)
+
+
+@pytest.mark.parametrize('value', [None, '', 0, False, ('a', 'b')])
+def test_uniqueness_error_constructor_matches_reference(value):
+    # RDFLib's percent-formatting itself rejects a multi-item tuple.
+    if isinstance(value, tuple):
+        for module in (rdflib, rdfcore):
+            with pytest.raises(TypeError):
+                module.exceptions.UniquenessError(value)
+        return
+    actual = rdfcore.exceptions.UniquenessError(value)
+    expected = rdflib.exceptions.UniquenessError(value)
+    assert actual.args == expected.args
+    assert str(actual) == str(expected)
+
+
+@pytest.mark.parametrize('backend', ['memory', 'sqlite'])
+def test_value_uniqueness_diagnostics_include_union_matches_and_contexts(backend):
+    for module in (rdflib, rdfcore):
+        store = module.SQLiteStore(':memory:') if module is rdfcore and backend == 'sqlite' else 'default'
+        dataset = module.Dataset(store=store)
+        selected = dataset.graph(module.URIRef('urn:selected'))
+        other = dataset.graph(module.URIRef('urn:other-context'))
+        s, p = module.URIRef('urn:s'), module.URIRef('urn:p')
+        selected.add((s, p, module.Literal('first')))
+        selected.add((s, p, module.Literal('second')))
+        other.add((s, p, module.Literal('third')))
+        try:
+            with pytest.raises(module.exceptions.UniquenessError) as error:
+                selected.value(s, p, any=False)
+            for value in ('first', 'second', 'third'):
+                assert '(urn:s, urn:p, ' + value + ')' in str(error.value)
+            for context in ('urn:selected', 'urn:other-context'):
+                assert context in str(error.value)
+            assert len(selected) == 2 and len(other) == 1
+        finally:
+            dataset.close()
+
+
+@pytest.mark.parametrize('accessor,missing', [
+    ('objects', 'object'), ('subjects', 'subject'), ('predicates', 'predicate'),
+])
+def test_value_propagates_iterator_error_without_substituting_default(accessor, missing):
+    for module in (rdflib, rdfcore):
+        def values(self, *args):
+            yield module.URIRef('urn:first')
+            raise RuntimeError('iterator failed')
+        controlled = type('ControlledGraph', (module.Graph,), {accessor: values})
+        kwargs = dict(subject=module.URIRef('urn:s'), predicate=module.URIRef('urn:p'),
+                      object=module.URIRef('urn:o'), default='fallback')
+        kwargs[missing] = None
+        graph = controlled()
+        assert graph.value(**kwargs) == module.URIRef('urn:first')
+        with pytest.raises(RuntimeError, match='iterator failed'):
+            graph.value(**kwargs, any=False)

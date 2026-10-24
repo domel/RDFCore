@@ -312,8 +312,26 @@ class Graph:
             value = next(values)
         except StopIteration:
             return default
-        if any is False and next(values, None) is not None:
-            raise UniquenessError(f"Found more than one value for {subject!r}, {predicate!r}")
+        if any is False:
+            try:
+                next(values)
+            except StopIteration:
+                pass
+            else:
+                message = (
+                    'While trying to find a value for (%s, %s, %s) the'
+                    ' following multiple values where found:\n'
+                    % (subject, predicate, object)
+                )
+                for (s, p, o), contexts in self.store.triples((subject, predicate, object), None):
+                    # Built-in stores return identifiers, and their union
+                    # iterator omits context lists. Keep diagnostic contexts
+                    # available without changing the store iteration contract.
+                    contexts = list(contexts)
+                    if not contexts and hasattr(self.store, 'contexts'):
+                        contexts = list(self.store.contexts((s, p, o)))
+                    message += '(%s, %s, %s)\n (contexts: %s)\n' % (s, p, o, contexts)
+                raise UniquenessError(message)
         return value
 
     def set(self, triple):

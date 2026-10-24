@@ -6,7 +6,7 @@ from pathlib import PurePath
 
 from .exceptions import UniquenessError
 from .namespace import OWL, RDF, RDFS, XSD, NamespaceManager
-from .store import Memory
+from .store import Memory, SQLiteStore
 from .term import BNode, Literal, Node, TripleTerm, URIRef
 from .parser import create_input_source
 from .plugin import get as get_plugin
@@ -324,11 +324,11 @@ class Graph:
                     % (subject, predicate, object)
                 )
                 for (s, p, o), contexts in self.store.triples((subject, predicate, object), None):
-                    # Built-in stores return identifiers, and their union
-                    # iterator omits context lists. Keep diagnostic contexts
-                    # available without changing the store iteration contract.
+                    # Only the exact built-in stores require this fallback.
+                    # Custom stores (including subclasses) own the contexts
+                    # returned by triples(); an empty iterable is valid.
                     contexts = list(contexts)
-                    if not contexts and hasattr(self.store, 'contexts'):
+                    if not contexts and type(self.store) in (Memory, SQLiteStore):
                         contexts = list(self.store.contexts((s, p, o)))
                     message += '(%s, %s, %s)\n (contexts: %s)\n' % (s, p, o, contexts)
                 raise UniquenessError(message)

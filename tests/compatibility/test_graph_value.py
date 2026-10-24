@@ -3,6 +3,42 @@ import rdflib
 import rdfcore
 
 
+@pytest.mark.parametrize('error', [NotImplementedError, RuntimeError])
+@pytest.mark.parametrize('provided_context', [False, True])
+def test_value_diagnostics_do_not_enumerate_custom_store_contexts(error, provided_context):
+    for module in (rdflib, rdfcore):
+        if module is rdflib:
+            from rdflib.plugins.stores.memory import Memory
+        else:
+            Memory = module.Memory
+
+        class CustomStore(Memory):
+            calls = 0
+
+            def contexts(self, *args, **kwargs):
+                self.calls += 1
+                raise error('context enumeration unavailable')
+
+            def triples(self, pattern, context=None):
+                for triple, contexts in super().triples(pattern, context):
+                    if context is None:
+                        contexts = iter(('provided-context',)) if provided_context else iter(())
+                    yield triple, contexts
+
+        store = CustomStore()
+        graph = module.Graph(store=store, identifier=module.URIRef('urn:g'))
+        s, p = module.URIRef('urn:s'), module.URIRef('urn:p')
+        for text in ('first', 'second'):
+            graph.add((s, p, module.Literal(text)))
+        with pytest.raises(module.exceptions.UniquenessError) as raised:
+            graph.value(s, p, any=False)
+        assert store.calls == 0
+        if provided_context:
+            assert 'provided-context' in str(raised.value)
+        else:
+            assert '(contexts: [])' in str(raised.value)
+
+
 @pytest.mark.parametrize('missing', ['subject', 'predicate', 'object', 'two', 'none'])
 @pytest.mark.parametrize('size', [0, 1, 2])
 @pytest.mark.parametrize('unique', [False, True])

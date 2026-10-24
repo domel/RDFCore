@@ -53,3 +53,22 @@ def test_nonpassing_manifest_result_keeps_gate_closed(status):
     suites = [dict(category='entailment', rdf_version=v,
                    tests=[{'status': status}], counts={status: 1}) for v in ('rdf11', 'rdf12')]
     assert coverage_report(suites)['official_semantics_passed'] is False
+
+
+def test_unexpected_probe_errors_are_reported_without_aborting_inventory(monkeypatch):
+    from rdfcore import semantics
+    from tests.w3c import semantic_coverage
+    from tests.w3c.semantic_requirements import ALL_PROBES, run_probe
+
+    def broken(*args, **kwargs):
+        raise RuntimeError('injected probe failure')
+
+    monkeypatch.setattr(semantics, 'entails', broken)
+    monkeypatch.setattr(semantic_coverage, 'entails', broken)
+    result = run_probe(ALL_PROBES[0])
+    assert result['status'] == 'error'
+    assert result['reason'] == 'RuntimeError: injected probe failure'
+    report = coverage_report([])
+    assert all(p['status'] == 'error' for p in report['additional_probes'])
+    assert all(p['status'] == 'error' for p in report['semantic_conditions'])
+    assert report['full_profile_verified'] is False

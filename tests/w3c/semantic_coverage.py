@@ -84,6 +84,9 @@ def _probe(name, premise, datatypes, target=False):
         return dict(id=name, status='resource-limit', expected=False, reason=str(exc))
     except UnsupportedEntailment as exc:
         return dict(id=name, status='unsupported', expected=False, reason=str(exc))
+    except Exception as exc:
+        return dict(id=name, status='error', expected=False,
+                    reason=f'{type(exc).__name__}: {exc}')
     return dict(id=name, status='passed' if actual is False else 'failed',
                 expected=False, actual=actual)
 

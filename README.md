@@ -747,8 +747,9 @@ python -m pytest -q
 The suite includes format tests, RDF 1.2 tests, streaming tests, compatibility
 tests, and differential checks against RDFLib 7.6.0.
 
-CI tests Python 3.10 through 3.14 and builds an installable wheel and source
-distribution. README Python examples are executed against small local files.
+CI verifies tests, package builds and W3C reports on Python 3.10 and 3.14.
+Support for intermediate Python versions remains declared. README Python
+examples are executed against small local files.
 
 ### Official W3C tests
 
@@ -824,6 +825,9 @@ T37 resolves 51 of the historical 79 semantic executions; T38 resolves ten
 more. T39 adds decisions for the remaining historical schema/reification cases.
 The report's `semantic_coverage` inventory lists Schema vocabulary sections,
 additional non-manifest probes and outstanding completeness blockers.
+Unexpected probe exceptions are recorded as `error` without discarding the
+manifest results. Failed or errored additional checks make the report command
+exit with a failure status; their results remain separate from manifest totals.
 It also executes separately listed semantic-condition and axiom probes,
 including `rdf:value`, nonfunctional lists, old-style reification and the
 infinite container-property family. The review targets

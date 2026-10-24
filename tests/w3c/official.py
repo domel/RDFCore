@@ -51,13 +51,18 @@ def git(path, *args):
     return subprocess.check_output(["git", "-C", str(path), *args], text=True).strip()
 
 
-def verify_checkout(checkout, *, lock=None):
-    """Check the existing lock without requiring tomllib on Python 3.10."""
+def locked_revision(lock=None):
+    """Read the pinned commit without requiring tomllib on Python 3.10."""
     lock = LOCK if lock is None else Path(lock)
     match = re.search(r'^commit\s*=\s*"([0-9a-f]{40})"', lock.read_text(), re.M)
     if match is None:
         raise ValueError('manifest lock must contain a 40-character hexadecimal commit')
-    pin = match.group(1)
+    return match.group(1)
+
+
+def verify_checkout(checkout, *, lock=None):
+    """Check that the fixture checkout is clean at the selected lock."""
+    pin = locked_revision(lock)
     try:
         actual = git(checkout, "rev-parse", "HEAD")
         dirty = git(checkout, "status", "--porcelain")
@@ -286,7 +291,11 @@ def main(argv=None):
         args.output.write_text(rendered, encoding="utf-8")
     else:
         print(rendered, end="")
-    return int(any(suite.get("suite_error") or suite["counts"]["failed"] or
+    coverage = report.get('semantic_coverage', {})
+    probe_failure = any(p.get('status') in {'failed', 'error'}
+                        for group in ('additional_probes', 'semantic_conditions')
+                        for p in coverage.get(group, ()))
+    return int(probe_failure or any(suite.get("suite_error") or suite["counts"]["failed"] or
                    suite["counts"]["unsupported"] or suite["counts"]["error"] for suite in report["suites"]))
 
 

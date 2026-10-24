@@ -229,4 +229,6 @@ def run_probe(probe):
         return dict(result, status='resource-limit', reason=str(exc))
     except UnsupportedEntailment as exc:
         return dict(result, status='unsupported', reason=str(exc))
+    except Exception as exc:
+        return dict(result, status='error', reason=f'{type(exc).__name__}: {exc}')
     return dict(result, actual=actual, status='passed' if actual is probe.expected else 'failed')

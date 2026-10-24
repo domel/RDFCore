@@ -118,6 +118,7 @@ from contextvars import ContextVar
 import re
 
 from .dataset import ConjunctiveGraph, Dataset
+from .graph import Graph
 from .namespace import RDF, RDFS
 from .term import BNode, Literal, TripleTerm, URIRef
 
@@ -684,9 +685,14 @@ def merge_datasets(datasets: Iterable[Dataset], *, max_steps: int | None = None)
             if not isinstance(dataset, Dataset):
                 raise TypeError('dataset merge inputs must be Dataset instances')
             graphs = []
-            for graph in dataset.graphs():
+            # Dataset.graphs() calls graph(), which can reset cached bases
+            # and register contexts. Read through independent views instead.
+            names = dict.fromkeys(dataset.store.contexts())
+            names.setdefault(dataset.default_graph.identifier)
+            for name in names:
                 _step()
-                name = graph.identifier
+                graph = Graph(store=dataset.store, identifier=name,
+                              namespace_manager=dataset.namespace_manager)
                 if isinstance(name, BNode):
                     occupied.add(name)
                 rows = _snapshot(graph)

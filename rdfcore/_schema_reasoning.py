@@ -95,7 +95,7 @@ def _schema_guard(model, standard, step, canonical=None, recognized=frozenset())
     return True
 
 
-def _constructor_proof(proof, query, regime, recognized, fresh, sem):
+def _constructor_proof(proof, query, recognized, fresh, sem, rdf, rdfs, close):
     """Sound IT-totality witnesses; lack of a witness is still unknown.
 
     Only already proven properties can be constructor predicates. Correlated
@@ -108,7 +108,7 @@ def _constructor_proof(proof, query, regime, recognized, fresh, sem):
                 for p, v in zip(row, candidate))]) for row in patterns]
     choices.sort(key=lambda pair: len(pair[1]))
     lookup = {sem._key(t): t for row in proof for root in row for t in sem._terms(root)}
-    properties = {s for s, p, o in proof if p == RDF.type and o == RDF.Property}
+    properties = {s for s, p, o in proof if p == rdf.type and o == rdf.Property}
     known = set(lookup)
 
     def bindings(index, current):
@@ -143,7 +143,7 @@ def _constructor_proof(proof, query, regime, recognized, fresh, sem):
                 raise ValueError('constructor predicate is not known to be a property')
             s, p, o = (instantiate(t) for t in term)
             value = sem._InterpretedTriple(s, p, o)
-            additions.add((value, RDF.type, RDFS.Proposition))
+            additions.add((value, rdf.type, rdfs.Proposition))
             return value
 
         for row in query:
@@ -153,7 +153,7 @@ def _constructor_proof(proof, query, regime, recognized, fresh, sem):
                         instantiate(term)
                     except ValueError:
                         pass
-        if additions and sem._homomorphism(sem._closure(proof | additions, regime, query), query):
+        if additions and sem._homomorphism(close(proof | additions), query):
             return True
     return False
 
@@ -249,6 +249,8 @@ def evaluate(source, target, regime, recognized, *, aliases=None, applications=(
 
     rdf = RDF if not aliases else sem._Vocabulary(RDF, canonical)
     rdfs = RDFS if not aliases else sem._Vocabulary(RDFS, canonical)
+    schema = set(map(canonical, _SCHEMA))
+    infinite = tuple(map(canonical, _INFINITE))
 
     def close(graph):
         return sem._closure(graph, regime, vocabulary, canonical=canonical if aliases else None)
@@ -335,9 +337,9 @@ def evaluate(source, target, regime, recognized, *, aliases=None, applications=(
             return True
     if target is not None and not target_bad and sem._homomorphism(proof, query):
         return True
-    if regime == 'rdfs' and any(isinstance(o, TripleTerm) and p in _SCHEMA | {rdf.type}
+    if regime == 'rdfs' and any(isinstance(o, TripleTerm) and p in schema | {rdf.type}
                                for _, p, o in query):
-        if _constructor_proof(proof, query, regime, recognized, fresh, sem):
+        if _constructor_proof(proof, query, recognized, fresh, sem, rdf, rdfs, close):
             return True
 
     # Only a candidate interpretation is allowed to choose particular literal
@@ -398,7 +400,7 @@ def evaluate(source, target, regime, recognized, *, aliases=None, applications=(
         return False
     for _, p, obj in query:
         sem._step()
-        if isinstance(obj, TripleTerm) and (p in _SCHEMA or p == rdf.type
-                or any((q, rdfs.subPropertyOf, p) in model for q in _INFINITE)):
+        if isinstance(obj, TripleTerm) and (p in schema or p == rdf.type
+                or any((q, rdfs.subPropertyOf, p) in model for q in infinite)):
             return None
     return None if sem._homomorphism(model, query) else False

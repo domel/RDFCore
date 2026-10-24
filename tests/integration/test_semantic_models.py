@@ -168,3 +168,33 @@ def test_known_ground_constructor_results_are_constants_not_existential_variable
     first, second = TripleTerm(S, C, Literal('a')), TripleTerm(S, C, Literal('b'))
     source = [(RDF.type, RDF.type, XSD.boolean), (S, P, first), (O, P, second)]
     assert decide(source, [(S, P, second)], datatypes={XSD.boolean}) is False
+
+
+@pytest.mark.parametrize('alias_type', [False, True])
+@pytest.mark.parametrize('depth', [1, 2])
+def test_constructor_witness_uses_interpreted_schema_vocabulary(alias_type, depth):
+    # Each constrained name must denote integer zero. P therefore has exactly
+    # subClassOf's meaning, even though the asserted predicate is ordinary.
+    types = {XSD.nonNegativeInteger, XSD.nonPositiveInteger}
+    names = [P, RDFS.subClassOf] + ([RDF.type] if alias_type else [])
+    source = [(name, RDF.type, datatype) for name in names for datatype in types]
+    source.append((RDFS.Resource, P, RDFS.Class))
+    term = O
+    for _ in range(depth):
+        term = TripleTerm(S, RDF.type, term)
+    assert decide(source, [(BNode('class'), RDFS.subClassOf, term)],
+                  datatypes=types, max_steps=1000000) is True
+
+
+def test_aliased_infinite_superproperty_is_not_a_finite_countermodel():
+    from rdfcore.semantics import UnsupportedEntailment
+    types = {XSD.nonNegativeInteger, XSD.nonPositiveInteger}
+    q = URIRef('urn:superproperty')
+    source = [(name, RDF.type, datatype) for name in (P, RDFS.subClassOf) for datatype in types]
+    source += [(RDFS.Resource, P, RDFS.Class), (RDFS.subClassOf, RDFS.subPropertyOf, q)]
+    # Constructor totality plus reflexive subclass edges makes this true.
+    # Until superproperty witnesses are supported, it must stay unknown,
+    # rather than claiming the finite sample is a negative certificate.
+    with pytest.raises(UnsupportedEntailment):
+        decide(source, [(BNode('class'), q, TripleTerm(S, RDF.type, O))],
+               datatypes=types, max_steps=1000000)

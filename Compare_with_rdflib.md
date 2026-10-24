@@ -198,7 +198,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `benchmark_parse()` | Benchmark with peak RSS |
 | `semantics.entails()` | Legacy proof mode retained; decision mode adds datatype constraints and membership regions, guarded countermodels, vocabulary value aliases, IT congruence/injectivity, infinite-image cardinality checks and free-class countermodels for restricted constructor cycles and unconstrained predicates; syntax constructors unchanged; unknown decisions and resource limits stay distinct; general RDF/RDFS reasoning remains incomplete |
 | `semantics.entailment_closure()` | Optional finite RDF/RDFS axioms and rules; no automatic Graph inference; optional work budget (not a time/memory bound) |
-| `semantics.merge_datasets()` | Explicit Semantics §10 statement-labelled merge; standardizes blank nodes apart across inputs, preserves graph boundaries and nested-term sharing; returns a new in-memory Dataset; empty named graphs omitted; no change to Dataset operators |
+| `semantics.merge_datasets()` | Explicit Semantics §10 statement-labelled merge; standardizes blank nodes apart across inputs, preserves graph boundaries and nested-term sharing; input triples, graph views and bases stay unchanged; returns a new in-memory Dataset; empty named graphs omitted; no change to Dataset operators |
 | `BoundedReadStream` | Bounded reads |
 | `BoundedWriteStream` | Bounded writes with partial-write retries and progress validation, including compressed output |
 | `ChunkReader` | Chunked UTF-8 reader |

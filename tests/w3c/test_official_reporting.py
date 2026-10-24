@@ -5,6 +5,61 @@ import pytest
 from tests.w3c.official import inventory, report_suite, verify_checkout
 
 
+@pytest.mark.parametrize('pin', ['a' * 40, '0123456789' * 4])
+def test_revision_reader_used_by_ci_accepts_explicit_locks(tmp_path, pin):
+    from tests.w3c.official import locked_revision
+    lock = tmp_path / 'manifest.lock'
+    lock.write_text('# pinned fixtures\ncommit = "' + pin + '"\n')
+    assert locked_revision(lock) == pin
+
+
+@pytest.mark.parametrize('value', ['', 'a' * 39, 'not-a-commit'])
+def test_revision_reader_rejects_missing_or_invalid_pins(tmp_path, value):
+    from tests.w3c.official import locked_revision
+    lock = tmp_path / 'manifest.lock'
+    lock.write_text('commit = "' + value + '"\n')
+    with pytest.raises(ValueError, match='manifest lock'):
+        locked_revision(lock)
+
+
+@pytest.mark.parametrize('status,exit_code', [('passed', 0), ('failed', 1), ('error', 1)])
+def test_cli_writes_report_and_fails_for_additional_probe_errors(tmp_path, monkeypatch, status, exit_code):
+    import json
+    from tests.w3c import official
+    report = {'suites': [{'counts': {'passed': 1, 'failed': 0, 'unsupported': 0, 'error': 0}}],
+              'semantic_coverage': {'additional_probes': [{'status': status}],
+                                    'semantic_conditions': [{'status': status}]}}
+    monkeypatch.setattr(official, 'build_report', lambda *args, **kwargs: report)
+    output = tmp_path / 'report.json'
+    assert official.main([str(tmp_path), '--output', str(output)]) == exit_code
+    assert json.loads(output.read_text()) == report
+
+
+def test_faulty_additional_probes_preserve_all_manifest_results(tmp_path, monkeypatch):
+    import json
+    from rdfcore import semantics
+    from tests.w3c import official, semantic_coverage
+
+    def broken(*args, **kwargs):
+        raise RuntimeError('injected failure')
+
+    def suite(*args, **kwargs):
+        return {'total': 1, 'counts': {'passed': 1, 'failed': 0, 'unsupported': 0, 'error': 0},
+                'tests': [{'id': 'urn:test', 'status': 'passed'}]}
+
+    monkeypatch.setattr(official, 'verify_checkout', lambda *args, **kwargs: 'a' * 40)
+    monkeypatch.setattr(official, 'report_suite', suite)
+    monkeypatch.setattr(semantics, 'entails', broken)
+    monkeypatch.setattr(semantic_coverage, 'entails', broken)
+    output = tmp_path / 'report.json'
+    assert official.main([str(tmp_path), '--output', str(output)]) == 1
+    report = json.loads(output.read_text())
+    assert len(report['suites']) == report['totals']['passed'] == 12
+    coverage = report['semantic_coverage']
+    assert all(p['status'] == 'error' for p in coverage['additional_probes'])
+    assert all(p['status'] == 'error' for p in coverage['semantic_conditions'])
+
+
 def manifest(tmp_path, entries, declarations, include=""):
     path = tmp_path / "manifest.ttl"
     path.write_text('''@prefix mf: <http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#> .

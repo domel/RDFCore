@@ -115,3 +115,26 @@ def test_sqlite_inputs_remain_open_and_unchanged(tmp_path):
         assert len(d.default_graph) == 1
     finally:
         store.close()
+
+
+@pytest.mark.parametrize('backend', ['memory', 'sqlite'])
+@pytest.mark.parametrize('budget', [None, 3])
+def test_merge_preserves_input_graph_views_and_base_on_success_or_error(tmp_path, backend, budget):
+    from rdfcore import SQLiteStore
+    from rdfcore.semantics import EntailmentResourceLimit
+    store = SQLiteStore(tmp_path / 'base.db') if backend == 'sqlite' else 'default'
+    d = Dataset(store=store, default_graph_base='https://example.org/default/')
+    g = d.graph(G, base='https://example.org/named/')
+    g.add((URIRef('urn:s'), P, Literal('v')))
+    views = d._graphs.copy()
+    try:
+        if budget is None:
+            assert len(merge_datasets([d])) == 1
+        else:
+            with pytest.raises(EntailmentResourceLimit):
+                merge_datasets([d], max_steps=budget)
+        assert g.base == 'https://example.org/named/'
+        assert d.default_graph.base == 'https://example.org/default/'
+        assert d._graphs == views
+    finally:
+        d.close()

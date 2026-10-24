@@ -814,6 +814,14 @@ T37 resolves 51 of the historical 79 semantic executions; T38 resolves ten
 more. T39 adds decisions for the remaining historical schema/reification cases.
 The report's `semantic_coverage` inventory lists Schema vocabulary sections,
 additional non-manifest probes and outstanding completeness blockers.
+It also executes separately listed semantic-condition and axiom probes,
+including `rdf:value`, nonfunctional lists, old-style reification and the
+infinite container-property family. The review targets
+[Schema WD of 23 October 2026](https://www.w3.org/TR/2026/WD-rdf12-schema-20261023/),
+which makes the HTML, XMLLiteral and JSON sections normative. Recognition
+of those datatypes remains explicit, as allowed by Semantics section 8.
+A free-class countermodel decides a restricted recursive constructor query;
+other schema/constructor queries can still be unsupported.
 `official_semantics_passed` describes the executed fixtures;
 `full_profile_verified` remains false while the general regime is incomplete. The
 report records `entailment_options` and a `semantic_plan`

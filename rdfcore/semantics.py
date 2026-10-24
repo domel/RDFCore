@@ -84,6 +84,14 @@ no unique-name or acyclicity assumption is imposed. Private interpreted
 applications permit value-valued components while public syntax stays strict.
 Each public call has its own recognition and application context.
 
+T40 review (2026-10-24) uses Schema WD 2026-10-23. Its HTML/XMLLiteral/JSON
+sections are now normative; datatype recognition still follows Semantics
+section 8 and stays explicit for those three types. A free-class
+countermodel refutes selected recursive subclass/constructor queries;
+this does not impose acyclicity on all interpretations. Other arbitrary
+schema/constructor queries remain unsupported. The executable clause probes
+are in tests/w3c/semantic_requirements.py, separate from official manifests.
+
 NOT implemented: general RDF/RDFS decision procedures, exhaustive
 proposition generation, dataset entailment, or complete RDF 1.2
 Semantics conformance. In proof mode, ``datatypes`` remains reserved and any

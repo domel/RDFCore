@@ -144,6 +144,34 @@ def test_exhaustion_is_not_non_entailment():
         decide([(C, RDF.type, RDFS.Class)], False, max_steps=10)
 
 
+@pytest.mark.parametrize('depth', [1, 2, 4])
+@pytest.mark.parametrize('universal_classes', [False, True])
+def test_free_class_constructor_cycle_has_a_countermodel(depth, universal_classes):
+    x = BNode('cycle')
+    term = x
+    for _ in range(depth):
+        term = TripleTerm(x, RDF.type, term)
+    source = [(RDFS.Resource, RDFS.subClassOf, RDFS.Class)] if universal_classes else []
+    assert decide(source, [(x, RDFS.subClassOf, term)]) is False
+
+
+def test_free_class_countermodel_does_not_forbid_cycles_in_other_models():
+    x = BNode('cycle')
+    term = TripleTerm(x, RDF.type, x)
+    source = [(RDFS.Resource, RDFS.subClassOf, RDFS.Class),
+              (x, RDFS.subClassOf, term)]
+    assert decide(source, source) is True
+
+
+@pytest.mark.parametrize('regime', ['rdf', 'rdfs'])
+def test_value_has_no_functionality_or_implicit_reification(regime):
+    source = [(S, RDF.value, O), (S, RDF.value, C)]
+    assert decide(source, False, regime) is False
+    assert decide(source, [(RDF.value, RDF.type, RDF.Property)], regime) is True
+    assert decide(source, [(S, RDF.reifies, TripleTerm(S, P, O))], regime) is False
+    assert decide(source, [(S, P, O)], regime) is False
+
+
 @pytest.mark.parametrize('backend', ['memory', 'sqlite'])
 def test_schema_decisions_preserve_graph_state(tmp_path, backend):
     from rdfcore import Dataset, SQLiteStore

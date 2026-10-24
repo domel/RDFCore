@@ -1,7 +1,7 @@
 """Query-local RDF/RDFS proofs and a guarded free-extension countermodel.
 
-Semantics CRD 2026-09-24 §§5, 8, 9; Schema WD 2026-10-22.
-Published documents and linked EDs inspected 2026-10-23. The non-normative
+Semantics CRD 2026-09-24 §§5, 8, 9; Schema WD 2026-10-23.
+Published documents and linked EDs inspected 2026-10-24. The non-normative
 appendix is NOT assumed to prove completeness of arbitrary RDF 1.2 reasoning.
 
 For a negative certificate, ordinary names and source blank nodes denote
@@ -21,7 +21,9 @@ The guard still rejects unhandled vocabulary links. Constructor queries are
 negative-certified only on finite property extensions, not on arbitrary
 infinite typing/subclass/subproperty relations. Unsupported diagrams remain
 unknown even if a Horn proof is absent. This is not a claim of complete
-RDF/RDFS decision support.
+RDF/RDFS decision support. A separate free-class interpretation also refutes
+a restricted recursive constructor query, without forbidding IT cycles in
+other interpretations.
 """
 from . import _datatype_spaces as spaces
 from .namespace import RDF, RDFS, XSD
@@ -156,9 +158,44 @@ def _constructor_proof(proof, query, regime, recognized, fresh, sem):
     return False
 
 
+def _free_class_cycle(source, query, recognized):
+    """A free interpretation refutes this recursive subclass query.
+
+    Semantics CRD 2026-09-24 §§5, 9: choose distinct vocabulary resources
+    and a free, injective IT whose image excludes those resources. Make all
+    resources classes, with Resource and Class universal. Give the other
+    vocabulary classes their required extensions. The subclass relation is
+    the axiomatic hierarchy, reflexivity and edges to the two universal
+    classes. A constructed superclass can therefore only be the subject
+    itself. A finite free term cannot equal a term properly containing it.
+
+    This is ONE admissible countermodel, not an occurs check on every RDF
+    interpretation: IT cycles remain legal in other models. Restrict the
+    premise and datatype map so no extra constraint invalidates this model.
+    """
+    from .semantics import _step
+    if (recognized != _MANDATORY or len(query) != 1
+            or not source <= {(RDFS.Resource, RDFS.subClassOf, RDFS.Class)}):
+        return False
+    node, predicate, term = next(iter(query))
+    if not isinstance(node, BNode) or predicate != RDFS.subClassOf:
+        return False
+    depth = 0
+    while isinstance(term, TripleTerm):
+        _step()
+        if term.subject != node or term.predicate != RDF.type:
+            return False
+        depth += 1
+        term = term.object
+    return depth > 0 and term == node
+
+
 def evaluate(source, target, regime, recognized, *, aliases=None, applications=()):
     from . import semantics as sem
 
+    if (regime == 'rdfs' and target is not None and not aliases and not applications
+            and _free_class_cycle(source, target, recognized)):
+        return False
     target_bad = target is not None and sem._ill_typed(target, recognized)
     valid_target = () if target_bad or target is None else target
     interner = {}

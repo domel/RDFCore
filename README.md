@@ -875,6 +875,8 @@ graph = Graph().parse(data=archived_xml, format="xml12", legacy_w3c=True)
 
 This recovery mode assumes RDF 1.2 when no version is announced in `xml12`
 and expands empty elements inside XML literals (`<br/>` becomes `<br></br>`).
+Expansion also applies when XML11 comment or processing-instruction filtering
+leaves an element empty. Reified statements retain the same expanded literal.
 Explicit version declarations still take precedence. In `xml`, only the
 XML-literal expansion applies. Default parsing and serializers are unchanged;
 this option is not a general XML canonicalization implementation. DTD rejection
@@ -894,6 +896,15 @@ Recovery does not discard either triple terms or direction to match those
 expectations. Results in this mode are archived-fixture compatibility evidence,
 not current RDF 1.2 conformance. The reasoning limits above also apply in
 this recovery profile.
+
+The 23 default-profile failures fall into three groups; none is hidden by
+the recovery results:
+
+| Cause in the locked snapshot | Executions | Default behavior | Explicit recovery |
+|---|---:|---|---|
+| `xml-canon-test001` / `002`, included by both XML suites | 4 | RDFLib-compatible empty-element spelling in `xml`; separate XML12 lexical rules | Expand empty elements |
+| Annotation fixtures without an RDF 1.2 announcement | 17 | Reject unannounced RDF 1.2 syntax | Accept archived syntax |
+| Disputed triple-term and direction expectations | 2 | Reject the unannounced RDF 1.2 input | Retain the triple and direction instead of matching the disputed results; still failed |
 
 The separate **W3C conformance** workflow runs weekly, on relevant pull
 requests and `v*` release tags, and can be started manually. It fetches or

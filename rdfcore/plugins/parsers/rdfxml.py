@@ -446,9 +446,10 @@ class RDFXMLParser(Parser):
                 copied = clone(child, scope)
                 if copied is not None:
                     result.appendChild(copied)
-            if self.legacy_w3c and node.nodeType == Node.ELEMENT_NODE and not node.childNodes:
+            if self.legacy_w3c and node.nodeType == Node.ELEMENT_NODE and not result.childNodes:
                 # DOM serialization, not a regex over markup or attribute data.
                 # This is empty-element expansion, not a general C14N engine.
+                # XML11 may have filtered all source children (comments/PIs).
                 result.appendChild(node.ownerDocument.createTextNode(''))
             return result
         fragment = element.ownerDocument.createDocumentFragment()

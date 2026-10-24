@@ -31,6 +31,31 @@ def test_legacy_empty_elements_are_expanded_only_when_requested(format):
     assert str(legacy.value(URIRef('urn:s'), URIRef('urn:e:p'))) == '<b><br></br></b>'
 
 
+@pytest.mark.parametrize('content', ['<!--x-->', '<?p x?>', '<!--x--><?p x?>'])
+@pytest.mark.parametrize('format', ['xml', 'xml12'])
+def test_legacy_expands_elements_empty_after_event_filtering(content, format):
+    from rdfcore import Literal
+    data = document('<e:p rdf:ID="r" rdf:parseType="Literal">'
+                    '<br>' + content + '</br></e:p>')
+    graph = Graph().parse(data=data, format=format, legacy_w3c=True,
+                          publicID='https://example/doc')
+    # XML11 filters these events, XML12 preserves them. Expansion concerns
+    # the resulting fragment, and reification must use the identical term.
+    expected = '<br></br>' if format == 'xml' else '<br>' + content + '</br>'
+    literal = Literal(expected, datatype=URIRef(RDF+'XMLLiteral'))
+    assert graph.value(URIRef('urn:s'), URIRef('urn:e:p')) == literal
+    assert graph.value(URIRef('https://example/doc#r'), URIRef(RDF+'object')) == literal
+    assert len(graph) == 5
+
+
+def test_legacy_preserves_literal_text_while_expanding_filtered_empty_children():
+    data = document('<e:p rdf:parseType="Literal">before'
+                    '<b><br><!--x--></br></b>after</e:p>')
+    graph = Graph().parse(data=data, format='xml', legacy_w3c=True)
+    assert str(graph.value(URIRef('urn:s'), URIRef('urn:e:p'))) == (
+        'before<b><br></br></b>after')
+
+
 @pytest.mark.parametrize('value', ['true', 1, None])
 def test_legacy_option_requires_boolean(value):
     with pytest.raises(ValueError, match='legacy_w3c'):

@@ -7,6 +7,21 @@ from rdflib.compare import isomorphic
 RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
 
 
+@pytest.mark.parametrize('content', ['', '<!--x-->', '<?p x?>', '<!--x--><?p x?>'])
+def test_default_xml_empty_literal_and_reification_match_reference(content):
+    source = document('<rdf:Description rdf:about="urn:s">'
+                      '<e:p rdf:ID="r" rdf:parseType="Literal">'
+                      '<br>' + content + '</br></e:p></rdf:Description>')
+    for module in (rdflib, rdfcore):
+        graph = module.Graph().parse(data=source, format='xml',
+                                    publicID='https://example/doc')
+        literal = module.Literal('<br/>', datatype=module.URIRef(RDF+'XMLLiteral'))
+        assert graph.value(module.URIRef('urn:s'), module.URIRef('urn:e:p')) == literal
+        assert graph.value(module.URIRef('https://example/doc#r'),
+                           module.URIRef(RDF+'object')) == literal
+        assert len(graph) == 5
+
+
 def document(body, attrs=''):
     return f'<rdf:RDF xmlns:rdf="{RDF}" xmlns:e="urn:e:" {attrs}>{body}</rdf:RDF>'
 

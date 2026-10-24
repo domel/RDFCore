@@ -74,9 +74,8 @@ def test_proposition_consistency_and_negative_certificates_do_not_assert_content
 def test_invalid_conclusion_is_false_only_if_premise_consistency_is_known():
     target = [(S, P, typed('invalid'))]
     assert semantics.entails([], target, datatypes={XSD.integer}, mode='decide') is False
-    with pytest.raises(semantics.UnsupportedEntailment):
-        semantics.entails([(RDFS.Class, RDFS.subClassOf, RDF.Property)], target,
-                         regime='rdfs', datatypes={XSD.integer}, mode='decide')
+    assert semantics.entails([(RDFS.Class, RDFS.subClassOf, RDF.Property)], target,
+                             regime='rdfs', datatypes={XSD.integer}, mode='decide') is False
 
 
 @pytest.mark.parametrize('regime', ['rdf', 'rdfs'])

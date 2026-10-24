@@ -173,7 +173,48 @@ DATATYPE_PROBES = tuple(
         ('JSON', RDF.JSON, Literal('{"v":1}', datatype=RDF.JSON)),
     )
 )
-ALL_PROBES = PROBES + AXIOM_PROBES + DATATYPE_PROBES
+SCHEMA_PROBES = (
+    _case('multiple-domains', 'x9-rdfs-interpretations',
+          'Multiple domains constrain every subject conjunctively',
+          [(P, RDFS.domain, C), (P, RDFS.domain, D), (S, P, O)],
+          [(S, RDF.type, C), (S, RDF.type, D), (P, RDF.type, RDF.Property),
+           (C, RDF.type, RDFS.Class), (D, RDF.type, RDFS.Class)]),
+    _case('multiple-ranges', 'x9-rdfs-interpretations',
+          'Multiple ranges constrain every object conjunctively',
+          [(P, RDFS.range, C), (P, RDFS.range, D), (S, P, O)],
+          [(O, RDF.type, C), (O, RDF.type, D), (P, RDF.type, RDF.Property),
+           (C, RDF.type, RDFS.Class), (D, RDF.type, RDFS.Class)]),
+    _case('class-self-member', 'x9-rdfs-interpretations',
+          'Classes may contain themselves and have empty or overlapping extensions',
+          [(C, RDF.type, C), (C, RDF.type, RDFS.Class), (D, RDF.type, RDFS.Class)],
+          False, expected=False),
+    _case('no-extensional-class-identity', 'x9-rdfs-interpretations',
+          'Coinciding known instances do not identify two classes',
+          [(S, RDF.type, C), (S, RDF.type, D), (C, P, O)],
+          [(D, P, O)], expected=False),
+    _case('value-not-functional', 'x9-rdfs-interpretations',
+          'Structured-value vocabulary does not impose a unique value',
+          [(S, RDF.value, O), (S, RDF.value, C)], False, expected=False),
+    _case('container-no-property-transfer', 'x9-rdfs-interpretations',
+          'Container attributes do not automatically apply to members',
+          [(S, RDF['_1'], O), (S, P, C)], [(O, P, C)], expected=False),
+    _case('container-not-permuted', 'x9-rdfs-interpretations',
+          'Bag convention does not permute indexed membership statements',
+          [(S, RDF.type, RDF.Bag), (S, RDF['_1'], C), (S, RDF['_2'], D)],
+          [(S, RDF['_1'], D)], expected=False),
+    _case('legacy-predicate-not-property', 'x9-rdfs-interpretations',
+          'Describing a statement predicate does not assert its use as a property',
+          [(C, RDF.predicate, P)], [(P, RDF.type, RDF.Property)], expected=False),
+    _case('legacy-not-from-assertion', 'x9-rdfs-interpretations',
+          'Asserting a triple does not assert an old-style reification',
+          [(S, P, O)], [(X, RDF.subject, S), (X, RDF.predicate, P), (X, RDF.object, O)],
+          expected=False),
+    _case('constructor-unconstrained', 'x5-simple-interpretations',
+          'A query-only predicate need not denote a property',
+          [(RDFS.Resource, RDFS.subClassOf, RDFS.Class)],
+          [(X, RDFS.subClassOf, TripleTerm(S, P, O))], expected=False),
+)
+ALL_PROBES = PROBES + AXIOM_PROBES + DATATYPE_PROBES + SCHEMA_PROBES
 
 
 def run_probe(probe):

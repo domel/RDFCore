@@ -358,6 +358,16 @@ or as triple-term components. Other undecided cases
 raise `UnsupportedEntailment`, never an assumed `False`. General RDF/RDFS
 reasoning remains incomplete. Dataset inputs are rejected; select a graph.
 
+`semantics.merge_datasets([first, second])` explicitly implements the
+[dataset merge defined in Semantics section 10](https://www.w3.org/TR/2026/CRD-rdf12-semantics-20260924/#x10-rdf-datasets).
+It returns a new in-memory Dataset, standardizes blank nodes apart between
+inputs and preserves sharing within each input, including triple terms and
+blank-node graph names. Equal IRI graph names combine their statements;
+default statements stay in the default graph. This statement-labelled merge
+omits empty named graphs. Inputs remain unchanged. The function snapshots
+its inputs and accepts an optional `max_steps` work budget; it is not a
+bounded-memory operation or a dataset entailment regime.
+
 Boolean domains and integer intervals of at most 4096 values can be checked
 exhaustively. Larger spaces use witnesses for consistency/countermodels only;
 a few samples never prove a universal conclusion. Evaluation stops with
@@ -822,6 +832,10 @@ which makes the HTML, XMLLiteral and JSON sections normative. Recognition
 of those datatypes remains explicit, as allowed by Semantics section 8.
 A free-class countermodel decides a restricted recursive constructor query;
 other schema/constructor queries can still be unsupported.
+The `normative_audit` part records reviewed formal obligations, their
+implementation status and test evidence. It also records discrepancies in
+the specification prose and the formal definitions used to resolve them.
+Completing this review does not establish a complete general reasoner.
 `official_semantics_passed` describes the executed fixtures;
 `full_profile_verified` remains false while the general regime is incomplete. The
 report records `entailment_options` and a `semantic_plan`

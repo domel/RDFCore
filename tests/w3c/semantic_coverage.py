@@ -35,7 +35,7 @@ SCHEMA_CHECKS = {
     '2.1.1': ('resource-universal',), '2.1.2': ('subclass-reflexive', 'class-resource'),
     '2.1.3': ('datatype-class',), '2.1.4': ('datatype-class',),
     '2.1.5': ('rdf-property', 'subproperty-reflexive'),
-    '2.2.1': ('range',), '2.2.2': ('domain', 'domain-not-inherited'),
+    '2.2.1': ('range', 'multiple-ranges'), '2.2.2': ('domain', 'multiple-domains', 'domain-not-inherited'),
     '2.2.3': ('subclass-members',), '2.2.4': ('subclass-transitive', 'subclass-members'),
     '2.2.5': ('subproperty-transitive', 'subproperty-extension'),
     '2.3.1': ('rdfs-range-15',), '2.3.2': ('rdfs-range-14',),
@@ -52,7 +52,7 @@ SCHEMA_CHECKS = {
     '4.3': ('list-typing', 'list-not-functional'), '4.4': ('rdf-nil',),
     '5.1': ('proposition', 'inner-not-asserted'),
     '5.2': ('rdfs-range-1', 'reifies-not-functional'),
-    '6.1': ('rdf-axiom-value', 'rdfs-domain-16', 'rdfs-range-16', 'value-no-assertion'),
+    '6.1': ('rdf-axiom-value', 'rdfs-domain-16', 'rdfs-range-16', 'value-no-assertion', 'value-not-functional'),
     '7.1.1': ('rdfs-fixed-hierarchy',), '7.1.2': ('container-overlap',),
     '7.1.3': ('container-not-gap-free',), '7.1.4': ('container-overlap',),
     '7.1.5': ('container-family-100000',), '7.1.6': ('container-membership',),
@@ -90,6 +90,8 @@ def _probe(name, premise, datatypes, target=False):
 
 def coverage_report(suites):
     from .semantic_requirements import ALL_PROBES, run_probe
+    from .semantic_audit import audit_report
+    audit = audit_report()
     semantic = [s for s in suites if s.get('category') == 'entailment']
     suite_passed = (len(semantic) == 2
                     and set(s.get('rdf_version') for s in semantic) == {'rdf11', 'rdf12'}
@@ -128,8 +130,9 @@ def coverage_report(suites):
     blockers = [
         'No completeness argument for arbitrary schema/constructor queries.',
         'Some vocabulary constraints still lack an interpretation certificate.',
-        'Clause-level Semantics/Schema audit remains incomplete.',
     ]
+    blockers.extend('Incomplete normative obligation: ' + r['id']
+                    for r in audit['obligations'] if r['status'] == 'partial')
     conditions = [dict(run_probe(p), reference=SEMANTICS + '#' + p.section,
                        evidence='tests/w3c/test_semantic_requirements.py',
                        coverage='example consequence; not a completeness proof') for p in ALL_PROBES]
@@ -141,6 +144,7 @@ def coverage_report(suites):
         'official_semantics_passed': suite_passed,
         'additional_probes': probes,
         'semantic_conditions': conditions,
+        'normative_audit': audit,
         'specification_changes': [
             dict(reference=SCHEMA, previous='2026-10-22',
                  change='HTML, XMLLiteral and JSON sections are now normative; registry admission and custodianship clarified.',

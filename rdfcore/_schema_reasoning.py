@@ -158,8 +158,8 @@ def _constructor_proof(proof, query, regime, recognized, fresh, sem):
     return False
 
 
-def _free_class_cycle(source, query, recognized):
-    """A free interpretation refutes this recursive subclass query.
+def _free_class_countermodel(source, query, recognized):
+    """A free interpretation refutes selected constructor queries.
 
     Semantics CRD 2026-09-24 §§5, 9: choose distinct vocabulary resources
     and a free, injective IT whose image excludes those resources. Make all
@@ -168,15 +168,47 @@ def _free_class_cycle(source, query, recognized):
     the axiomatic hierarchy, reflexivity and edges to the two universal
     classes. A constructed superclass can therefore only be the subject
     itself. A finite free term cannot equal a term properly containing it.
+    If Resource is a subclass of Property, choose IP=IR and add Property
+    to the universal superclass cluster; the free algebra still works.
+
+    An ordinary query-only IRI can instead denote a nonproperty resource.
+    An application using it as predicate is then undefined, so no mapping
+    satisfies a conclusion containing that application, nested or otherwise.
+    The premise must not constrain that IRI; the source guard enforces this.
 
     This is ONE admissible countermodel, not an occurs check on every RDF
     interpretation: IT cycles remain legal in other models. Restrict the
     premise and datatype map so no extra constraint invalidates this model.
     """
-    from .semantics import _step
-    if (recognized != _MANDATORY or len(query) != 1
-            or not source <= {(RDFS.Resource, RDFS.subClassOf, RDFS.Class)}):
+    from .semantics import _ill_typed, _step, _terms
+    cluster = {RDFS.Resource, RDFS.Class, RDF.Property}
+    if not _MANDATORY <= recognized:
         return False
+    for s, p, o in source:
+        _step()
+        if p != RDFS.subClassOf or s not in cluster or o not in cluster:
+            return False
+    # Set all three class extensions to IR to witness consistency, while
+    # preserving each recognized datatype's own fixed extension. Datatype
+    # objects and values may themselves be classes/properties.
+    if query is None or _ill_typed(query, recognized):
+        return True
+    if len(query) != 1:
+        return False
+    universal = {RDFS.Resource, RDFS.Class}
+    while True:
+        previous = universal.copy()
+        universal.update(o for s, _, o in source if s in previous)
+        if universal == previous:
+            break
+    universal_properties = RDF.Property in universal
+    for row in query:
+        for root in row:
+            for term in _terms(root):
+                _step()
+                if (not universal_properties and isinstance(term, TripleTerm) and isinstance(term.predicate, URIRef)
+                        and _ordinary(term.predicate)):
+                    return True
     node, predicate, term = next(iter(query))
     if not isinstance(node, BNode) or predicate != RDFS.subClassOf:
         return False
@@ -194,7 +226,7 @@ def evaluate(source, target, regime, recognized, *, aliases=None, applications=(
     from . import semantics as sem
 
     if (regime == 'rdfs' and target is not None and not aliases and not applications
-            and _free_class_cycle(source, target, recognized)):
+            and _free_class_countermodel(source, target, recognized)):
         return False
     target_bad = target is not None and sem._ill_typed(target, recognized)
     valid_target = () if target_bad or target is None else target

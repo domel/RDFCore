@@ -19,7 +19,7 @@ def test_all_green_fixtures_do_not_prove_full_profile():
     assert report['full_profile_verified'] is False
     assert [p['status'] for p in report['additional_probes'][:3]] == ['passed'] * 3
     assert report['additional_probes'][3]['status'] == 'passed'
-    assert report['additional_probes'][4]['status'] == 'unsupported'
+    assert report['additional_probes'][4]['status'] == 'passed'
     assert all(p['status'] == 'passed' for p in report['semantic_conditions'])
     assert all(p['reference'].startswith(report['semantics_reference'] + '#')
                for p in report['semantic_conditions'])

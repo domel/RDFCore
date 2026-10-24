@@ -121,7 +121,7 @@ from .dataset import ConjunctiveGraph, Dataset
 from .namespace import RDF, RDFS
 from .term import BNode, Literal, TripleTerm, URIRef
 
-__all__ = ["UnsupportedEntailment", "EntailmentResourceLimit", "entails", "entailment_closure"]
+__all__ = ["UnsupportedEntailment", "EntailmentResourceLimit", "entails", "entailment_closure", "merge_datasets"]
 
 Term = URIRef | BNode | Literal | TripleTerm
 Triple = tuple[Term, Term, Term]
@@ -359,6 +359,10 @@ def _simple_value_fragment(graph, recognized) -> bool:
 def _decide(source, target, regime, recognized) -> bool:
     if _ill_typed(source, recognized):
         return True  # Includes the explicit False conclusion: ex falso.
+    if regime == 'rdfs':
+        from ._schema_reasoning import _free_class_countermodel
+        if _free_class_countermodel(source, target, recognized):
+            return False
     if regime != 'simple':
         from ._datatype_reasoning import evaluate
         from .datatypes import DatatypeResourceLimit, UnsupportedDatatype
@@ -656,3 +660,64 @@ def entails(
         f"{regime} proof not found: datatype, axiomatic, proposition and "
         "inconsistency reasoning are incomplete; non-entailment is unknown"
     )
+
+
+def merge_datasets(datasets: Iterable[Dataset], *, max_steps: int | None = None) -> Dataset:
+    """Return the statement-labelled dataset merge of Semantics §10.
+
+    Blank nodes are standardized apart for each input occurrence, including
+    graph names and nested triple terms, while sharing within that input is
+    preserved. Equal IRI graph names combine their statements. Default
+    statements remain in the default graph; inputs and stores are untouched.
+
+    The algorithm labels statements, so named graphs with no statements do
+    not contribute a label and are omitted. This is an explicit semantic
+    merge, not a change to Dataset operators or an entailment regime. The
+    output is a fresh in-memory Dataset. Input snapshots use memory linear
+    in the input size; this function does not advertise bounded memory.
+    max_steps has the same internal-work meaning as in entails().
+    """
+    with _limited(max_steps):
+        snapshots, occupied = [], set()
+        for dataset in datasets:
+            _step()
+            if not isinstance(dataset, Dataset):
+                raise TypeError('dataset merge inputs must be Dataset instances')
+            graphs = []
+            for graph in dataset.graphs():
+                _step()
+                name = graph.identifier
+                if isinstance(name, BNode):
+                    occupied.add(name)
+                rows = _snapshot(graph)
+                for row in rows:
+                    for root in row:
+                        occupied.update(t for t in _terms(root) if isinstance(t, BNode))
+                graphs.append((name == dataset.default_graph.identifier, name, rows))
+            snapshots.append(graphs)
+        result = Dataset()
+        for graphs in snapshots:
+            mapping = {}
+
+            def renamed(term):
+                _step()
+                if isinstance(term, BNode):
+                    if term not in mapping:
+                        fresh = BNode()
+                        while fresh in occupied:
+                            _step()
+                            fresh = BNode()
+                        occupied.add(fresh)
+                        mapping[term] = fresh
+                    return mapping[term]
+                if isinstance(term, TripleTerm):
+                    return TripleTerm(*(renamed(t) for t in term))
+                return term
+
+            for is_default, name, rows in graphs:
+                if not rows:
+                    continue
+                graph = result.default_graph if is_default else result.graph(renamed(name))
+                for row in rows:
+                    graph.add(tuple(renamed(t) for t in row))
+        return result

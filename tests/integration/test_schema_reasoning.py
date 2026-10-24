@@ -5,6 +5,7 @@ These tests do not turn a finite rule closure into a general decision procedure.
 import pytest
 
 from rdfcore import BNode, Literal, RDF, RDFS, TripleTerm, URIRef, XSD
+from rdfcore.datatypes import SUPPORTED_DATATYPES
 from rdfcore.semantics import EntailmentResourceLimit, UnsupportedEntailment, entails
 
 S, P, O, Q, C, D = map(URIRef, ('urn:s', 'urn:p', 'urn:o', 'urn:q', 'urn:C', 'urn:D'))
@@ -58,8 +59,9 @@ def test_constructor_existence_is_not_limited_to_terms_already_in_the_premise():
 
 def test_constructor_witness_does_not_invent_its_predicate_property():
     source = [(RDFS.Resource, RDFS.subClassOf, RDFS.Class)]
-    with pytest.raises(UnsupportedEntailment):
-        decide(source, [(BNode('class'), RDFS.subClassOf, TripleTerm(S, P, O))])
+    assert decide(source, [(BNode('class'), RDFS.subClassOf, TripleTerm(S, P, O))]) is False
+    assert decide(source + [(P, RDF.type, RDF.Property)],
+                  [(BNode('class'), RDFS.subClassOf, TripleTerm(S, P, O))]) is True
 
 
 def test_named_propositions_and_literal_reifiers_are_not_automatically_inconsistent():
@@ -133,10 +135,14 @@ def test_an_infinite_proposition_image_cannot_be_a_finite_datatype_class(datatyp
                   datatypes={datatype}) is True
 
 
-def test_genuinely_unresolved_constructor_queries_stay_unknown():
-    with pytest.raises(UnsupportedEntailment):
-        decide([(RDFS.Resource, RDFS.subClassOf, RDFS.Class)],
-               [(BNode('c'), RDFS.subClassOf, TripleTerm(BNode('s'), P, O))])
+@pytest.mark.parametrize('nested', [False, True])
+@pytest.mark.parametrize('universal_classes', [False, True])
+def test_a_constructor_predicate_can_be_nonproperty_in_a_countermodel(nested, universal_classes):
+    term = TripleTerm(BNode('s'), P, O)
+    if nested:
+        term = TripleTerm(S, RDF.type, term)
+    source = [(RDFS.Resource, RDFS.subClassOf, RDFS.Class)] if universal_classes else []
+    assert decide(source, [(BNode('c'), RDFS.subClassOf, term)]) is False
 
 
 def test_exhaustion_is_not_non_entailment():
@@ -146,13 +152,31 @@ def test_exhaustion_is_not_non_entailment():
 
 @pytest.mark.parametrize('depth', [1, 2, 4])
 @pytest.mark.parametrize('universal_classes', [False, True])
-def test_free_class_constructor_cycle_has_a_countermodel(depth, universal_classes):
+@pytest.mark.parametrize('universal_properties', [False, True])
+def test_free_class_constructor_cycle_has_a_countermodel(depth, universal_classes, universal_properties):
     x = BNode('cycle')
     term = x
     for _ in range(depth):
         term = TripleTerm(x, RDF.type, term)
     source = [(RDFS.Resource, RDFS.subClassOf, RDFS.Class)] if universal_classes else []
+    if universal_properties:
+        source.append((RDFS.Resource, RDFS.subClassOf, RDF.Property))
     assert decide(source, [(x, RDFS.subClassOf, term)]) is False
+
+
+def test_universal_properties_make_a_query_constructor_defined():
+    source = [(RDFS.Resource, RDFS.subClassOf, RDFS.Class),
+              (RDFS.Resource, RDFS.subClassOf, RDF.Property)]
+    assert decide(source, [(BNode('c'), RDFS.subClassOf, TripleTerm(S, P, O))]) is True
+
+
+@pytest.mark.parametrize('datatype', sorted(SUPPORTED_DATATYPES))
+def test_free_top_cluster_model_respects_every_supported_datatype(datatype):
+    source = [(RDFS.Class, RDFS.subClassOf, RDF.Property)]
+    x = BNode('cycle')
+    assert decide(source, False, datatypes={URIRef(datatype)}) is False
+    assert decide(source, [(x, RDFS.subClassOf, TripleTerm(x, RDF.type, x))],
+                  datatypes={URIRef(datatype)}) is False
 
 
 def test_free_class_countermodel_does_not_forbid_cycles_in_other_models():

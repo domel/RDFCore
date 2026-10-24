@@ -192,12 +192,15 @@ nor changes ordinary graph storage.
 |---|---|---|
 | RDF 1.1 with RDFLib-compatible behavior | `xml`, `rdfxml`, `application/rdf+xml` | None added by the writer |
 | RDF 1.2 | `xml12`, `xmlrdf12` | Writer adds `rdf:version="1.2"` |
-| RDF 1.2 basic profile | `xml12` with `rdf_version="1.2-basic"` | Writer announces `1.2-basic`; no triple terms |
+| RDF 1.2 basic output | `xml12` serializer with `rdf_version="1.2-basic"` | Writer announces `1.2-basic`; no triple terms |
 
 Files ending in `.rdf` or `.xml` select RDF 1.1 unless a format is supplied.
 `application/rdf+xml; version=1.2` selects XML12 as an RDFCore extension.
 The parser still requires an in-scope `rdf:version` announcement for
 RDF 1.2-only constructs, even when `format="xml12"` is explicit.
+To restrict input to the basic profile, use
+`format="application/rdf+xml; version=1.2-basic"`. With `format="xml12"`,
+the `rdf_version` argument alone does not restrict the parser's input profile.
 
 ### Basic use
 

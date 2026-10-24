@@ -315,9 +315,6 @@ class Graph:
         if any is False:
             try:
                 next(values)
-            except StopIteration:
-                pass
-            else:
                 message = (
                     'While trying to find a value for (%s, %s, %s) the'
                     ' following multiple values where found:\n'
@@ -332,6 +329,8 @@ class Graph:
                         contexts = list(self.store.contexts((s, p, o)))
                     message += '(%s, %s, %s)\n (contexts: %s)\n' % (s, p, o, contexts)
                 raise UniquenessError(message)
+            except StopIteration:
+                pass
         return value
 
     def set(self, triple):

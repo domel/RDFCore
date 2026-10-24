@@ -39,6 +39,42 @@ def test_value_diagnostics_do_not_enumerate_custom_store_contexts(error, provide
             assert '(contexts: [])' in str(raised.value)
 
 
+@pytest.mark.parametrize('stage', ['query', 'contexts'])
+@pytest.mark.parametrize('error', [StopIteration, RuntimeError])
+@pytest.mark.parametrize('any_value', [True, False])
+def test_value_diagnostic_iteration_errors_match_reference(stage, error, any_value):
+    for module in (rdflib, rdfcore):
+        if module is rdflib:
+            from rdflib.plugins.stores.memory import Memory
+        else:
+            Memory = module.Memory
+
+        class Contexts:
+            def __iter__(self):
+                raise error('diagnostic failed')
+
+        class CustomStore(Memory):
+            def triples(self, pattern, context=None):
+                if context is None:
+                    if stage == 'query':
+                        raise error('diagnostic failed')
+                    return ((triple, Contexts()) for triple, _ in super().triples(pattern, context))
+                return super().triples(pattern, context)
+
+        graph = module.Graph(store=CustomStore(), identifier=module.URIRef('urn:g'))
+        s, p = module.URIRef('urn:s'), module.URIRef('urn:p')
+        values = {module.Literal('first'), module.Literal('second')}
+        for value in values:
+            graph.add((s, p, value))
+        if any_value is False and error is RuntimeError:
+            with pytest.raises(RuntimeError, match='diagnostic failed'):
+                graph.value(s, p, any=any_value)
+        else:
+            # RDFLib catches StopIteration from the complete diagnostic block
+            # and returns the first match, even after detecting ambiguity.
+            assert graph.value(s, p, any=any_value) in values
+
+
 @pytest.mark.parametrize('missing', ['subject', 'predicate', 'object', 'two', 'none'])
 @pytest.mark.parametrize('size', [0, 1, 2])
 @pytest.mark.parametrize('unique', [False, True])

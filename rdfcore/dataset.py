@@ -208,13 +208,22 @@ class ConjunctiveGraph(Dataset):
     def __iter__(self):
         return self.triples((None, None, None))
 
-    def __init__(self, store="default", identifier=None):
-        warnings.warn("ConjunctiveGraph is deprecated; use Dataset", DeprecationWarning, stacklevel=2)
-        super().__init__(store=store, default_union=True)
-        value = identifier or BNode()
-        self.identifier = value if isinstance(value, (URIRef, BNode)) else URIRef(value)
+    def __init__(self, store="default", identifier=None, default_graph_base=None):
+        Graph.__init__(self, store=store, identifier=identifier or None)
+        if type(self) is ConjunctiveGraph:
+            warnings.warn("ConjunctiveGraph is deprecated, use Dataset instead.",
+                          DeprecationWarning, stacklevel=2)
+        assert self.store.context_aware, "ConjunctiveGraph must be backed by a context aware store."
+        self.context_aware = True
+        self.default_union = True
         self.default_graph = Graph(store=self.store, identifier=identifier or BNode(),
-                                   namespace_manager=self.namespace_manager)
+                                   base=default_graph_base)
         self._graphs = {self.default_graph.identifier: self.default_graph}
-        if identifier is not None:
-            self.conjunctive_identifier = identifier
+
+    @property
+    def default_context(self):
+        return self.default_graph
+
+    @default_context.setter
+    def default_context(self, value):
+        self.default_graph = value

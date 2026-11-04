@@ -575,7 +575,7 @@ Unknown versions are rejected. Back up existing databases before migration.
 Language tags compare case-insensitively while metadata retains their first
 spelling per context and union. Spelling lost by older releases is unrecoverable.
 
-When serializing a dataset to a graph format, RDFLib's format-specific
+For legacy RDF 1.1 dataset output without `dataset_policy`, RDFLib's format-specific
 projection applies: N-Triples includes its quads as triple statements, while
 Turtle and RDF/XML use the default graph unless `default_union=True`.
 Serialization uses `Graph.base` when `base` is omitted. Turtle and TriG pretty
@@ -591,7 +591,8 @@ with `safe_iris=True`; direct streaming writers use it by default.
 return false positives for blank nodes. Use `rdfcore.compare.isomorphic()`
 for exact graph/dataset comparison, including nested triple terms and empty
 named graphs. The graph method uses exact comparison for RDF 1.2 as an extension.
-Symmetric blank-node graphs may still be expensive.
+Independent blank-node components are matched separately; connected symmetric
+graphs may still be expensive.
 
 For sorting large streams, use `external_sort()` with a memory budget:
 

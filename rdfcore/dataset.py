@@ -200,10 +200,76 @@ class Dataset(Graph):
         yield from self.graphs(triple)
 
 
-class ConjunctiveGraph(Dataset):
+class ConjunctiveGraph(Graph):
+    # Dataset conveniences retained as RDFCore extensions; the class itself
+    # follows RDFLib's Graph hierarchy and union-query contract.
+    graph = Dataset.graph
+    graphs = Dataset.graphs
+    context_id = Dataset.context_id
+    remove_context = Dataset.remove_context
+    remove_graph = Dataset.remove_graph
+    add_graph = Dataset.add_graph
+    add = Dataset.add
+    addN = Dataset.addN
+    remove = Dataset.remove
+    triples_choices = Dataset.triples_choices
+    _triples_in_context = Dataset._triples_in_context
+
     def contexts(self, triple=None):
         for context in self.store.contexts(triple):
-            yield self.get_context(context)
+            yield context if isinstance(context, Graph) else self.get_context(context)
+
+    def get_graph(self, identifier):
+        return [graph for graph in self.contexts() if graph.identifier == identifier][0]
+
+    def get_context(self, identifier, quoted=False, base=None):
+        return Graph(store=self.store, identifier=identifier or None,
+                     namespace_manager=self.namespace_manager, base=base)
+
+    def _graph(self, context):
+        if context is None or isinstance(context, (ConjunctiveGraph, Dataset)):
+            return context
+        return self.get_context(context.identifier if isinstance(context, Graph) else context)
+
+    def _spoc(self, triple_or_quad, default=False):
+        if triple_or_quad is None:
+            return None, None, None, self.default_context if default else None
+        if len(triple_or_quad) == 3:
+            subject, predicate, obj = triple_or_quad
+            context = self.default_context if default else None
+        elif len(triple_or_quad) == 4:
+            subject, predicate, obj, context = triple_or_quad
+            context = self._graph(context)
+        return subject, predicate, obj, context
+
+    def triples(self, triple_or_quad, context=None):
+        subject, predicate, obj, selected = self._spoc(triple_or_quad)
+        selected = self._graph(context or selected)
+        if self.default_union:
+            if selected == self.default_context:
+                selected = None
+        elif selected is None:
+            selected = self.default_context
+        identifier = getattr(selected, 'identifier', selected)
+        for triple, _ in self.store.triples((subject, predicate, obj), identifier):
+            yield triple
+
+    def quads(self, triple_or_quad=None):
+        subject, predicate, obj, context = self._spoc(triple_or_quad)
+        identifier = getattr(context, 'identifier', context)
+        from .store import Memory, SQLiteStore
+        for triple, contexts in self.store.triples((subject, predicate, obj), identifier):
+            if type(self.store) in (Memory, SQLiteStore):
+                contexts = (self.get_context(key) for key in self.store.contexts(triple))
+            for selected in contexts:
+                yield (*triple, selected)
+
+    def __contains__(self, triple_or_quad):
+        subject, predicate, obj, context = self._spoc(triple_or_quad)
+        return next(self.triples((subject, predicate, obj), context=context), None) is not None
+
+    def __len__(self):
+        return self.store.__len__()
 
     def __iter__(self):
         return self.triples((None, None, None))

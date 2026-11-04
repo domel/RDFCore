@@ -167,10 +167,18 @@ def test_value_context_store_and_default_identity(backend, view, missing, size):
             triples.append(tuple(triple))
             target.add(tuple(triple))
             target.add(tuple(triple))  # Duplicates must not create ambiguity.
-        # The other context must not affect a selected graph. In the union,
-        # it repeats a logical triple instead of adding a new candidate.
-        if view in ('default', 'union'):
-            named.add(triples[0] if triples else (s, p, module.Literal('unrelated')))
+        # A different value for the same pattern must be visible only in the
+        # union. Also repeat a selected triple to check cross-context dedup.
+        other = dataset.graph(module.URIRef('urn:outside'))
+        foreign = list(base)
+        foreign[position] = module.Literal('foreign') if missing == 'object' else module.URIRef('urn:foreign')
+        other.add(tuple(foreign))
+        if triples:
+            other.add(triples[0])
+        expected_triples = set(triples)
+        if view == 'union':
+            expected_triples.add(tuple(foreign))
+        candidates = {triple[position] for triple in expected_triples}
         kwargs = dict(subject=s, predicate=p, object=o)
         kwargs[missing] = None
         results = []
@@ -182,19 +190,19 @@ def test_value_context_store_and_default_identity(backend, view, missing, size):
                             result = graph.value(**kwargs, default=fallback, any=flag)
                         except module.exceptions.UniquenessError as error:
                             assert flag is False
+                            assert len(candidates) > 1
                             message = str(error)
                             assert 'Uniqueness assumption is not fulfilled.' in message
                             assert 'While trying to find a value for' in message
                             assert 'urn:s' in message and 'urn:p' in message
                             results.append('nonunique')
                         else:
-                            pattern = [None if i == position else term for i, term in enumerate(base)]
-                            candidates = {t[position] for t in graph.triples(tuple(pattern))}
                             if not candidates:
                                 assert result is fallback
                                 results.append('default')
                             else:
                                 assert result in candidates
+                                assert flag is not False or len(candidates) == 1
                                 assert type(result) in (module.URIRef, module.Literal)
                                 results.append(('term', type(result).__name__) if len(candidates) > 1 else
                                                ('term', type(result).__name__, result.n3()))
@@ -203,6 +211,24 @@ def test_value_context_store_and_default_identity(backend, view, missing, size):
         finally:
             dataset.close()
     assert observe(rdfcore) == observe(rdflib)
+
+
+@pytest.mark.parametrize('backend', ['memory', 'sqlite'])
+@pytest.mark.parametrize('default_union', [False, True])
+@pytest.mark.parametrize('missing', ['subject', 'predicate', 'object'])
+def test_value_empty_dataset_returns_default_identity(backend, default_union, missing):
+    for module in (rdflib, rdfcore):
+        store = module.SQLiteStore(':memory:') if module is rdfcore and backend == 'sqlite' else 'default'
+        dataset = module.Dataset(store=store, default_union=default_union)
+        kwargs = dict(subject=module.URIRef('urn:s'), predicate=module.URIRef('urn:p'),
+                      object=module.URIRef('urn:o'))
+        kwargs[missing] = None
+        fallback = object()
+        try:
+            for flag in (True, False):
+                assert dataset.value(**kwargs, default=fallback, any=flag) is fallback
+        finally:
+            dataset.close()
 
 
 @pytest.mark.parametrize('value', [None, '', 0, False, ('a', 'b')])

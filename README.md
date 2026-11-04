@@ -445,6 +445,13 @@ graph.serialize(format="nt", rdf_version="1.1", downgrade="interop")
 `downgrade="interop"` re-expresses supported constructs in RDF 1.1.
 Unsupported downgrades raise an error; information is not silently discarded.
 
+`rdfcore.interop.basic_encode()` / `basic_decode()` follow the informative
+[W3C Interop draft](https://www.w3.org/TR/2026/DNOTE-rdf12-interop-20260723/).
+They preserve supported input structure, not entailment, and reject hybrid,
+incomplete or cyclic forms. Transformations buffer data and retain empty named
+graphs. RDF 1.1 direction mapping uses i18n datatypes as a separate extension;
+`decode_direction_i18n()` reverses an individual mapped literal explicitly.
+
 ## Streaming processing
 
 Streaming operations process statements without building a `Graph` or

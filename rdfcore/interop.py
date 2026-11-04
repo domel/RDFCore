@@ -1,4 +1,9 @@
-"""Explicit RDF 1.2 interoperability transformations."""
+"""Explicit transformations following Interop DNOTE 2026-07-23 §§3.1–3.3.
+
+This informative Note's Full/Basic mapping preserves information on its
+supported input domain, not RDF entailment. Directional i18n mapping to 1.1
+is a separate RDFCore extension. ED reviewed 2026-11-04.
+"""
 
 from __future__ import annotations
 
@@ -13,8 +18,31 @@ _I18N = re.compile(r"^https://www\.w3\.org/ns/i18n#([a-z0-9]+(?:-[a-z0-9]+)*)_(l
 
 def _copy_graph_names(source, result):
     if hasattr(source, 'quads'):
-        for graph in source.graphs():
-            result.graph(graph.identifier)
+        for identifier in source.store.contexts():
+            result.graph(identifier)
+
+
+def _statements(value):
+    if not hasattr(value, 'quads'):
+        return [(*triple, None) for triple in value]
+    default = value.default_graph.identifier
+    return [(*triple, None if context == default else context)
+            for context in value.store.contexts()
+            for triple, _ in value.store.triples((None, None, None), context)]
+
+
+def _bnodes(term):
+    if isinstance(term, BNode):
+        yield term
+    elif isinstance(term, TripleTerm):
+        for component in term:
+            yield from _bnodes(component)
+
+
+def _check_hybrid(quads):
+    if any(isinstance(s, BNode) and p == RDF.type and o == RDF.PropositionForm
+           for s, p, o, _ in quads) and any(isinstance(o, TripleTerm) for _, _, o, _ in quads):
+        raise ValueError('cannot transform mixed triple terms and existing PropositionForm nodes')
 
 
 def encode_direction_i18n(literal: Literal) -> Literal:
@@ -43,17 +71,11 @@ def basic_encode(value):
     result = Dataset() if is_dataset else Graph()
     _copy_graph_names(value, result)
     mapping = {}
-    quads = list(value.quads()) if is_dataset else [(*triple, None) for triple in value]
-    occupied = {
-        term for quad in quads for term in quad[:3] if isinstance(term, BNode)
-    }
-    if any(
-        isinstance(subject, BNode)
-        and predicate == RDF.type
-        and obj == RDF.PropositionForm
-        for subject, predicate, obj, _graph in quads
-    ) and any(isinstance(term, TripleTerm) for quad in quads for term in quad[:3]):
-        raise ValueError("cannot basic-encode data containing existing PropositionForm nodes")
+    quads = _statements(value)
+    occupied = {node for quad in quads for term in quad for node in _bnodes(term)}
+    if is_dataset:
+        occupied.update(node for context in value.store.contexts() for node in _bnodes(context))
+    _check_hybrid(quads)
     for quad in quads:
         subject, predicate, obj, graph = quad
         converted = _encode_term(obj, mapping, result, graph, occupied)
@@ -68,11 +90,18 @@ def basic_decode(value):
     is_dataset = hasattr(value, "quads")
     result = Dataset() if is_dataset else Graph()
     _copy_graph_names(value, result)
-    quads = list(value.quads()) if is_dataset else [(*triple, None) for triple in value]
+    quads = _statements(value)
+    _check_hybrid(quads)
     forms = _proposition_forms(quads)
+    if is_dataset:
+        names = set(value.store.contexts())
+        if any(node in names for _, node in forms):
+            raise ValueError('proposition form cannot replace a graph name')
     for subject, predicate, obj, graph in quads:
         if _is_form_triple(subject, predicate, obj, forms, graph):
             continue
+        if (graph, subject) in forms or (graph, predicate) in forms:
+            raise ValueError('proposition form cannot replace an asserted subject or predicate')
         converted = _decode_term(obj, forms, graph)
         _add_quad(result, (subject, predicate, converted, graph))
     return result
@@ -108,29 +137,48 @@ def _add_quad(result, quad):
 
 
 def _proposition_forms(quads):
-    forms = {}
+    forms = {(graph, subject): {} for subject, predicate, obj, graph in quads
+             if isinstance(subject, BNode) and predicate == RDF.type and obj == RDF.PropositionForm}
     for subject, predicate, obj, graph in quads:
         key = (graph, subject)
-        if predicate == RDF.type and obj == RDF.PropositionForm and isinstance(subject, BNode):
-            forms.setdefault(key, {})["type"] = True
-        elif isinstance(subject, BNode) and predicate in (
+        if key in forms and predicate in (
             RDF.propositionFormSubject,
             RDF.propositionFormPredicate,
             RDF.propositionFormObject,
         ):
-            fields = forms.setdefault(key, {})
+            fields = forms[key]
             if predicate in fields and fields[predicate] != obj:
                 raise ValueError('ambiguous proposition form component')
             fields[predicate] = obj
-    complete = {}
-    for (graph, node), fields in forms.items():
-        if all(key in fields for key in ("type", RDF.propositionFormSubject, RDF.propositionFormPredicate, RDF.propositionFormObject)):
-            complete[(graph, node)] = TripleTerm(
-                fields[RDF.propositionFormSubject],
-                fields[RDF.propositionFormPredicate],
-                fields[RDF.propositionFormObject],
-            )
-    return complete
+    fields_order = (RDF.propositionFormSubject, RDF.propositionFormPredicate, RDF.propositionFormObject)
+    if any(not all(field in fields for field in fields_order) for fields in forms.values()):
+        raise ValueError('incomplete proposition form')
+    resolved, active = {}, set()
+    for key in forms:
+        stack = [(key, False)]
+        while stack:
+            current, finish = stack.pop()
+            if current in resolved:
+                continue
+            graph, _ = current
+            s, p, o = (forms[current][field] for field in fields_order)
+            dependency = (graph, o)
+            if finish:
+                if (graph, s) in forms or (graph, p) in forms:
+                    raise ValueError('proposition form cannot replace a triple-term subject or predicate')
+                try:
+                    resolved[current] = TripleTerm(s, p, resolved.get(dependency, o))
+                except (TypeError, ValueError) as exc:
+                    raise ValueError('invalid proposition form components') from exc
+                active.remove(current)
+            else:
+                if current in active:
+                    raise ValueError('cyclic proposition form')
+                active.add(current)
+                stack.append((current, True))
+                if dependency in forms:
+                    stack.append((dependency, False))
+    return resolved
 
 
 def _is_form_triple(subject, predicate, obj, forms, graph):
@@ -140,14 +188,9 @@ def _is_form_triple(subject, predicate, obj, forms, graph):
     )
 
 
-def _decode_term(term, forms, graph, active=frozenset()):
+def _decode_term(term, forms, graph):
     if isinstance(term, BNode) and (graph, term) in forms:
-        key = (graph, term)
-        if key in active:
-            raise ValueError('cyclic proposition form')
-        return _decode_term(forms[key], forms, graph, active | {key})
-    if isinstance(term, TripleTerm):
-        return TripleTerm(_decode_term(term.subject, forms, graph, active), _decode_term(term.predicate, forms, graph, active), _decode_term(term.object, forms, graph, active))
+        return forms[(graph, term)]
     return term
 
 
@@ -160,7 +203,7 @@ def interop_downgrade(value, target_version):
         from .graph import Graph
         output = Dataset() if hasattr(result, "quads") else Graph()
         _copy_graph_names(result, output)
-        quads = list(result.quads()) if hasattr(result, "quads") else [(*triple, None) for triple in result]
+        quads = _statements(result)
         for subject, predicate, obj, graph in quads:
             obj = _encode_directional_term(obj)
             _add_quad(output, (subject, predicate, obj, graph))

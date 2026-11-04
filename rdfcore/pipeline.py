@@ -101,6 +101,8 @@ def convert(source, destination=None, input_format=None, output_format=None, *, 
         destination, input_format, output_format = None, destination, input_format
     if not isinstance(input_format, str) or not isinstance(output_format, str):
         raise TypeError("input_format and output_format must be strings")
+    if kwargs.pop('downgrade', 'error') != 'error':
+        raise ValueError("streaming convert does not support downgrade; use an explicit interop transformation")
     from .media import resolve_format, version_options
     original_input_format = input_format
     input_format, input_version = resolve_format(input_format)

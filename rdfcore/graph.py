@@ -423,7 +423,23 @@ class Graph:
         downgrade = args.get("downgrade", "error")
         if downgrade not in ("error", "interop"):
             raise ValueError("downgrade must be 'error' or 'interop'")
-        required_version = required_rdf_version(self)
+        graph_formats = {'nt', 'nt11', 'ntriples', 'application/n-triples', 'nt12',
+                         'turtle', 'ttl', 'turtle11', 'text/turtle', 'turtle12',
+                         'xml', 'rdfxml', 'application/rdf+xml', 'xml12', 'xmlrdf12'}
+        projection = hasattr(self, 'quads') and format in graph_formats
+        policy = args.pop('dataset_policy', None) if projection else None
+        if policy is not None and policy not in ('strict', 'default', 'union'):
+            raise ValueError("dataset_policy must be 'strict', 'default', or 'union'")
+        if projection and policy is None and (format in {'nt12', 'turtle12', 'xml12', 'xmlrdf12'}
+                                              or downgrade == 'interop'):
+            policy = 'strict'
+        if projection and policy == 'strict' and any(
+                context != self.default_graph.identifier for context in self.store.contexts()):
+            raise ValueError('named graph requires an explicit dataset_policy for graph output')
+        # Preserve RDFLib's legacy default projection. Explicit extension
+        # policies use read-only views, independent of default_union.
+        required_source = _DatasetProjection(self, 'union') if projection and policy is not None else self
+        required_version = required_rdf_version(required_source)
         serializable_graph = self
         if required_version != "1.1":
             rdf12_serializer = format in ("nt12", "nq12", "turtle12", "trig12", "xml12", "xmlrdf12")
@@ -440,6 +456,8 @@ class Graph:
                 )
             if requested_version == "1.2-basic" and required_version == "1.2":
                 raise ValueError(f"RDF 1.2 data cannot be serialized as {requested_version}")
+        if projection and policy is not None:
+            serializable_graph = _DatasetProjection(serializable_graph, policy)
         plugin = get_plugin(format, Serializer)
         serializer = plugin.getClass()(serializable_graph)
         if isinstance(destination, (str, PurePath)):
@@ -497,6 +515,19 @@ class Graph:
             raise TypeError("predicate must be a URIRef")
         if not isinstance(obj, (URIRef, BNode, Literal, TripleTerm)):
             raise TypeError("object must be a URIRef, BNode, or Literal")
+
+
+class _DatasetProjection(Graph):
+    """Read-only serialization view; no graph/context registration or copy."""
+
+    def __init__(self, source, policy):
+        super().__init__(store=source.store, identifier=source.default_graph.identifier,
+                         namespace_manager=source.namespace_manager, base=source.base)
+        self._context = None if policy == 'union' else source.default_graph.identifier
+
+    def triples(self, pattern):
+        for triple, _ in self.store.triples(pattern, self._context):
+            yield triple
 
 
 def _format_from_location(location):

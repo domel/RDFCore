@@ -49,7 +49,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `value` | ✅ | ⚠️ `tests/compatibility/test_graph_value.py` runs both libraries: Graph/Dataset context isolation with conflicting values in other graphs, Memory/SQLite, default identity, duplicates, repeat calls, lazy access and uniqueness diagnostics; custom-store contexts and diagnostic `StopIteration` handling follow the reference; invalid selectors remain store-dependent |
 | `set` | ✅ | ✅ |
 | `parse` | ✅ | ✅ |
-| `serialize` | ✅ | ✅ base fallback/override tested against RDFLib; format-specific output parity remains scoped |
+| `serialize` | ✅ | ✅ legacy default projection and base fallback/override tested against RDFLib; explicit Dataset `dataset_policy` extension; RDF12 graph output/interop defaults to strict graph-name preservation; format-specific output parity remains scoped |
 | `bind`, `namespaces`, `qname` | ✅ | ✅ |
 | `compute_qname`, `absolutize` | ✅ | ✅ |
 | `close` | ✅ | ✅ |

@@ -444,6 +444,11 @@ graph.serialize(format="nt", rdf_version="1.1", downgrade="interop")
 
 `downgrade="interop"` re-expresses supported constructs in RDF 1.1.
 Unsupported downgrades raise an error; information is not silently discarded.
+For Dataset output through `nt12`, `turtle12`, `xml12` or an explicit interop
+downgrade, named graphs (including empty ones) require `dataset_policy="default"`
+or `"union"`; the default `"strict"` rejects projection. Legacy RDF 1.1 aliases
+keep RDFLib's defaults unless a policy is supplied. `convert()` uses the same
+policy names, but rejects `downgrade="interop"`; transform the data explicitly first.
 
 `rdfcore.interop.basic_encode()` / `basic_decode()` follow the informative
 [W3C Interop draft](https://www.w3.org/TR/2026/DNOTE-rdf12-interop-20260723/).

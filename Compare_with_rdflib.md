@@ -153,7 +153,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | RDF/XML 1.2 | ❌ | ⚠️ `xml12`, `xmlrdf12`; same serializer, announces `1.2` by default, respects explicit `1.1` / `1.2-basic` profiles |
 | RDF/XML writer round trips | RDF 1.1 reference | ✅ Tested XML11 reference parsing and XML12 profiles, Unicode, XMLLiteral, shared BNodes, nested terms and reifiers; XML12 accepts UTF-32 bytes, legacy XML requires decoding; no byte-parity claim |
 | JSON-LD | ✅ | ❌ |
-| Canonical NT/NQ lexical syntax | ⚠️ | ✅ explicit `canonical=True`; not blank-node canonicalization (RDFC-1.0) |
+| Canonical NT/NQ lexical syntax | ⚠️ | ⚠️ `nt12`/`nq12` implement canonical statement layout; legacy NT/NQ flags provide case/string normalization, not strict RDF 1.1 canonical syntax; ordering is separate; no blank-node canonicalization (RDFC-1.0) |
 | RDF12 output sink selection | Shared legacy behavior remains separate | ✅ NT12/NQ12/Turtle12/TriG12 text/binary selection and `text_output`; no retry after sink TypeError; caller streams remain open |
 | Turtle12/TriG12 stream profile | ❌ RDF 1.2 | ✅ Existing graphs select their profile before output; canonical lexical options omit VERSION and lowercase language tags, without statement sorting or RDFC-1.0 |
 | Turtle/TriG binary stream encoding | No shared RDFLib stream mode | ✅ One incremental encoder per document; no repeated UTF-16/32 BOM; stateful finalization and caller-sink ownership tested; decode non-UTF-8 output before RDF parsing |

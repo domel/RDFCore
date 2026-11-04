@@ -1,4 +1,4 @@
-"""Fixed-memory external sorting for N-Triples/N-Quads statements."""
+"""External sorting with approximate run budgets for RDF statements."""
 
 from __future__ import annotations
 
@@ -11,7 +11,11 @@ from .plugins.serializers.nt12 import _term
 
 
 def statement_key(statement):
-    """Return the byte-sort key used by :func:`external_sort`."""
+    """Return a tuple of canonical RDF12 term strings, including graph names.
+
+    Raw default quads (graph=None) share a key with triples. Labels are not
+    renamed. Equal keys need not imply equal Python objects or term spellings.
+    """
     if len(statement) == 3:
         parts = statement
     elif len(statement) == 4:
@@ -31,6 +35,9 @@ def external_sort(
     the pickle representation of each statement.  Only N-Triples/N-Quads
     terms are supported.  Temporary runs are removed when iteration finishes,
     is closed, or raises an exception.
+
+    Equal-key records retain input order. ``unique=True`` keeps their first
+    spelling, using canonical keys rather than Python object equality.
     """
     if memory_budget <= 0:
         raise ValueError("memory_budget must be positive")

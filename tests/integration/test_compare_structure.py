@@ -59,6 +59,15 @@ def test_large_identical_components_do_not_depend_on_python_recursion_depth():
     assert not isomorphic(left, right)
 
 
+def test_large_connected_component_uses_iterative_statement_matching():
+    left, right = Graph(), Graph()
+    for index in range(1300):
+        predicate = URIRef(f'urn:edge{index}')
+        left.add((BNode(f'a{index}'), predicate, BNode(f'a{index + 1}')))
+        right.add((BNode(f'b{index}'), predicate, BNode(f'b{index + 1}')))
+    assert isomorphic(left, right)
+
+
 @pytest.mark.parametrize('mismatch', [False, True])
 def test_nested_terms_share_one_mapping_with_graph_names(mismatch):
     left, right = Dataset(), Dataset()

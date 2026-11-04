@@ -493,9 +493,8 @@ For existing graphs/datasets, RDF 1.2 serializers scan the required profile
 before writing. Direct push writers cannot look ahead: select
 `rdf_version="1.2"` before feeding mixed data.
 
-`canonical=True` in Turtle12/TriG12 stream mode suppresses version directives
-and lowercases language tags; it neither sorts statements nor canonicalizes
-blank nodes. Non-UTF-8 output must be decoded before UTF-8 RDF syntax parsing.
+See [canonical output and sorting](#canonical-output-and-sorting) for lexical
+options. Non-UTF-8 output must be decoded before UTF-8 RDF syntax parsing.
 
 RDF 1.2 serializers select standard text/binary sinks before writing.
 For custom sinks, use `text_output=True` or `False`; sink errors propagate
@@ -621,6 +620,23 @@ finally:
 not total RSS; one oversized statement can exceed it.
 Graphs, datasets, pretty output, isomorphism and canonicalization may retain
 or sort the complete graph in memory.
+
+### Canonical output and sorting
+
+| Format | Effect of `canonical=True` | Statement order |
+|---|---|---|
+| `nt`, `nt11`, `ntriples` | Lowercase language tags; omit `xsd:string` | Graph iteration |
+| `nquads`, `nq`, `nq11` | Same legacy normalization | Sorted output lines |
+| `nt12` | Canonical RDF 1.2 statement layout; no `VERSION` | Graph iteration |
+| `nq12` | Canonical RDF 1.2 statement layout; no `VERSION` | Sorted output lines |
+| `turtle12`, `trig12` | Lowercase language tags; no `VERSION` | Pretty formatting or stream order; no canonical byte order |
+| Legacy Turtle/TriG and RDF/XML (both versions) | Flag has no effect | Ordinary writer behavior |
+
+Legacy NT/NQ normalization is an extension, not strict RDF 1.1 canonical syntax.
+Canonical statement bytes require UTF-8. No mode renames blank nodes or
+implements RDFC-1.0. `statement_key()` uses canonical RDF12 term strings;
+`external_sort(unique=True)` keeps the first spelling for each equal key,
+including equivalent triple/default-quad keys. Sorting retains raw graph names.
 
 ## Optimization options
 

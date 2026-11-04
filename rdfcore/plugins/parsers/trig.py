@@ -68,6 +68,8 @@ class TriGParser(TurtleParser):
         self._expect(".")
 
     def _block(self, graph):
+        if self.allow_rdf12 and graph is not None and hasattr(self.sink, 'declare_graph'):
+            self.sink.declare_graph(graph)
         previous = self.current_graph
         self.current_graph = graph
         while not self._at_end() and self._peek() != "}":

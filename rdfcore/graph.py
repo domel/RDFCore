@@ -415,6 +415,8 @@ class Graph:
         from .media import version_options
 
         format, media_version = resolve_format(format, Serializer)
+        selected_plugin = get_plugin(format, Serializer)
+        builtin = selected_plugin.getClass().__module__.startswith('rdfcore.plugins.serializers.')
         args = version_options(args, media_version)
 
         if base is None:
@@ -426,7 +428,7 @@ class Graph:
         graph_formats = {'nt', 'nt11', 'ntriples', 'application/n-triples', 'nt12',
                          'turtle', 'ttl', 'turtle11', 'text/turtle', 'turtle12',
                          'xml', 'rdfxml', 'application/rdf+xml', 'xml12', 'xmlrdf12'}
-        projection = hasattr(self, 'quads') and format in graph_formats
+        projection = builtin and hasattr(self, 'quads') and format in graph_formats
         policy = args.pop('dataset_policy', None) if projection else None
         if policy is not None and policy not in ('strict', 'default', 'union'):
             raise ValueError("dataset_policy must be 'strict', 'default', or 'union'")
@@ -438,16 +440,16 @@ class Graph:
             raise ValueError('named graph requires an explicit dataset_policy for graph output')
         # Preserve RDFLib's legacy default projection. Explicit extension
         # policies use read-only views, independent of default_union.
-        required_source = _DatasetProjection(self, 'union') if projection and policy is not None else self
+        required_source = _DatasetProjection(self, policy) if projection and policy is not None else self
         required_version = required_rdf_version(required_source)
-        serializable_graph = self
+        serializable_graph = required_source
         if required_version != "1.1":
             rdf12_serializer = format in ("nt12", "nq12", "turtle12", "trig12", "xml12", "xmlrdf12")
             if downgrade == "interop" and requested_version in ("1.1", "1.2-basic"):
                 from .interop import interop_downgrade
-                serializable_graph = interop_downgrade(self, requested_version)
+                serializable_graph = interop_downgrade(required_source, requested_version)
                 required_version = required_rdf_version(serializable_graph)
-            if not rdf12_serializer and serializable_graph is self:
+            if builtin and not rdf12_serializer and downgrade != 'interop':
                 raise ValueError("RDF 1.2 data requires an RDF 1.2 serializer or downgrade='interop'")
             if requested_version == "1.1" and required_version != "1.1":
                 raise ValueError(
@@ -456,8 +458,6 @@ class Graph:
                 )
             if requested_version == "1.2-basic" and required_version == "1.2":
                 raise ValueError(f"RDF 1.2 data cannot be serialized as {requested_version}")
-        if projection and policy is not None:
-            serializable_graph = _DatasetProjection(serializable_graph, policy)
         plugin = get_plugin(format, Serializer)
         serializer = plugin.getClass()(serializable_graph)
         if isinstance(destination, (str, PurePath)):

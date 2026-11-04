@@ -25,6 +25,9 @@ class TriG12Serializer(Serializer):
             use_text = text_output(stream, encoding, kwargs.get('text_output'))
             writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=stream_version,
                                          base=base, safe_iris=safe, text_output=use_text, canonical=canonical)
+            for context in self.store.store.contexts():
+                if context != getattr(getattr(self.store, "default_graph", None), "identifier", None) and not self.store.store.__len__(context):
+                    writer._write(_term(context, self.store.namespace_manager, canonical, base, safe) + ' {}\n')
             for quad in self.store.quads():
                 writer.add(quad)
             writer.close()
@@ -49,6 +52,9 @@ class TriG12Serializer(Serializer):
         if manager._prefixes:
             lines.append("\n")
         groups = {}
+        for context in self.store.store.contexts():
+            if context != getattr(getattr(self.store, "default_graph", None), "identifier", None):
+                groups.setdefault(context, [])
         for subject, predicate, obj, graph in self.store.quads((None, None, None, None)):
             groups.setdefault(graph, []).append((subject, predicate, obj))
         for graph in sorted(groups, key=lambda item: str(item)):

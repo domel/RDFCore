@@ -74,6 +74,9 @@ class DatasetSink:
     def __init__(self, dataset):
         self.dataset = dataset
 
+    def declare_graph(self, identifier):
+        self.dataset.graph(identifier)
+
     def add(self, statement):
         if len(statement) == 3:
             self.dataset.add(tuple(statement))

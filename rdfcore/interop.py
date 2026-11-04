@@ -19,7 +19,10 @@ _I18N = re.compile(r"^https://www\.w3\.org/ns/i18n#([a-z0-9]+(?:-[a-z0-9]+)*)_(l
 def _copy_graph_names(source, result):
     if hasattr(source, 'quads'):
         for identifier in source.store.contexts():
-            result.graph(identifier)
+            if identifier != source.default_graph.identifier:
+                if identifier == result.default_graph.identifier:
+                    raise ValueError('named graph collides with target default graph identifier')
+                result.graph(identifier)
 
 
 def _statements(value):
@@ -198,6 +201,19 @@ def interop_downgrade(value, target_version):
     if target_version == "1.2-basic":
         return basic_encode(value)
     if target_version == "1.1":
+        literals = set()
+        def collect(term):
+            if isinstance(term, Literal):
+                literals.add(term)
+            elif isinstance(term, TripleTerm):
+                for component in term:
+                    collect(component)
+        for row in _statements(value):
+            for term in row[:3]:
+                collect(term)
+        for literal in literals:
+            if literal.direction and encode_direction_i18n(literal) in literals:
+                raise ValueError('directional downgrade collides with an existing i18n literal')
         result = basic_encode(value)
         from .dataset import Dataset
         from .graph import Graph

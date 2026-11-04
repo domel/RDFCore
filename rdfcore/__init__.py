@@ -31,6 +31,9 @@ from .benchmark import benchmark_parse
 from .external_sort import external_sort, statement_key
 from . import plugin
 
+for _alias in ('default', 'Memory'):
+    plugin.register(_alias, Store, Memory)
+
 from .plugins.parsers.ntriples11 import NTParser, ParseError, W3CNTriplesParser
 from .plugins.parsers.ntriples12 import NT12Parser
 from .plugins.parsers.nquads11 import NQuadsParser, W3CNQuadsParser

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path, PurePath
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, url2pathname
 
 
 def _http_accept(format):
@@ -66,6 +66,10 @@ def create_input_source(source=None, publicID=None, location=None, file=None, da
         raise ValueError("exactly one of source, location, file or data must be given")
     if sum(value is not None for value in (source, location, file, data)) > 1:
         raise ValueError("source, location, file, and data are mutually exclusive")
+    if isinstance(source, InputSource):
+        if publicID is not None:
+            source.publicID = publicID
+        return source
     if data is not None and not isinstance(data, (str, bytes, bytearray)):
         raise RuntimeError("parse data can only be str, bytes or bytearray")
     if isinstance(data, bytearray):
@@ -100,7 +104,14 @@ def create_input_source(source=None, publicID=None, location=None, file=None, da
                 file.close()
                 raise
         else:
-            path = Path(location)
+            if parsed.scheme == 'file':
+                if parsed.netloc not in ('', 'localhost'):
+                    raise ValueError('non-local file URI is unsupported')
+                path = Path(url2pathname(parsed.path))
+                if publicID is None:
+                    publicID = str(location)
+            else:
+                path = Path(location)
             file = path.open("rb")
         result = InputSource(data=data, location=location, file=file, publicID=publicID, auto_close=True)
         return result

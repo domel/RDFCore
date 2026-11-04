@@ -9,6 +9,7 @@ from .codec import encode, decode, decode_legacy
 from .term import Literal, Node, TripleTerm
 
 _UNMATCHED_CONTEXT = object()
+_MISSING_CONTEXT_VIEW = object()
 
 
 def _check_removed_context(context):
@@ -55,6 +56,24 @@ class Store:
 
     def add(self, triple, context, quoted=False):
         raise NotImplementedError
+
+    def addN(self, quads):
+        for subject, predicate, obj, context in quads:
+            assert context is not None, 'Context associated with %s %s %s is None!' % (subject, predicate, obj)
+            native = isinstance(self, (Memory, SQLiteStore))
+            identifier = getattr(context, 'identifier', context) if native else context
+            self.add((subject, predicate, obj), identifier)
+            if native and hasattr(self, '_conjunctive_views'):
+                self._conjunctive_views[identifier] = context
+                self._conjunctive_contexts.setdefault(identifier, context)
+
+    def _forget_context_views(self, context):
+        for name in ('_conjunctive_views', '_conjunctive_contexts'):
+            cache = getattr(self, name, {})
+            journals = getattr(self, '_context_view_undo', ())
+            if journals:
+                journals[-1].append((cache, context, cache.get(context, _MISSING_CONTEXT_VIEW)))
+            cache.pop(context, None)
 
     def remove(self, triple, context=None):
         raise NotImplementedError
@@ -159,6 +178,7 @@ class Memory(Store):
         self.remove((None, None, None), context)
         self._contexts.pop(context, None)
         self._known_contexts.pop(context, None)
+        self._forget_context_views(context)
 
 
 class SQLiteStore(Store):
@@ -275,15 +295,27 @@ class SQLiteStore(Store):
         name = f'rdfcore_batch_{self._transaction_depth}'
         self._connection.execute(f'SAVEPOINT {name}')
         self._transaction_depth += 1
+        if not hasattr(self, '_context_view_undo'):
+            self._context_view_undo = []
+        undo = []
+        self._context_view_undo.append(undo)
         try:
             yield self
         except BaseException:
             self._connection.execute(f'ROLLBACK TO SAVEPOINT {name}')
             self._connection.execute(f'RELEASE SAVEPOINT {name}')
+            for cache, context, view in reversed(undo):
+                if view is _MISSING_CONTEXT_VIEW:
+                    cache.pop(context, None)
+                else:
+                    cache[context] = view
             raise
         else:
             self._connection.execute(f'RELEASE SAVEPOINT {name}')
+            if len(self._context_view_undo) > 1:
+                self._context_view_undo[-2].extend(undo)
         finally:
+            self._context_view_undo.pop()
             self._transaction_depth -= 1
 
     def add_many(self, triples, context=None):
@@ -427,6 +459,7 @@ class SQLiteStore(Store):
         with self.transaction():
             self.remove((None, None, None), context)
             self._connection.execute("DELETE FROM graph_contexts WHERE context = ?", (self._encode(context),))
+        self._forget_context_views(context)
 
     def close(self, commit_pending_transaction=False):
         if self._transaction_depth:

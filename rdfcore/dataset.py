@@ -315,13 +315,7 @@ class ConjunctiveGraph(Graph):
                 self._assert_nodes(subject, predicate, obj)
                 context = self._graph(context)
                 yield subject, predicate, obj, context
-        from .store import Memory, SQLiteStore
-        if isinstance(self.store, (Memory, SQLiteStore)):
-            for subject, predicate, obj, context in checked():
-                assert context is not None, 'Context associated with %s %s %s is None!' % (subject, predicate, obj)
-                self.add((subject, predicate, obj, context))
-        else:
-            self.store.addN(checked())
+        self.store.addN(checked())
         return self
 
     def remove(self, triple_or_quad):
@@ -372,13 +366,19 @@ class ConjunctiveGraph(Graph):
         remote = isinstance(candidate, str) and urlsplit(candidate).scheme in ('http', 'https')
         if not remote:
             if isinstance(candidate, (str, PurePath)):
-                system_id = Path(candidate).absolute().as_uri()
-            elif source is not None and hasattr(source, 'name'):
+                system_id = str(candidate) if urlsplit(str(candidate)).scheme == 'file' else Path(candidate).absolute().as_uri()
+            elif source is not None and isinstance(getattr(source, 'name', None), (str, PurePath)):
                 system_id = Path(source.name).absolute().as_uri()
             if not publicID:
                 publicID = system_id or Path.cwd().as_uri() + '/'
         if publicID:
             publicID = urljoin(Path.cwd().as_uri() + '/', publicID)
+        if getattr(self.default_context.parse, '__func__', None) is not Graph.parse:
+            from .parser import create_input_source
+            input_source = create_input_source(source=source, publicID=publicID, format=format,
+                                               location=location, file=file, data=data, **args)
+            self.default_context.parse(input_source, publicID=publicID, format=format, **args)
+            return self
         target = self
         if self.default_context.store is not self.store:
             target = _ConjunctiveParseView(store=self.default_context.store,
@@ -395,7 +395,7 @@ class ConjunctiveGraph(Graph):
     def __init__(self, store="default", identifier=None, default_graph_base=None):
         self._validate_identifier(identifier)
         from .store import Store
-        if not isinstance(store, Store) and store not in ('default', 'Memory'):
+        if not isinstance(store, Store):
             from .plugin import get
             store = get(store, Store).getClass()()
         Graph.__init__(self, store=store, identifier=identifier or None)

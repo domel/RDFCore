@@ -125,3 +125,136 @@ def test_choices_and_empty_contexts():
                         normalized(graph.triples_choices(([triple[0]], None, None))),
                         normalized(graph.triples_choices(([triple[0]], None, None), graph.default_context))))
     assert results[0] == results[1]
+
+
+@pytest.mark.parametrize('operation', ['add', 'addN', 'remove', 'set', 'iadd', 'isub'])
+@pytest.mark.parametrize('context', ['none', 'named', 'foreign', 'default'])
+def test_mutations(operation, context):
+    results = []
+    for module in (rdflib, rdfcore):
+        graph, triple = populated(module)
+        target = {'none': None, 'named': module.URIRef('urn:named'),
+                  'foreign': module.Graph(identifier=module.URIRef('urn:foreign')),
+                  'default': graph.default_context}[context]
+        if operation == 'add':
+            result = graph.add((*triple, target))
+        elif operation == 'addN':
+            try:
+                result = graph.addN([(*triple, target)])
+            except Exception as exc:
+                result = type(exc).__name__
+        elif operation == 'remove':
+            result = graph.remove((*triple, target))
+        elif operation == 'set':
+            result = graph.set((triple[0], triple[1], module.Literal('replacement')))
+        elif operation == 'iadd':
+            result = graph.__iadd__([triple])
+        else:
+            result = graph.__isub__([triple])
+        results.append((result is graph, result if isinstance(result, str) else None,
+                        normalized(graph.quads()), normalized(iter(graph)),
+                        normalized((g,) for g in graph.contexts())))
+        if context == 'foreign':
+            assert len(target) == 0
+    assert results[0] == results[1]
+
+
+@pytest.mark.parametrize('value', ['plain', None, 'list', 'short'])
+def test_invalid_add_and_partial_generator(value):
+    results = []
+    for module in (rdflib, rdfcore):
+        graph, triple = populated(module)
+        invalid = {'plain': ('s', 'p', 'o'), None: (None, None, None),
+                   'list': list(triple), 'short': triple[:2]}[value]
+        try:
+            graph.add(invalid)
+            error = None
+        except Exception as exc:
+            error = type(exc).__name__
+        def records():
+            yield (*triple, module.URIRef('urn:first'))
+            raise RuntimeError('stopped')
+        with pytest.raises(RuntimeError, match='stopped'):
+            graph.addN(records())
+        results.append((error, normalized(graph.quads())))
+    assert results[0] == results[1]
+
+
+def test_lifecycle():
+    for module in (rdflib, rdfcore):
+        graph, triple = populated(module)
+        assert graph.open('unused') is None
+        assert graph.commit() is graph
+        assert graph.rollback() is graph
+        assert graph.destroy('unused') is graph
+        assert triple in graph
+        assert graph.close() is None
+
+
+def test_store_delegation():
+    for module in (rdflib, rdfcore):
+        calls = []
+        class RecordingStore(module.store.Store):
+            context_aware = True
+
+            def add(self, triple, context, quoted=False):
+                calls.append(('add', context, quoted))
+
+            def addN(self, quads):
+                calls.extend(('addN', row[3]) for row in quads)
+
+            def triples(self, triple, context=None):
+                calls.append(('triples', context))
+                return iter(())
+
+            def open(self, configuration, create=False):
+                calls.append(('open', configuration, create))
+                return 17
+
+            def close(self, commit_pending_transaction=False):
+                calls.append(('close', commit_pending_transaction))
+                return 17
+
+        store = RecordingStore()
+        graph = module.ConjunctiveGraph(store=store, identifier=module.URIRef('urn:d'))
+        triple = tuple(module.URIRef('urn:' + x) for x in 'spo')
+        graph.add(triple)
+        assert calls[-1] == ('add', graph.default_context, False)
+        graph.addN([(*triple, graph)])
+        assert calls[-1] == ('addN', graph)
+        list(graph.triples(triple, context=module.URIRef('urn:named')))
+        assert calls[-1][1].identifier == module.URIRef('urn:named')
+        list(graph.quads((*triple, module.URIRef('urn:named'))))
+        assert calls[-1][1].identifier == module.URIRef('urn:named')
+        assert graph.open('configuration', True) == 17
+        assert graph.close(True) == 17
+        assert calls[-2:] == [('open', 'configuration', True), ('close', True)]
+
+
+@pytest.mark.parametrize('sqlite', [False, True])
+def test_store_parity_and_reopen(sqlite, tmp_path):
+    expected, triple = populated(rdflib)
+    path = tmp_path / 'conjunctive.sqlite'
+    store = rdfcore.SQLiteStore(path) if sqlite else rdfcore.store.Memory()
+    graph = rdfcore.ConjunctiveGraph(store=store, identifier=rdfcore.URIRef('urn:default'))
+    t = tuple(rdfcore.URIRef(str(x)) for x in triple)
+    graph.add(t).add((*t, rdfcore.URIRef('urn:named')))
+    graph.get_context(rdfcore.BNode('other')).add((t[2], t[1], t[0]))
+    assert normalized(graph.quads()) == normalized(expected.quads())
+    assert graph.commit() is graph
+    assert graph.rollback() is graph
+    if sqlite:
+        graph.close()
+        graph = rdfcore.ConjunctiveGraph(store=rdfcore.SQLiteStore(path), identifier=rdfcore.URIRef('urn:default'))
+        assert normalized(graph.quads()) == normalized(expected.quads())
+        with pytest.raises(RuntimeError), graph.store.transaction():
+            graph.remove((None, None, None))
+            raise RuntimeError('rollback')
+        assert normalized(graph.quads()) == normalized(expected.quads())
+    graph.remove((*t, rdfcore.URIRef('urn:named')))
+    expected.remove((*triple, rdflib.URIRef('urn:named')))
+    assert normalized(graph.quads()) == normalized(expected.quads())
+    assert graph.remove_context(rdfcore.URIRef('urn:default')) is None
+    expected.remove_context(rdflib.URIRef('urn:default'))
+    assert normalized(graph.quads()) == normalized(expected.quads())
+    graph.close()

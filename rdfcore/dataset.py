@@ -209,10 +209,6 @@ class ConjunctiveGraph(Graph):
     remove_context = Dataset.remove_context
     remove_graph = Dataset.remove_graph
     add_graph = Dataset.add_graph
-    add = Dataset.add
-    addN = Dataset.addN
-    remove = Dataset.remove
-    triples_choices = Dataset.triples_choices
     _triples_in_context = Dataset._triples_in_context
 
     def contexts(self, triple=None):
@@ -250,17 +246,18 @@ class ConjunctiveGraph(Graph):
                 selected = None
         elif selected is None:
             selected = self.default_context
-        identifier = getattr(selected, 'identifier', selected)
+        identifier = self._store_context(selected)
         for triple, _ in self.store.triples((subject, predicate, obj), identifier):
             yield triple
 
     def quads(self, triple_or_quad=None):
         subject, predicate, obj, context = self._spoc(triple_or_quad)
-        identifier = getattr(context, 'identifier', context)
+        identifier = self._store_context(context)
         from .store import Memory, SQLiteStore
         for triple, contexts in self.store.triples((subject, predicate, obj), identifier):
             if type(self.store) in (Memory, SQLiteStore):
-                contexts = (self.get_context(key) for key in self.store.contexts(triple))
+                contexts = (self.store._conjunctive_views.get(key) or self.get_context(key)
+                            for key in self.store.contexts(triple))
             for selected in contexts:
                 yield (*triple, selected)
 
@@ -270,6 +267,77 @@ class ConjunctiveGraph(Graph):
 
     def __len__(self):
         return self.store.__len__()
+
+    def triples_choices(self, triple, context=None):
+        from .store import Memory, SQLiteStore
+        if isinstance(self.store, (Memory, SQLiteStore)):
+            yield from Dataset.triples_choices(self, triple, context)
+        else:
+            selected = self.default_context if context is None and not self.default_union else self._graph(context)
+            for row, _ in self.store.triples_choices(triple, context=selected):
+                yield row
+
+    def _store_context(self, context):
+        from .store import Memory, SQLiteStore
+        return getattr(context, 'identifier', context) if isinstance(self.store, (Memory, SQLiteStore)) else context
+
+    def _assert_nodes(self, subject, predicate, obj):
+        from .term import Node, TripleTerm
+        if any(isinstance(term, TripleTerm) for term in (subject, predicate, obj)):
+            self._assert_triple((subject, predicate, obj))
+        else:
+            for term in (subject, predicate, obj):
+                assert isinstance(term, Node), 'Term %s must be an rdflib term' % (term,)
+
+    def add(self, triple_or_quad):
+        subject, predicate, obj, context = self._spoc(triple_or_quad, default=True)
+        self._assert_nodes(subject, predicate, obj)
+        self.store.add((subject, predicate, obj), self._store_context(context), quoted=False)
+        if context is not None and hasattr(self.store, '_conjunctive_views'):
+            self.store._conjunctive_views[context.identifier] = context
+        return self
+
+    def addN(self, quads):
+        def checked():
+            for subject, predicate, obj, context in quads:
+                self._assert_nodes(subject, predicate, obj)
+                context = self._graph(context)
+                yield subject, predicate, obj, context
+        from .store import Memory, SQLiteStore
+        if isinstance(self.store, (Memory, SQLiteStore)):
+            for subject, predicate, obj, context in checked():
+                assert context is not None, 'Context associated with %s %s %s is None!' % (subject, predicate, obj)
+                self.add((subject, predicate, obj, context))
+        else:
+            self.store.addN(checked())
+        return self
+
+    def remove(self, triple_or_quad):
+        subject, predicate, obj, context = self._spoc(triple_or_quad)
+        self.store.remove((subject, predicate, obj), self._store_context(context))
+        return self
+
+    def __iadd__(self, other):
+        self.addN((subject, predicate, obj, self) for subject, predicate, obj in other)
+        return self
+
+    def open(self, configuration, create=False):
+        return self.store.open(configuration, create)
+
+    def commit(self):
+        self.store.commit()
+        return self
+
+    def rollback(self):
+        self.store.rollback()
+        return self
+
+    def destroy(self, configuration):
+        self.store.destroy(configuration)
+        return self
+
+    def close(self, commit_pending_transaction=False):
+        return self.store.close(commit_pending_transaction)
 
     def __iter__(self):
         return self.triples((None, None, None))
@@ -282,6 +350,9 @@ class ConjunctiveGraph(Graph):
         assert self.store.context_aware, "ConjunctiveGraph must be backed by a context aware store."
         self.context_aware = True
         self.default_union = True
+        from .store import Memory, SQLiteStore
+        if isinstance(self.store, (Memory, SQLiteStore)) and not hasattr(self.store, '_conjunctive_views'):
+            self.store._conjunctive_views = {}
         self.default_graph = Graph(store=self.store, identifier=identifier or BNode(),
                                    base=default_graph_base)
         self._graphs = {self.default_graph.identifier: self.default_graph}

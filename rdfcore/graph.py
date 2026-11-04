@@ -27,6 +27,8 @@ class Graph:
     def add(self, triple):
         self._assert_triple(triple)
         self.store.add(triple, self.identifier)
+        if hasattr(self.store, '_conjunctive_views'):
+            self.store._conjunctive_views[self.identifier] = self
         return self
 
     def addN(self, quads):

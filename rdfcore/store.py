@@ -39,7 +39,16 @@ class Store:
         return None
 
     def open(self, configuration=None, create=False):
-        return self
+        return None
+
+    def commit(self):
+        return None
+
+    def rollback(self):
+        return None
+
+    def destroy(self, configuration):
+        return None
 
     def close(self, commit_pending_transaction=False):
         return None

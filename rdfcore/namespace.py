@@ -73,6 +73,19 @@ class NamespaceManager:
         self._namespaces: dict[str, str] = {}
         self._qname_cache: dict[str, tuple[str, URIRef, str]] = {}
         self._bound_namespaces: set[str] = set()
+        # RDFLib keeps bindings in the store, independently of manager
+        # identity. Views with separate managers must observe each other's
+        # binds; QName caches remain local to each manager.
+        store = getattr(graph, 'store', None)
+        if store is not None:
+            bindings = getattr(store, '_namespace_bindings', None)
+            if bindings is None:
+                bindings = self._prefixes, self._namespaces, self._bound_namespaces
+                try:
+                    store._namespace_bindings = bindings
+                except AttributeError:
+                    pass
+            self._prefixes, self._namespaces, self._bound_namespaces = bindings
 
     def bind(self, prefix: str, namespace, override: bool = True, replace: bool = False):
         namespace = str(namespace)

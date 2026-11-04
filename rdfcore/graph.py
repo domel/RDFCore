@@ -29,6 +29,7 @@ class Graph:
         self.store.add(triple, self.identifier)
         if hasattr(self.store, '_conjunctive_views'):
             self.store._conjunctive_views[self.identifier] = self
+            self.store._conjunctive_contexts.setdefault(self.identifier, self)
         return self
 
     def addN(self, quads):
@@ -40,6 +41,9 @@ class Graph:
                     for term in (subject, predicate, obj):
                         assert isinstance(term, Node), 'Term %s must be an rdflib term' % (term,)
                 self.store.add((subject, predicate, obj), self.identifier)
+                if hasattr(self.store, '_conjunctive_views'):
+                    self.store._conjunctive_views[self.identifier] = self
+                    self.store._conjunctive_contexts.setdefault(self.identifier, self)
         return self
 
     def remove(self, triple):
@@ -381,6 +385,7 @@ class Graph:
             format = _format_from_location(location or source)
         source = create_input_source(source, publicID, location, file, data,
                                      None if automatic_format else format, **args)
+        parser_class = None
         try:
             if automatic_format and source.content_type:
                 # Content-Type takes precedence over a URL suffix. Explicit
@@ -408,8 +413,11 @@ class Graph:
             sink = DatasetSink(self) if hasattr(self, "quads") else GraphSink(self)
             parser.parse(source, sink, **args)
         finally:
-            source.close()
+            self._close_parser_source(source, parser_class)
         return self
+
+    def _close_parser_source(self, source, parser_class):
+        source.close()
 
     def serialize(self, destination=None, format="turtle", base=None, encoding=None, **args):
         from .rdf_version import required_rdf_version, validate_rdf_version, version_allows

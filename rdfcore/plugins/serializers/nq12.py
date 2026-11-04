@@ -1,6 +1,5 @@
 """RDF 1.2 N-Quads serializer."""
 
-from ...dataset import DATASET_DEFAULT_GRAPH_ID
 from ...serializer import Serializer, write_output
 from ..serializers.nt12 import _term
 
@@ -18,8 +17,10 @@ class NQuads12Serializer(Serializer):
         if not canonical and version != "1.1":
             lines.append(f'VERSION "{version}"\n')
         for subject, predicate, obj, graph in self.store.quads((None, None, None, None)):
+            graph = getattr(graph, 'identifier', graph)
+            default = self.store.default_graph.identifier
             parts = [_term(subject, canonical), _term(predicate, canonical), _term(obj, canonical)]
-            if graph is not None and graph != DATASET_DEFAULT_GRAPH_ID:
+            if graph is not None and graph != default:
                 parts.append(_term(graph, canonical))
             lines.append(" ".join(parts) + " .\n")
         value = "".join(sorted(lines[1:]) if lines and lines[0].startswith("VERSION") else sorted(lines))

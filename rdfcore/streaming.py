@@ -188,6 +188,7 @@ class NQStreamingWriter:
             subject, predicate, obj, graph = statement
         else:
             raise ValueError("NQStreamingWriter accepts triples or quads")
+        graph = getattr(graph, 'identifier', graph)
         parts = [_term(subject, canonical=self.canonical), _term(predicate, canonical=self.canonical), _term(obj, canonical=self.canonical)]
         if graph is not None and graph != self.default_graph_id:
             parts.append(_term(graph, canonical=self.canonical))
@@ -276,9 +277,12 @@ def _turtle_term(term, base=None, safe=True, canonical=False):
 
 
 class TriGStreamingWriter:
-    """Write quads as contiguous TriG blocks without grouping the dataset."""
+    """Write contiguous TriG blocks; ``default_graph_id`` selects the default.
 
-    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto", base=None, safe_iris=True, text_output=None, canonical=False):
+    Graph context views are accepted alongside RDF graph identifiers.
+    """
+
+    def __init__(self, stream, *, encoding="utf-8", rdf_version="auto", base=None, safe_iris=True, text_output=None, canonical=False, default_graph_id=DATASET_DEFAULT_GRAPH_ID):
         from .plugins.serializers.turtle import _safe_iris
         self.safe_iris = _safe_iris({'safe_iris': safe_iris}, True)
         if rdf_version not in ("auto", "1.1", "1.2-basic", "1.2"):
@@ -293,6 +297,7 @@ class TriGStreamingWriter:
         self.encoding = encoding
         self.rdf_version = rdf_version
         self.base = base
+        self.default_graph_id = default_graph_id
         self._graph = _NO_GRAPH
         self._closed = False
         self._emitted_version = rdf_version if rdf_version != "auto" else "1.1"
@@ -323,7 +328,8 @@ class TriGStreamingWriter:
             self._emitted_version = required
         if self._emitted_version == "1.2-basic" and required == "1.2":
             raise ValueError("cannot upgrade a started TriG stream from RDF 1.2-basic to RDF 1.2")
-        graph = None if graph == DATASET_DEFAULT_GRAPH_ID else graph
+        graph = getattr(graph, 'identifier', graph)
+        graph = None if graph == self.default_graph_id else graph
         if graph != self._graph:
             self._close_graph()
             if graph is None:

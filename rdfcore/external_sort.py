@@ -19,7 +19,8 @@ def statement_key(statement):
     if len(statement) == 3:
         parts = statement
     elif len(statement) == 4:
-        parts = statement[:3] if statement[3] is None else statement
+        graph = getattr(statement[3], 'identifier', statement[3])
+        parts = statement[:3] if graph is None else (*statement[:3], graph)
     else:
         raise ValueError("external sort accepts triples or quads")
     return tuple(_term(term, canonical=True) for term in parts)
@@ -38,6 +39,7 @@ def external_sort(
 
     Equal-key records retain input order. ``unique=True`` keeps their first
     spelling, using canonical keys rather than Python object equality.
+    Quad contexts supplied as Graph views are returned as RDF identifiers.
     """
     if memory_budget <= 0:
         raise ValueError("memory_budget must be positive")
@@ -54,6 +56,10 @@ def _external_sort(statements, memory_budget, temp_dir, unique, max_open_runs):
         run_size = 0
         for statement in statements:
             statement = tuple(statement)
+            # Graph views carry their whole store (and possibly a live SQLite
+            # connection). Spill RDF identifiers, never those live objects.
+            if len(statement) == 4:
+                statement = (*statement[:3], getattr(statement[3], 'identifier', statement[3]))
             key = statement_key(statement)
             record_size = len(pickle.dumps((key, statement), protocol=4))
             if run and run_size + record_size > memory_budget:

@@ -30,6 +30,18 @@ def test_constructor(identifier):
     assert observations[0] == observations[1]
 
 
+def test_namespace_bindings_are_shared_with_separate_managers():
+    for module in (rdflib, rdfcore):
+        graph = module.ConjunctiveGraph()
+        graph.bind('example', module.URIRef('https://example.org/'))
+        assert ('example', module.URIRef('https://example.org/')) in list(graph.default_context.namespaces())
+        graph.default_context.bind('second', module.URIRef('https://second.example/'))
+        assert ('second', module.URIRef('https://second.example/')) in list(graph.namespaces())
+        other = module.Graph(store=graph.store)
+        assert ('second', module.URIRef('https://second.example/')) in list(other.namespaces())
+        assert graph.namespace_manager is not graph.default_context.namespace_manager
+
+
 def test_subclass_and_non_context_store():
     for module in (rdflib, rdfcore):
         class Derived(module.ConjunctiveGraph):
@@ -127,15 +139,40 @@ def test_choices_and_empty_contexts():
     assert results[0] == results[1]
 
 
+def test_inplace_add_with_anonymous_default_and_view_replacement():
+    for module in (rdflib, rdfcore):
+        graph = module.ConjunctiveGraph()
+        triple = tuple(module.URIRef('urn:' + x) for x in 'spo')
+        graph += [triple]
+        assert len(graph.default_context) == 0
+        context = next(graph.quads())[3]
+        assert type(context) is module.ConjunctiveGraph
+        assert context.identifier == graph.identifier
+        assert type(next(graph.contexts())) is module.ConjunctiveGraph
+        view = graph.get_context(graph.identifier)
+        view.addN([(*triple, view)])
+        assert type(next(graph.quads())[3]) is module.Graph
+
+
 @pytest.mark.parametrize('operation', ['add', 'addN', 'remove', 'set', 'iadd', 'isub'])
-@pytest.mark.parametrize('context', ['none', 'named', 'foreign', 'default'])
+@pytest.mark.parametrize('context', ['none', 'named', 'foreign', 'default', 'dataset', 'conjunctive'])
 def test_mutations(operation, context):
     results = []
     for module in (rdflib, rdfcore):
         graph, triple = populated(module)
+        class ControlledDataset(module.Dataset):
+            @property
+            def identifier(self):
+                return module.URIRef('urn:foreign-dataset')
+
+            @identifier.setter
+            def identifier(self, value):
+                pass
         target = {'none': None, 'named': module.URIRef('urn:named'),
                   'foreign': module.Graph(identifier=module.URIRef('urn:foreign')),
-                  'default': graph.default_context}[context]
+                  'default': graph.default_context,
+                  'dataset': ControlledDataset(),
+                  'conjunctive': module.ConjunctiveGraph(identifier=module.URIRef('urn:foreign-conjunctive'))}[context]
         if operation == 'add':
             result = graph.add((*triple, target))
         elif operation == 'addN':
@@ -258,3 +295,41 @@ def test_store_parity_and_reopen(sqlite, tmp_path):
     expected.remove_context(rdflib.URIRef('urn:default'))
     assert normalized(graph.quads()) == normalized(expected.quads())
     graph.close()
+
+
+def test_memory_subclass_keeps_native_quad_contexts():
+    results = []
+    for module in (rdflib, rdfcore):
+        from importlib import import_module
+        Memory = import_module(module.__name__ + '.plugins.stores.memory').Memory if module is rdflib else module.store.Memory
+        class DerivedMemory(Memory):
+            def triples(self, pattern, context=None):
+                yield from super().triples(pattern, context)
+        graph = module.ConjunctiveGraph(store=DerivedMemory(), identifier=module.URIRef('urn:default'))
+        graph.add(tuple(module.URIRef('urn:' + x) for x in 'spo'))
+        results.append(normalized(graph.quads()))
+    assert results[0] == results[1]
+
+
+@pytest.mark.parametrize('value', [True, 42, object()])
+def test_invalid_identifiers(value):
+    for module in (rdflib, rdfcore):
+        with pytest.raises(TypeError):
+            module.ConjunctiveGraph(identifier=value)
+        with pytest.warns(DeprecationWarning):
+            graph = module.ConjunctiveGraph()
+        with pytest.raises(TypeError):
+            graph.get_context(value)
+
+
+@pytest.mark.parametrize('store', ['Memory', 'missing', None, False, 1])
+def test_store_names(store):
+    outcomes = []
+    for module in (rdflib, rdfcore):
+        try:
+            graph = module.ConjunctiveGraph(store=store)
+            outcome = type(graph.store).__name__
+        except Exception as error:
+            outcome = type(error).__name__
+        outcomes.append(outcome)
+    assert outcomes[0] == outcomes[1]

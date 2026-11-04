@@ -1,6 +1,6 @@
 import pytest
 
-from rdfcore import ConjunctiveGraph, DATASET_DEFAULT_GRAPH_ID, BNode, Dataset, URIRef
+from rdfcore import ConjunctiveGraph, DATASET_DEFAULT_GRAPH_ID, BNode, Dataset, Graph, URIRef
 
 
 def test_dataset_default_and_named_graphs():
@@ -45,4 +45,9 @@ def test_conjunctive_graph_uses_its_given_default_graph_identifier():
         graph = ConjunctiveGraph(identifier=URIRef("http://example.org/conjunctive"))
     triple = (URIRef("http://e/s"), URIRef("http://e/p"), URIRef("http://e/o"))
     graph.add(triple)
-    assert list(graph.quads((None, None, None, None))) == [(*triple, URIRef("http://example.org/conjunctive"))]
+    rows = list(graph.quads((None, None, None, None)))
+    assert len(rows) == 1
+    assert rows[0][:3] == triple
+    assert type(rows[0][3]) is Graph
+    assert rows[0][3].identifier == URIRef("http://example.org/conjunctive")
+    assert rows[0][3].store is graph.store

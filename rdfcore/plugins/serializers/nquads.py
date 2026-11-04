@@ -22,6 +22,7 @@ class NQuadsSerializer(Serializer):
             quads = ((*triple, DATASET_DEFAULT_GRAPH_ID) for triple in self.store)
         lines = []
         for subject, predicate, obj, graph in quads:
+            graph = getattr(graph, 'identifier', graph)
             parts = [_term(subject, canonical=canonical), _term(predicate, canonical=canonical), _term(obj, canonical=canonical)]
             if graph is not None and graph != DATASET_DEFAULT_GRAPH_ID:
                 parts.append(_term(graph, canonical=canonical))

@@ -682,7 +682,7 @@ def merge_datasets(datasets: Iterable[Dataset], *, max_steps: int | None = None)
         snapshots, occupied = [], set()
         for dataset in datasets:
             _step()
-            if not isinstance(dataset, Dataset):
+            if not isinstance(dataset, (Dataset, ConjunctiveGraph)):
                 raise TypeError('dataset merge inputs must be Dataset instances')
             graphs = []
             # Dataset.graphs() calls graph(), which can reset cached bases

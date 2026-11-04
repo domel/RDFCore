@@ -1,6 +1,5 @@
 """RDF 1.2 TriG serializer."""
 
-from ...dataset import DATASET_DEFAULT_GRAPH_ID
 from ...serializer import Serializer, text_output, write_output
 from ...term import URIRef
 from .turtle12 import _term
@@ -24,11 +23,14 @@ class TriG12Serializer(Serializer):
                 capture = False
             use_text = text_output(stream, encoding, kwargs.get('text_output'))
             writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=stream_version,
-                                         base=base, safe_iris=safe, text_output=use_text, canonical=canonical)
+                                         base=base, safe_iris=safe, text_output=use_text, canonical=canonical, default_graph_id=None)
             for context in self.store.store.contexts():
                 if context != getattr(getattr(self.store, "default_graph", None), "identifier", None) and not self.store.store.__len__(context):
                     writer._write(_term(context, self.store.namespace_manager, canonical, base, safe) + ' {}\n')
             for quad in self.store.quads():
+                subject, predicate, obj, graph = quad
+                graph = getattr(graph, 'identifier', graph)
+                quad = subject, predicate, obj, None if graph == self.store.default_graph.identifier else graph
                 writer.add(quad)
             writer.close()
             return stream.getvalue() if capture else stream
@@ -56,6 +58,8 @@ class TriG12Serializer(Serializer):
             if context != getattr(getattr(self.store, "default_graph", None), "identifier", None):
                 groups.setdefault(context, [])
         for subject, predicate, obj, graph in self.store.quads((None, None, None, None)):
+            graph = getattr(graph, 'identifier', graph)
+            graph = None if graph == self.store.default_graph.identifier else graph
             groups.setdefault(graph, []).append((subject, predicate, obj))
         for graph in sorted(groups, key=lambda item: str(item)):
             triples = sorted(groups[graph], key=lambda triple: tuple(str(item) for item in triple))
@@ -64,7 +68,7 @@ class TriG12Serializer(Serializer):
                 f"{_term(obj, manager, canonical, base, safe)} .\n"
                 for subject, predicate, obj in triples
             )
-            if graph == DATASET_DEFAULT_GRAPH_ID or graph is None:
+            if graph is None:
                 lines.append("{\n" + body + "}\n")
             else:
                 lines.append(f"{_term(graph, manager, canonical, base, safe)} {{\n" + body + "}\n")

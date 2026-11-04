@@ -381,6 +381,10 @@ The operation snapshots its inputs and accepts `max_steps`; it is not streaming.
 Use `Graph` for one graph and `Dataset` for named graphs. For a union view,
 set `Dataset(default_union=True)`. The RDFLib-compatible `ConjunctiveGraph`
 also reads the union, but is deprecated; prefer `Dataset`.
+Its `quads()` returns `Graph` objects as contexts; `Dataset.quads()` returns
+graph identifiers. `default_graph_base` sets the base of its default context.
+For `ConjunctiveGraph`, legacy N-Quads keeps context labels (except RDFLib's default sentinel), as in
+RDFLib; `nq12` writes the default context as an unnamed default graph.
 
 ```python
 from rdfcore import Dataset, Literal, URIRef

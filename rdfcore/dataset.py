@@ -213,14 +213,24 @@ class ConjunctiveGraph(Graph):
 
     def contexts(self, triple=None):
         for context in self.store.contexts(triple):
-            yield context if isinstance(context, Graph) else self.get_context(context)
+            if isinstance(context, Graph):
+                yield context
+            else:
+                yield getattr(self.store, '_conjunctive_contexts', {}).get(context, self.get_context(context))
 
     def get_graph(self, identifier):
         return [graph for graph in self.contexts() if graph.identifier == identifier][0]
 
     def get_context(self, identifier, quoted=False, base=None):
+        self._validate_identifier(identifier)
         return Graph(store=self.store, identifier=identifier or None,
                      namespace_manager=self.namespace_manager, base=base)
+
+    @staticmethod
+    def _validate_identifier(identifier):
+        if identifier and not isinstance(identifier, (URIRef, BNode)):
+            # RDFLib URIRef checks membership before converting to text.
+            ' ' in identifier
 
     def _graph(self, context):
         if context is None or isinstance(context, (ConjunctiveGraph, Dataset)):
@@ -255,8 +265,9 @@ class ConjunctiveGraph(Graph):
         identifier = self._store_context(context)
         from .store import Memory, SQLiteStore
         for triple, contexts in self.store.triples((subject, predicate, obj), identifier):
-            if type(self.store) in (Memory, SQLiteStore):
-                contexts = (self.store._conjunctive_views.get(key) or self.get_context(key)
+            if (isinstance(self.store, (Memory, SQLiteStore)) and isinstance(contexts, tuple)
+                    and not any(isinstance(item, Graph) for item in contexts)):
+                contexts = (self.store._conjunctive_views.get(key, self.get_context(key))
                             for key in self.store.contexts(triple))
             for selected in contexts:
                 yield (*triple, selected)
@@ -295,6 +306,7 @@ class ConjunctiveGraph(Graph):
         self.store.add((subject, predicate, obj), self._store_context(context), quoted=False)
         if context is not None and hasattr(self.store, '_conjunctive_views'):
             self.store._conjunctive_views[context.identifier] = context
+            self.store._conjunctive_contexts.setdefault(context.identifier, context)
         return self
 
     def addN(self, quads):
@@ -339,10 +351,53 @@ class ConjunctiveGraph(Graph):
     def close(self, commit_pending_transaction=False):
         return self.store.close(commit_pending_transaction)
 
+    def _close_parser_source(self, source, parser_class):
+        from .plugins.parsers.rdfxml import RDFXMLParser
+        if parser_class is RDFXMLParser:
+            # RDFLib's SAX RDF/XML reader closes caller-provided streams,
+            # unlike its Turtle reader. Keep this legacy class's contract.
+            for stream in (source.getCharacterStream(), source.getByteStream()):
+                if stream is not None:
+                    stream.close()
+        source.close()
+
+    def parse(self, source=None, publicID=None, format=None, location=None, file=None, data=None, **args):
+        from pathlib import Path, PurePath
+        from urllib.parse import urljoin, urlsplit
+        system_id = None
+        if file is not None:
+            # RDFLib FileInputSource requires this even for in-memory files.
+            system_id = Path(file.name).absolute().as_uri()
+        candidate = location if location is not None else source
+        remote = isinstance(candidate, str) and urlsplit(candidate).scheme in ('http', 'https')
+        if not remote:
+            if isinstance(candidate, (str, PurePath)):
+                system_id = Path(candidate).absolute().as_uri()
+            elif source is not None and hasattr(source, 'name'):
+                system_id = Path(source.name).absolute().as_uri()
+            if not publicID:
+                publicID = system_id or Path.cwd().as_uri() + '/'
+        if publicID:
+            publicID = urljoin(Path.cwd().as_uri() + '/', publicID)
+        target = self
+        if self.default_context.store is not self.store:
+            target = _ConjunctiveParseView(store=self.default_context.store,
+                                            identifier=self.default_context.identifier)
+            target.default_context = self.default_context
+            target.namespace_manager = self.default_context.namespace_manager
+        Graph.parse(target, source=source, publicID=publicID, format=format,
+                    location=location, file=file, data=data, **args)
+        return self
+
     def __iter__(self):
         return self.triples((None, None, None))
 
     def __init__(self, store="default", identifier=None, default_graph_base=None):
+        self._validate_identifier(identifier)
+        from .store import Store
+        if not isinstance(store, Store) and store not in ('default', 'Memory'):
+            from .plugin import get
+            store = get(store, Store).getClass()()
         Graph.__init__(self, store=store, identifier=identifier or None)
         if type(self) is ConjunctiveGraph:
             warnings.warn("ConjunctiveGraph is deprecated, use Dataset instead.",
@@ -353,6 +408,9 @@ class ConjunctiveGraph(Graph):
         from .store import Memory, SQLiteStore
         if isinstance(self.store, (Memory, SQLiteStore)) and not hasattr(self.store, '_conjunctive_views'):
             self.store._conjunctive_views = {}
+            self.store._conjunctive_contexts = {
+                key: self.get_context(key) for key in self.store.contexts()
+            }
         self.default_graph = Graph(store=self.store, identifier=identifier or BNode(),
                                    base=default_graph_base)
         self._graphs = {self.default_graph.identifier: self.default_graph}
@@ -364,3 +422,7 @@ class ConjunctiveGraph(Graph):
     @default_context.setter
     def default_context(self, value):
         self.default_graph = value
+
+
+class _ConjunctiveParseView(ConjunctiveGraph):
+    """Internal parser target when the default context uses another store."""

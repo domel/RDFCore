@@ -15,7 +15,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 |---|---:|---:|
 | `Graph` | ✅ | ✅ |
 | `Dataset` | ✅ | ✅ |
-| `ConjunctiveGraph` | ✅ | ⚠️ |
+| `ConjunctiveGraph` | ✅ | ⚠️ Core constructor, union/context queries, mutations, store lifecycle and RDF 1.1 parsing/output covered by differential tests; inherited Graph API limitations remain |
 | `Store` | ✅ | ✅ |
 | `Memory` | ✅ | ✅ |
 | Disk-backed store | Store-dependent | ✅ `SQLiteStore` |

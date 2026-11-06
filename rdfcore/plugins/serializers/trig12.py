@@ -31,7 +31,7 @@ class TriG12Serializer(Serializer):
             contexts = self.store.store.contexts() if dataset else (self.store.identifier,)
             for context in contexts:
                 if context != getattr(getattr(self.store, "default_graph", None), "identifier", None) and not self.store.store.__len__(context):
-                    writer._write(_term(context, self.store.namespace_manager, canonical, base, safe) + ' {}\n')
+                    writer._write(_term(context, None, canonical, base, safe) + ' {}\n')
             quads = self.store.quads() if dataset else ((*triple, self.store.identifier) for triple in self.store)
             for quad in quads:
                 subject, predicate, obj, graph = quad

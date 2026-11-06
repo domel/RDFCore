@@ -171,7 +171,7 @@ def worker(args):
                         )
                     writer.add(row)
                 writer.close()
-                elapsed = perf_counter() - started
+            elapsed = perf_counter() - started
             result["timing_includes"] = (
                 "term construction, serialization and file writes"
             )

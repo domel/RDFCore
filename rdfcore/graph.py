@@ -109,6 +109,10 @@ class Graph:
                 yield predicate
 
     def objects(self, subject=None, predicate=None, unique=False):
+        if isinstance(subject, list):
+            for selected in subject:
+                yield from self.objects(selected, predicate, unique)
+            return
         seen = set()
         for _, _, obj in self.triples((subject, predicate, None)):
             if not unique or obj not in seen:
@@ -375,6 +379,21 @@ class Graph:
 
     def close(self, commit_pending_transaction=False):
         return self.store.close(commit_pending_transaction)
+
+    def open(self, configuration, create=False):
+        return self.store.open(configuration, create)
+
+    def commit(self):
+        self.store.commit()
+        return self
+
+    def rollback(self):
+        self.store.rollback()
+        return self
+
+    def destroy(self, configuration):
+        self.store.destroy(configuration)
+        return self
 
     def parse(self, source=None, publicID=None, format=None, location=None, file=None, data=None, **args):
         automatic_format = format is None

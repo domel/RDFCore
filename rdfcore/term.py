@@ -386,6 +386,22 @@ class Literal(Identifier):
     def neq(self, other):
         return not self.eq(other)
 
+    def _unary_numeric(self, operation):
+        if not isinstance(self.value, (int, float)):
+            raise TypeError(f'Not a number; {self!r}')
+        return Literal(operation(self.value))
+
+    def __neg__(self):
+        import operator
+        return self._unary_numeric(operator.neg)
+
+    def __pos__(self):
+        import operator
+        return self._unary_numeric(operator.pos)
+
+    def __abs__(self):
+        return self._unary_numeric(abs)
+
     def normalize(self):
         if self.value is None:
             return self

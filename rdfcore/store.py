@@ -192,6 +192,28 @@ class SQLiteStore(Store):
     context_aware = True
     graph_aware = True
 
+    def commit(self):
+        if self._transaction_depth:
+            raise RuntimeError('cannot commit inside an active transaction context')
+        self._connection.commit()
+
+    def rollback(self):
+        if self._transaction_depth:
+            name = f'rdfcore_batch_{self._transaction_depth - 1}'
+            self._connection.execute(f'ROLLBACK TO SAVEPOINT {name}')
+            undo = self._context_view_undo[-1]
+            for cache, context, view in reversed(undo):
+                if view is _MISSING_CONTEXT_VIEW:
+                    cache.pop(context, None)
+                else:
+                    cache[context] = view
+            undo.clear()
+        else:
+            self._connection.rollback()
+
+    def destroy(self, configuration):
+        raise NotImplementedError('SQLiteStore destruction is unsupported; close the store before removing its file explicitly')
+
     def __init__(self, path=":memory:"):
         self.path = str(path)
         self._transaction_depth = 0
@@ -402,6 +424,9 @@ class SQLiteStore(Store):
     def triples(self, triple_pattern, context=None):
         if len(triple_pattern) != 3:
             raise ValueError("triple pattern must contain three elements")
+        if any(value is not None and (type(value) is str or isinstance(value, (bool, int, float)))
+               for value in triple_pattern):
+            return
         clauses, values = [], []
         for column, value in zip(("s", "p", "o"), triple_pattern):
             if value is not None:

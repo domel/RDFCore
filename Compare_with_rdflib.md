@@ -2,6 +2,11 @@
 
 Legend: ✅ implemented within the listed scope, ⚠️ partial or available in a different form, ❌ not implemented. These marks do not certify complete RDFLib parity. The executable reference is RDFLib 7.6.0.
 
+The machine-readable inventory (`python -m benchmarks.audit_api`) separates
+missing APIs, RDFCore extensions and present-but-unverified members. It records
+signature differences, plugins, exceptions, Python version and revision;
+matching signatures are not evidence of behavioral parity.
+
 ## Classes
 
 | Format dispatch | RDFLib 7.6.0 | RDFCore |
@@ -64,8 +69,8 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `triples_choices` | ✅ | ✅ list-only choices, empty-list wildcard, repeated results and errors tested against RDFLib |
 | `query`, `update` | ✅ | ❌ |
 | `skolemize`, `de_skolemize` | ✅ | ✅ |
-| `commit`, `rollback` | ✅ | ❌ |
-| `open`, `destroy` | ✅ | ❌ |
+| `commit`, `rollback` | ✅ | ✅ Store delegation with differential tests; SQLite rollback affects the active savepoint, commit inside transaction contexts raises |
+| `open`, `destroy` | ✅ | ⚠️ Differential Store delegation; SQLite destroy raises NotImplementedError, open/reopen lifecycle remains incomplete |
 
 ## `Dataset`
 
@@ -84,7 +89,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `parse`, `serialize` | ✅ | ✅ |
 | `bind`, `namespaces`, `qname` | ✅ | ✅ |
 | `query`, `update` | ✅ | ❌ |
-| `commit`, `rollback` | ✅ | ❌ |
+| `commit`, `rollback` | ✅ | ✅ Differential Store delegation; explicit SQLite savepoint semantics |
 
 ## RDF Terms
 
@@ -107,6 +112,7 @@ Legend: ✅ implemented within the listed scope, ⚠️ partial or available in 
 | `TripleTerm` | ❌ in RDFLib 7.6.0 | ✅ |
 | Term identity, hashing and ordering | ✅ | ✅ tested constructor and comparison matrices, including term-subclass ordering, in `tests/compatibility/` |
 | Literal arithmetic and complete datatype API | ✅ | ⚠️ incomplete; constructor/value compatibility does not imply arithmetic parity |
+| Unary Literal `-`, `+`, `abs()` | ✅ | ✅ `tests/compatibility/test_literal_unary.py`, executable oracle including bool, Decimal errors and datatype changes |
 | Namespace prefix collisions and QName resolution | ✅ | ✅ executable differential matrices |
 | Collection indexing, deletion and malformed lists | ✅ | ✅ executable differential matrices; cyclic lists may not terminate, as in the reference |
 

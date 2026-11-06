@@ -568,6 +568,9 @@ store.close()
 
 `transaction()` commits on success and rolls back on error; nested blocks
 use savepoints. Writes outside transactions commit immediately.
+`graph.rollback()` inside a SQLite transaction rolls back its current block;
+`graph.commit()` inside the block raises `RuntimeError` (leave the block to commit).
+SQLite store destruction is explicitly unsupported and never deletes a file.
 `store.add_many(triples, context=None)` consumes input lazily in one transaction
 and returns the number of input triples, including duplicates. Generator errors
 roll back triples and context registrations. These are RDFCore extensions.

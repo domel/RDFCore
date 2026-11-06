@@ -120,7 +120,6 @@ def verify_stream(path, format, size, dataset, *, ordered=False):
 
 def worker(args):
     import rdflib, rdfcore
-    from rdfcore.pipeline import count
     from rdfcore.compare import isomorphic
 
     module = rdflib if args.library == "rdflib" else rdfcore
@@ -130,12 +129,39 @@ def worker(args):
     peak = 0
     if args.operation == "parse":
         if args.library == "stream":
+            class FingerprintSink:
+                amount = 0
+                fingerprint = 0
+
+                def add(self, statement):
+                    signature = tuple(
+                        (type(term).__name__, str(term),
+                         str(term.datatype) if getattr(term, 'datatype', None) is not None else None,
+                         getattr(term, 'language', None), getattr(term, 'direction', None))
+                        if term is not None else None for term in statement)
+                    self.amount += 1
+                    self.fingerprint += int.from_bytes(hashlib.blake2b(
+                        repr(signature).encode(), digest_size=16).digest(), 'big')
+
+            sink = FingerprintSink()
             started = perf_counter()
-            amount = count(args.input, format)
+            rdfcore.parse_stream(args.input, format, sink)
             elapsed = perf_counter() - started
             peak = rss()
-            assert amount == args.size
-            verify_stream(args.input, format, args.size, dataset)
+            assert sink.amount == args.size
+            expected = 0
+            for index in range(args.size):
+                signature = (('URIRef', f'urn:s{index}', None, None, None),
+                             ('URIRef', f'urn:p{index%7}', None, None, None),
+                             ('Literal', str(index), None, None, None))
+                if dataset and (args.format == 'nq' or index%4):
+                    context = ('URIRef', f'urn:g{index%3}', None, None, None) if index%4 else None
+                    signature = (*signature, context)
+                expected += int.from_bytes(hashlib.blake2b(
+                    repr(signature).encode(), digest_size=16).digest(), 'big')
+            assert sink.fingerprint == expected
+            result['timing_includes'] = 'parsing and bounded semantic fingerprint sink'
+            result['verification'] = 'exact count and aggregate 128-bit semantic fingerprints'
             graph = None
         else:
             graph = module.Dataset() if dataset else module.Graph()

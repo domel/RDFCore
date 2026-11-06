@@ -46,3 +46,59 @@ def test_sqlite_graph_rollback_is_effective():
             graph.destroy('unrelated.db')
     finally:
         graph.close()
+
+
+def test_sqlite_open_reopen_and_configuration(tmp_path):
+    path, other = tmp_path / 'graph.db', tmp_path / 'other.db'
+    other.write_bytes(b'untouched')
+    store = rdfcore.SQLiteStore(path)
+    graph = rdfcore.Graph(store=store, identifier=rdfcore.URIRef('urn:graph'))
+    triple = tuple(rdfcore.URIRef('urn:' + x) for x in 'spo')
+    graph.add(triple)
+    assert graph.open(path) == 1
+    with pytest.raises(RuntimeError):
+        graph.open(other)
+    graph.close()
+    assert graph.open(path) == 1
+    assert triple in graph
+    graph.close()
+    missing = tmp_path / 'missing.db'
+    assert graph.open(missing, create=False) == -1
+    assert not missing.exists()
+    assert graph.open(missing, create=True) == 1
+    assert len(graph) == 0
+    graph.close()
+    assert other.read_bytes() == b'untouched'
+
+
+def test_sqlite_nested_rollback_preserves_outer_writes(tmp_path):
+    graph = rdfcore.Graph(store=rdfcore.SQLiteStore(tmp_path / 'nested.db'))
+    s, p, o = [rdfcore.URIRef('urn:' + x) for x in 'spo']
+    try:
+        with graph.store.transaction():
+            graph.add((s, p, o))
+            with graph.store.transaction():
+                graph.add((o, p, s))
+                assert graph.rollback() is graph
+            assert set(graph) == {(s, p, o)}
+        assert set(graph) == {(s, p, o)}
+    finally:
+        graph.close()
+
+
+def test_sqlite_failed_reopen_keeps_data_and_other_files(tmp_path):
+    import sqlite3
+    path, other = tmp_path / 'valid.db', tmp_path / 'unrelated.txt'
+    other.write_bytes(b'not a database')
+    graph = rdfcore.Graph(store=rdfcore.SQLiteStore(path), identifier=rdfcore.URIRef('urn:g'))
+    triple = tuple(rdfcore.URIRef('urn:' + x) for x in 'spo')
+    graph.add(triple)
+    graph.close()
+    with pytest.raises(sqlite3.DatabaseError):
+        graph.open(other)
+    assert graph.store.path == str(path)
+    assert other.read_bytes() == b'not a database'
+    assert graph.open(path) == 1
+    assert triple in graph
+    graph.close()
+    graph.close()

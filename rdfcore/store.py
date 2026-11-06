@@ -192,6 +192,25 @@ class SQLiteStore(Store):
     context_aware = True
     graph_aware = True
 
+    def open(self, configuration, create=False):
+        from pathlib import Path
+        requested = str(configuration)
+        same = requested == self.path or (requested != ':memory:' and self.path != ':memory:'
+                                         and Path(requested).resolve() == Path(self.path).resolve())
+        if not self._closed:
+            if not same:
+                raise RuntimeError('close the SQLite store before changing its configuration')
+            return 1
+        if requested != ':memory:' and not create and not Path(requested).is_file():
+            return -1
+        # Initialize separately: a failed open leaves this closed store's
+        # configuration and its callers' graph views intact.
+        replacement = type(self)(requested)
+        self.__dict__.update(replacement.__dict__)
+        for name in ('_conjunctive_views', '_conjunctive_contexts'):
+            getattr(self, name, {}).clear()
+        return 1
+
     def commit(self):
         if self._transaction_depth:
             raise RuntimeError('cannot commit inside an active transaction context')
@@ -218,6 +237,15 @@ class SQLiteStore(Store):
         self.path = str(path)
         self._transaction_depth = 0
         self._connection = sqlite3.connect(self.path)
+        self._closed = False
+        try:
+            self._initialize()
+        except BaseException:
+            self._connection.close()
+            self._closed = True
+            raise
+
+    def _initialize(self):
         version = self._connection.execute('PRAGMA user_version').fetchone()[0]
         if version not in (0, 1):
             self._connection.close()
@@ -489,5 +517,8 @@ class SQLiteStore(Store):
     def close(self, commit_pending_transaction=False):
         if self._transaction_depth:
             raise RuntimeError('cannot close store inside an active transaction')
+        if self._closed:
+            return self
         self._connection.commit()
         self._connection.close()
+        self._closed = True

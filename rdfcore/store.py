@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 import sqlite3
 from os import fsdecode, fspath
 from .codec import encode, decode, decode_legacy
@@ -11,6 +11,33 @@ from .term import Literal, Node, TripleTerm
 
 _UNMATCHED_CONTEXT = object()
 _MISSING_CONTEXT_VIEW = object()
+
+
+class _ContextViews(dict):
+    """Journal graph-view changes alongside SQLite savepoints."""
+    def __init__(self, owner):
+        super().__init__()
+        self.owner = owner
+
+    def _remember(self, key):
+        journals = getattr(self.owner, '_context_view_undo', ())
+        if journals:
+            journals[-1].setdefault((id(self), key), (self, key, self.get(key, _MISSING_CONTEXT_VIEW)))
+
+    def __setitem__(self, key, value):
+        if self.get(key, _MISSING_CONTEXT_VIEW) is value:
+            return
+        self._remember(key)
+        super().__setitem__(key, value)
+
+    def setdefault(self, key, default=None):
+        if key not in self:
+            self[key] = default
+        return self[key]
+
+    def pop(self, key, default=None):
+        self._remember(key)
+        return super().pop(key, default)
 
 
 def _check_removed_context(context):
@@ -77,11 +104,7 @@ class Store:
 
     def _forget_context_views(self, context):
         for name in ('_conjunctive_views', '_conjunctive_contexts'):
-            cache = getattr(self, name, {})
-            journals = getattr(self, '_context_view_undo', ())
-            if journals:
-                journals[-1].append((cache, context, cache.get(context, _MISSING_CONTEXT_VIEW)))
-            cache.pop(context, None)
+            getattr(self, name, {}).pop(context, None)
 
     def remove(self, triple, context=None):
         raise NotImplementedError
@@ -221,10 +244,19 @@ class SQLiteStore(Store):
             return -1
         # Initialize separately: a failed open leaves this closed store's
         # configuration and its callers' graph views intact.
+        if requested != ':memory:' and Path(requested).is_file():
+            # Inspect before initialization changes journal mode or creates tables.
+            uri = Path(requested).resolve().as_uri() + '?mode=ro'
+            with closing(sqlite3.connect(uri, uri=True)) as probe:
+                columns = {row[1] for row in probe.execute('PRAGMA table_info(triples)')}
+                tables = list(probe.execute("SELECT name FROM sqlite_master WHERE type='table'"))
+                if columns != {'s', 'p', 'o', 'context'} and not (create and not tables):
+                    raise ValueError('unrecognized RDF storage schema')
         replacement = type(self)(requested)
         self.__dict__.update(replacement.__dict__)
         for name in ('_conjunctive_views', '_conjunctive_contexts'):
-            getattr(self, name, {}).clear()
+            getattr(self, name).clear()
+            getattr(self, name).owner = self
         return 1
 
     def commit(self):
@@ -237,11 +269,11 @@ class SQLiteStore(Store):
             name = f'rdfcore_batch_{self._transaction_depth - 1}'
             self._connection.execute(f'ROLLBACK TO SAVEPOINT {name}')
             undo = self._context_view_undo[-1]
-            for cache, context, view in reversed(undo):
+            for cache, context, view in reversed(tuple(undo.values())):
                 if view is _MISSING_CONTEXT_VIEW:
-                    cache.pop(context, None)
+                    dict.pop(cache, context, None)
                 else:
-                    cache[context] = view
+                    dict.__setitem__(cache, context, view)
             undo.clear()
         else:
             self._connection.rollback()
@@ -250,8 +282,8 @@ class SQLiteStore(Store):
         raise NotImplementedError('SQLiteStore destruction is unsupported; close the store before removing its file explicitly')
 
     def __init__(self, path=":memory:"):
-        self._conjunctive_views = {}
-        self._conjunctive_contexts = {}
+        self._conjunctive_views = _ContextViews(self)
+        self._conjunctive_contexts = _ContextViews(self)
         self.path = fsdecode(fspath(path))
         self._transaction_depth = 0
         self._connection = sqlite3.connect(self.path)
@@ -365,23 +397,25 @@ class SQLiteStore(Store):
         self._transaction_depth += 1
         if not hasattr(self, '_context_view_undo'):
             self._context_view_undo = []
-        undo = []
+        undo = {}
         self._context_view_undo.append(undo)
         try:
             yield self
         except BaseException:
             self._connection.execute(f'ROLLBACK TO SAVEPOINT {name}')
             self._connection.execute(f'RELEASE SAVEPOINT {name}')
-            for cache, context, view in reversed(undo):
+            for cache, context, view in reversed(tuple(undo.values())):
                 if view is _MISSING_CONTEXT_VIEW:
-                    cache.pop(context, None)
+                    dict.pop(cache, context, None)
                 else:
-                    cache[context] = view
+                    dict.__setitem__(cache, context, view)
             raise
         else:
             self._connection.execute(f'RELEASE SAVEPOINT {name}')
             if len(self._context_view_undo) > 1:
-                self._context_view_undo[-2].extend(undo)
+                parent = self._context_view_undo[-2]
+                for key, original in undo.items():
+                    parent.setdefault(key, original)
         finally:
             self._context_view_undo.pop()
             self._transaction_depth -= 1

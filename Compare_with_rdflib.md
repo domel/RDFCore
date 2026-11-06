@@ -7,6 +7,10 @@ missing APIs, RDFCore extensions and present-but-unverified members. It records
 signature differences, plugins, exceptions, Python version and revision;
 matching signatures are not evidence of behavioral parity.
 
+S13 review regressions cover bulk Store dispatch, calendar subtraction and legacy
+duration mapping, graph-node persistence, rollback of context views, schema
+rejection and instance-field inventory: [tests](tests/compatibility/test_s13_review_fixes.py).
+
 ## Classes
 
 | Format dispatch | RDFLib 7.6.0 | RDFCore | Scope / executable evidence |

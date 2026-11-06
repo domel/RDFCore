@@ -3,6 +3,7 @@ from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, ROUND_FLOOR
 import re
+import sys
 
 XSD = 'http://www.w3.org/2001/XMLSchema#'
 DURATIONS = {XSD + name for name in ('duration', 'dayTimeDuration', 'yearMonthDuration')}
@@ -44,7 +45,15 @@ class Duration:
         return NotImplemented
 
     def __rsub__(self, other):
-        return -self + other
+        if isinstance(other, timedelta):
+            return Duration(tdelta=other) - self
+        if isinstance(other, (date, datetime)):
+            if self.years % 1 or self.months % 1:
+                raise ValueError('fractional years or months not supported for date calculations')
+            year, month = divmod(other.year * 12 + other.month - 1 - int(self.years * 12 + self.months), 12)
+            return other.replace(year=year, month=month + 1,
+                                 day=min(other.day, monthrange(year, month + 1)[1])) - self.tdelta
+        return NotImplemented
 
     def __eq__(self, other):
         if isinstance(other, timedelta):
@@ -83,7 +92,36 @@ _PATTERN = re.compile(r'(?P<sign>[+-])?P(?:(?P<years>\d+(?:[.,]\d+)?)Y)?(?:(?P<m
 def parse_duration(lexical):
     match = _PATTERN.fullmatch(lexical)
     if not match:
-        raise ValueError('invalid duration')
+        # RDFLib's legacy ISO duration mapping also accepts date-like forms.
+        if not lexical.startswith('P'):
+            raise ValueError('invalid duration')
+        if sys.version_info >= (3, 11):
+            # The pinned oracle uses datetime.fromisoformat on these Pythons.
+            parsed = datetime.fromisoformat(lexical[1:])
+            return Duration(parsed.year, parsed.month,
+                            timedelta(days=parsed.day, hours=parsed.hour, minutes=parsed.minute,
+                                      seconds=parsed.second, microseconds=parsed.microsecond))
+        try:
+            day, clock = lexical[1:].split('T')
+            parsed_day = None
+            for pattern in ('%Y-%m-%d', '%Y%m%d', '%Y-%j', '%Y%j'):
+                try:
+                    parsed_day = datetime.strptime(day, pattern)
+                    break
+                except ValueError:
+                    pass
+            if parsed_day is None:
+                raise ValueError('invalid duration date')
+            clock_match = re.fullmatch(r'(\d{2}):?(\d{2}):?(\d{2})(?:[.,](\d+))?', clock)
+            if clock_match is None:
+                raise ValueError('invalid duration time')
+            hour, minute, second, fraction = clock_match.groups()
+            parsed_time = time(int(hour), int(minute), int(second), int(((fraction or '') + '000000')[:6]))
+            fixed = timedelta(days=parsed_day.day, hours=parsed_time.hour, minutes=parsed_time.minute,
+                              seconds=parsed_time.second, microseconds=parsed_time.microsecond)
+            return Duration(parsed_day.year, parsed_day.month, fixed)
+        except (ValueError, OverflowError) as error:
+            raise ValueError('invalid duration') from error
     values = match.groupdict()
     sign = -1 if values.pop('sign') == '-' else 1
     if lexical.lstrip('+-') == 'P':

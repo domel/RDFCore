@@ -580,6 +580,10 @@ store (`1`), or returns `-1` for a missing file; `create=True` permits creation.
 and returns the number of input triples, including duplicates. Generator errors
 roll back triples and context registrations. These are RDFCore extensions.
 
+Reopening an unrelated SQLite schema raises `ValueError` without initializing it.
+Rollback restores both statements and cached graph views. Generalized graph nodes
+are persisted as graph references by identifier, without copying their contents.
+
 SQLite uses a versioned JSON term codec. Older databases migrate transactionally
 through a restricted legacy reader; failed decoding preserves existing data.
 Unknown versions are rejected. Back up existing databases before migration.

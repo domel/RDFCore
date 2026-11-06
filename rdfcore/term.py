@@ -322,7 +322,8 @@ class Literal(Identifier):
                 ill_typed = True
                 value = None
         if normalize and value is not None and not isinstance(lexical_or_value, Literal) and str(datatype) in {_XSD + name for name in ('duration', 'dayTimeDuration', 'yearMonthDuration')}:
-            lexical = _normalize_lexical(lexical, datatype)
+            from ._literal_arithmetic import format_duration
+            lexical = format_duration(value)
         if (str(datatype) == _XSD + 'boolean'
                 and isinstance(lexical_or_value, str)
                 and not isinstance(lexical_or_value, Literal)):

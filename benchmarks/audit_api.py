@@ -6,6 +6,7 @@ import json
 import platform
 from pathlib import Path
 import subprocess
+import warnings
 
 import rdflib
 import rdfcore
@@ -45,7 +46,9 @@ def inventory():
         if name in ('NamespaceManager', 'Serializer'):
             return cls(graph())
         if name == 'ConjunctiveGraph':
-            return None  # Covered separately in S14, including warning behavior.
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', DeprecationWarning)
+                return cls()
         if name in ('Node', 'Identifier', 'IdentifiedNode'):
             return None
         return cls()

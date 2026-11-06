@@ -267,11 +267,7 @@ class Dataset(ConjunctiveGraph):
         return ConjunctiveGraph._graph(self, context)
 
     def addN(self, quads):
-        for subject, predicate, obj, graph in quads:
-            ConjunctiveGraph._assert_nodes(self, subject, predicate, obj)
-            assert graph is not None, 'Context associated with %s %s %s is None!' % (subject, predicate, obj)
-            self.add((subject, predicate, obj, graph))
-        return self
+        return ConjunctiveGraph.addN(self, quads)
 
     def triples(self, triple_or_quad, context=None):
         yield from ConjunctiveGraph.triples(self, triple_or_quad, context)

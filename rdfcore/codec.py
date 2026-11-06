@@ -8,7 +8,10 @@ from .term import BNode, Genid, RDFLibGenid, Literal, TripleTerm, URIRef, Variab
 
 
 def encode(term, *, canonical=True):
+    from .graph import Graph
     def pack(value):
+        if isinstance(value, Graph):
+            return ['graph', pack(value.identifier)]
         if value is None:
             return ['none']
         if isinstance(value, Literal):
@@ -29,6 +32,12 @@ def decode(data):
         if not isinstance(value, list) or not value:
             raise ValueError('invalid stored RDF term')
         tag, *parts = value
+        if tag == 'graph' and len(parts) == 1:
+            from .graph import Graph
+            identifier = unpack(parts[0])
+            if not isinstance(identifier, (URIRef, BNode)):
+                raise ValueError('invalid stored graph identifier')
+            return Graph(identifier=identifier)
         if tag == 'none' and not parts:
             return None
         classes = {'uri': URIRef, 'blank': BNode, 'variable': Variable, 'genid': Genid, 'rdflib-genid': RDFLibGenid}

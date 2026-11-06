@@ -417,6 +417,14 @@ def main():
     if args.worker:
         print(json.dumps(worker(args)))
         return
+    baseline = None
+    if args.baseline:
+        same = args.baseline.resolve() == args.output.resolve()
+        if args.output.exists() and args.baseline.exists():
+            same = same or os.path.samefile(args.baseline, args.output)
+        if same:
+            parser.error('baseline and output must refer to different files')
+        baseline = json.loads(args.baseline.read_text())
     import rdflib
 
     report = {
@@ -611,7 +619,7 @@ def main():
     if args.baseline:
         try:
             report["regression_checks"] = regression_checks(
-                report, json.loads(args.baseline.read_text()), args.regression_margin
+                report, baseline, args.regression_margin
             )
             failed = failed or any(
                 not row["passed"] for row in report["regression_checks"]

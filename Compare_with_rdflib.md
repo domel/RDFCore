@@ -190,6 +190,7 @@ rejection and instance-field inventory: [tests](tests/compatibility/test_s13_rev
 | Empty registered contexts after triple removal | ✅ | ✅ | ✅ including reopen | Graph-adapted query/removal observations against RDFLib; raw Store protocol remains partial; [test_store_parity.py](tests/integration/test_store_parity.py) |
 | No full Python materialization | Store-dependent | ❌ | ✅ | Graph-adapted query/removal observations against RDFLib; raw Store protocol remains partial; [test_store_parity.py](tests/integration/test_store_parity.py) |
 | Atomic lazy bulk ingestion | No RDFCore `add_many` extension | ❌ | ✅ `add_many`, including rollback of contexts | SQLite extension: atomic state and persistence; [test_sqlite_transactions.py](tests/integration/test_sqlite_transactions.py) |
+| Persistence fault handling | Store-dependent | In-memory | Transactional schema migration, WAL visibility, process-exit recovery, lock and commit-error rollback | [test_s15_persistence.py](tests/integration/test_s15_persistence.py) |
 
 ## RDFCore Extensions
 
@@ -204,7 +205,7 @@ rejection and instance-field inventory: [tests](tests/compatibility/test_s13_rev
 | Interoperability graph identity | `basic_encode`, `basic_decode` and explicit downgrade retain empty named graphs without resetting input graph bases; fresh nodes avoid nested and graph-name collisions; incomplete, ambiguous, cyclic or hybrid forms raise explicit errors; informative Interop DNOTE 2026-07-23 mapping, not entailment preservation |
 | `count()` | Streaming count; owned input and decompression layers closed on success/error; caller input remains open |
 | `validate()` | Streaming validation; same input ownership contract as `count()` |
-| `external_sort()` | External-memory sorting |
+| `external_sort()` | Stable external-memory sorting; versioned JSON runs, strict decoding and explicit handle cleanup; [tests](tests/streaming/test_s15_sort_records.py) |
 | `statement_key()` | Stable sorting key |
 | `benchmark_parse()` | Benchmark with peak RSS |
 | `semantics.entails()` | Legacy proof mode retained; decision mode adds datatype constraints and membership regions, guarded countermodels, vocabulary value aliases, IT congruence/injectivity, infinite-image cardinality checks and free-class countermodels for restricted constructor cycles and unconstrained predicates; syntax constructors unchanged; unknown decisions and resource limits stay distinct; general RDF/RDFS reasoning remains incomplete |

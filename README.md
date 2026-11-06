@@ -580,13 +580,16 @@ store (`1`), or returns `-1` for a missing file; `create=True` permits creation.
 and returns the number of input triples, including duplicates. Generator errors
 roll back triples and context registrations. These are RDFCore extensions.
 
-Reopening an unrelated SQLite schema raises `ValueError` without initializing it.
+Opening an unrelated SQLite schema raises `ValueError` without initializing it.
 Rollback restores both statements and cached graph views. Generalized graph nodes
 are persisted as graph references by identifier, without copying their contents.
 
 SQLite uses a versioned JSON term codec. Older databases migrate transactionally
 through a restricted legacy reader; failed decoding preserves existing data.
-Unknown versions are rejected. Back up existing databases before migration.
+Unknown versions are rejected. Failed migration preserves the original schema and rows.
+The storage codec allows up to 128 nested term levels. The legacy allowlist does
+not bound pickle memory use; migrate only trusted legacy files. Back up existing
+databases before migration.
 Language tags compare case-insensitively while metadata retains their first
 spelling per context and union. Spelling lost by older releases is unrecoverable.
 
@@ -632,8 +635,11 @@ finally:
 ```
 
 `external_sort()` writes temporary runs and merges them in passes;
-`max_open_runs` limits open runs per pass. Its budget approximates run size,
-not total RSS; one oversized statement can exceed it.
+`max_open_runs` limits open runs per pass. Runs use length-prefixed, versioned
+JSON records, with no pickle loading. Invalid or truncated records raise errors.
+Its budget approximates encoded run size,
+not total RSS; one oversized statement can exceed it. Decoding retains the
+current record in memory, so untrusted file size still matters.
 Graphs, datasets, pretty output, isomorphism and canonicalization may retain
 or sort the complete graph in memory.
 

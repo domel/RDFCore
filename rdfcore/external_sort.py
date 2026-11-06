@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack, closing
 import heapq
-import pickle
+import struct
+from .codec import encode, decode_value, load_json
 import tempfile
 from pathlib import Path
 
@@ -33,9 +35,10 @@ def external_sort(
     """Yield statements in sorted order using bounded in-memory runs.
 
     ``memory_budget`` is an approximate upper bound for a run, measured using
-    the pickle representation of each statement.  Only N-Triples/N-Quads
+    the framed JSON representation of each statement.  Only N-Triples/N-Quads
     terms are supported.  Temporary runs are removed when iteration finishes,
-    is closed, or raises an exception.
+    is closed, or raises an exception. Cleanup attempts every run; filesystem
+    errors are propagated if removal is not possible.
 
     Equal-key records retain input order. ``unique=True`` keeps their first
     spelling, using canonical keys rather than Python object equality.
@@ -61,7 +64,7 @@ def _external_sort(statements, memory_budget, temp_dir, unique, max_open_runs):
             if len(statement) == 4:
                 statement = (*statement[:3], getattr(statement[3], 'identifier', statement[3]))
             key = statement_key(statement)
-            record_size = len(pickle.dumps((key, statement), protocol=4))
+            record_size = len(_encode_record(statement))
             if run and run_size + record_size > memory_budget:
                 path = _write_run(run, temp_dir)
                 run_paths.append(path)
@@ -91,11 +94,21 @@ def _external_sort(statements, memory_budget, temp_dir, unique, max_open_runs):
             run_paths = merged_paths
         yield from _merge_runs(run_paths, unique)
     finally:
-        for path in all_paths:
-            try:
-                Path(path).unlink()
-            except FileNotFoundError:
-                pass
+        _remove_runs(all_paths)
+
+
+def _remove_runs(paths):
+    error = None
+    for path in paths:
+        try:
+            Path(path).unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as failure:
+            if error is None:
+                error = failure
+    if error is not None:
+        raise error
 
 
 def _write_run(records, temp_dir):
@@ -105,25 +118,48 @@ def _write_run(records, temp_dir):
     try:
         with handle:
             for record in records:
-                pickle.dump(record, handle, protocol=4)
+                handle.write(_encode_record(record[1]))
     except BaseException:
         Path(path).unlink(missing_ok=True)
         raise
     return path
 
 
+def _encode_record(statement):
+    payload = b'[' + b','.join(encode(term, canonical=False) for term in statement) + b']'
+    return b'RCR1' + struct.pack('>Q', len(payload)) + payload
+
+
 def _read_record(handle):
-    try:
-        return pickle.load(handle)
-    except EOFError:
+    header = handle.read(12)
+    if not header:
         return None
+    if len(header) != 12 or header[:4] != b'RCR1':
+        raise ValueError('invalid external sort record version or header')
+    size = struct.unpack('>Q', header[4:])[0]
+    position = handle.tell()
+    remaining = handle.seek(0, 2) - position
+    handle.seek(position)
+    if size > remaining:
+        raise ValueError('truncated external sort record')
+    payload = handle.read(size)
+    if len(payload) != size:
+        raise ValueError('truncated external sort record')
+    values = load_json(payload)
+    if not isinstance(values, list) or len(values) not in (3, 4):
+        raise ValueError('invalid external sort statement')
+    statement = tuple(decode_value(value) for value in values)
+    return statement_key(statement), statement
 
 
 def _merged_records(paths):
     handles = []
     heap = []
-    try:
-        handles = [open(path, "rb") for path in paths]
+    with ExitStack() as cleanup:
+        for path in paths:
+            handle = open(path, "rb")
+            cleanup.callback(handle.close)
+            handles.append(handle)
         for index, handle in enumerate(handles):
             record = _read_record(handle)
             if record is not None:
@@ -134,18 +170,15 @@ def _merged_records(paths):
             record = _read_record(handles[index])
             if record is not None:
                 heapq.heappush(heap, (record[0], index, record[1]))
-    finally:
-        for handle in handles:
-            handle.close()
 
 
 def _write_merged_run(paths, temp_dir):
     handle = tempfile.NamedTemporaryFile(mode="wb", prefix="rdfcore-run-", dir=temp_dir, delete=False)
     path = handle.name
     try:
-        with handle:
-            for record in _merged_records(paths):
-                pickle.dump(record, handle, protocol=4)
+        with handle, closing(_merged_records(paths)) as records:
+            for record in records:
+                handle.write(_encode_record(record[1]))
     except BaseException:
         Path(path).unlink(missing_ok=True)
         raise
@@ -154,10 +187,11 @@ def _write_merged_run(paths, temp_dir):
 
 def _merge_runs(paths, unique):
     previous = None
-    for key, statement in _merged_records(paths):
-        if not unique or key != previous:
-            yield statement
-            previous = key
+    with closing(_merged_records(paths)) as records:
+        for key, statement in records:
+            if not unique or key != previous:
+                yield statement
+                previous = key
 
 
 __all__ = ["external_sort", "statement_key"]

@@ -69,16 +69,63 @@ class BoundedWriteStream:
         return getattr(self.stream, name)
 
 
+class _OwnedCodecStream:
+    """Close an owned file even when closing its compression layer fails."""
+    def __init__(self, stream, raw):
+        self.stream, self.raw = stream, raw
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+    def __iter__(self):
+        return iter(self.stream)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def close(self):
+        try:
+            self.stream.close()
+        finally:
+            self.raw.close()
+
+
+def _codec_stream(bounded, raw, owns, kind, mode):
+    try:
+        if kind == 'gz':
+            stream = gzip.GzipFile(fileobj=bounded, mode=mode)
+        elif kind == 'bz2':
+            stream = bz2.BZ2File(bounded, mode=mode)
+        elif kind == 'xz':
+            stream = lzma.LZMAFile(bounded, mode=mode)
+        else:
+            return bounded, owns
+    except BaseException:
+        if owns:
+            raw.close()
+        raise
+    return (_OwnedCodecStream(stream, raw) if owns else stream), owns
+
+
 def _compression(path, compression):
     if compression:
-        return compression.lstrip(".").lower()
-    suffix = Path(path).suffix.lower() if isinstance(path, (str, Path)) else ""
-    return suffix[1:] if suffix in (".gz", ".bz2", ".xz") else None
+        if not isinstance(compression, str):
+            raise TypeError('compression must be a string')
+        kind = compression.lstrip('.').lower()
+        if kind not in ('gz', 'bz2', 'xz'):
+            raise ValueError('unsupported compression')
+        return kind
+    suffix = Path(path).suffix.lower() if isinstance(path, (str, Path)) else ''
+    return suffix[1:] if suffix in ('.gz', '.bz2', '.xz') else None
 
 
 def open_input(source, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZE):
     """Return ``(stream, owns_stream)`` for a path or file-like source."""
     _check_buffer_size(buffer_size)
+    kind = _compression(source, compression)
     owns = False
     if source is None or source == "-":
         raw = getattr(sys.stdin, "buffer", sys.stdin)
@@ -89,20 +136,14 @@ def open_input(source, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZE):
         owns = True
     else:
         raise TypeError("source must be a path or readable file-like object")
-    kind = _compression(source, compression)
     bounded = (_CompressionReadStream if kind in ('gz', 'bz2', 'xz') else BoundedReadStream)(raw, buffer_size)
-    if kind == "gz":
-        return gzip.GzipFile(fileobj=bounded, mode="rb"), owns
-    if kind == "bz2":
-        return bz2.BZ2File(bounded, mode="rb"), owns
-    if kind == "xz":
-        return lzma.LZMAFile(bounded, mode="rb"), owns
-    return bounded, owns
+    return _codec_stream(bounded, raw, owns, kind, 'rb')
 
 
 def open_output(destination, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZE):
     """Return ``(stream, owns_stream)`` for a path or file-like destination."""
     _check_buffer_size(buffer_size)
+    kind = _compression(destination, compression)
     owns = False
     if destination is None or destination == "-":
         raw = getattr(sys.stdout, "buffer", sys.stdout)
@@ -113,12 +154,5 @@ def open_output(destination, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZ
         owns = True
     else:
         raise TypeError("destination must be a path or writable file-like object")
-    kind = _compression(destination, compression)
     bounded = BoundedWriteStream(raw, buffer_size)
-    if kind == "gz":
-        return gzip.GzipFile(fileobj=bounded, mode="wb"), owns
-    if kind == "bz2":
-        return bz2.BZ2File(bounded, mode="wb"), owns
-    if kind == "xz":
-        return lzma.LZMAFile(bounded, mode="wb"), owns
-    return bounded, owns
+    return _codec_stream(bounded, raw, owns, kind, 'wb')

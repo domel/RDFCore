@@ -275,6 +275,7 @@ class SQLiteStore(Store):
                 else:
                     dict.__setitem__(cache, context, view)
             undo.clear()
+            self._has_lexical_forms = self._lexical_undo[-1]
         else:
             self._connection.rollback()
 
@@ -300,7 +301,22 @@ class SQLiteStore(Store):
         if version not in (0, 1):
             self._connection.close()
             raise ValueError(f'unsupported RDF storage version: {version}')
-        self._connection.execute("PRAGMA journal_mode = WAL")
+        tables = {row[0] for row in self._connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        if tables or version == 1:
+            columns = {row[1] for row in self._connection.execute('PRAGMA table_info(triples)')}
+            if columns != {'s', 'p', 'o', 'context'}:
+                raise ValueError('unrecognized RDF storage schema')
+        self._connection.execute('BEGIN IMMEDIATE')
+        try:
+            self._initialize_schema(version)
+            self._connection.commit()
+        except BaseException:
+            self._connection.rollback()
+            raise
+        self._connection.execute('PRAGMA journal_mode=WAL')
+
+    def _initialize_schema(self, version):
         self._connection.execute(
             "CREATE TABLE IF NOT EXISTS triples ("
             "s BLOB NOT NULL, p BLOB NOT NULL, o BLOB NOT NULL, "
@@ -317,25 +333,19 @@ class SQLiteStore(Store):
             'PRIMARY KEY(s,p,o,context))')
         self._has_lexical_forms = bool(self._connection.execute('SELECT 1 FROM lexical_forms LIMIT 1').fetchone())
         if version == 0:
-            try:
-                with self._connection:
-                    self._connection.execute('CREATE TEMP TABLE migrated (s BLOB, p BLOB, o BLOB, context BLOB, PRIMARY KEY(s,p,o,context))')
-                    for row in self._connection.execute('SELECT s,p,o,context FROM triples'):
-                        terms = tuple(decode_legacy(value) for value in row)
-                        values = tuple(encode(value) for value in terms)
-                        self._remember_lexical_forms(terms[:3], values, table='migrated')
-                        self._connection.execute('INSERT OR IGNORE INTO migrated VALUES (?,?,?,?)',
-                                                 values)
-                    self._connection.execute('DELETE FROM triples')
-                    self._connection.execute('INSERT INTO triples SELECT * FROM migrated')
-                    self._connection.execute('DROP TABLE migrated')
-                    self._connection.execute('PRAGMA user_version=1')
-            except Exception:
-                self._connection.close()
-                raise
+            self._connection.execute('CREATE TEMP TABLE migrated (s BLOB, p BLOB, o BLOB, context BLOB, PRIMARY KEY(s,p,o,context))')
+            for row in self._connection.execute('SELECT s,p,o,context FROM triples'):
+                terms = tuple(decode_legacy(value) for value in row)
+                values = tuple(encode(value) for value in terms)
+                self._remember_lexical_forms(terms[:3], values, table='migrated')
+                self._connection.execute('INSERT OR IGNORE INTO migrated VALUES (?,?,?,?)',
+                                         values)
+            self._connection.execute('DELETE FROM triples')
+            self._connection.execute('INSERT INTO triples SELECT * FROM migrated')
+            self._connection.execute('DROP TABLE migrated')
+            self._connection.execute('PRAGMA user_version=1')
         self._connection.execute('CREATE TABLE IF NOT EXISTS graph_contexts (context BLOB NOT NULL PRIMARY KEY)')
         self._connection.execute('INSERT OR IGNORE INTO graph_contexts SELECT DISTINCT context FROM triples')
-        self._connection.commit()
 
     @staticmethod
     def _encode(value):
@@ -397,26 +407,33 @@ class SQLiteStore(Store):
         self._transaction_depth += 1
         if not hasattr(self, '_context_view_undo'):
             self._context_view_undo = []
+            self._lexical_undo = []
+        self._lexical_undo.append(self._has_lexical_forms)
         undo = {}
         self._context_view_undo.append(undo)
         try:
             yield self
-        except BaseException:
-            self._connection.execute(f'ROLLBACK TO SAVEPOINT {name}')
             self._connection.execute(f'RELEASE SAVEPOINT {name}')
-            for cache, context, view in reversed(tuple(undo.values())):
-                if view is _MISSING_CONTEXT_VIEW:
-                    dict.pop(cache, context, None)
-                else:
-                    dict.__setitem__(cache, context, view)
+        except BaseException:
+            try:
+                if self._connection.in_transaction:
+                    self._connection.execute(f'ROLLBACK TO SAVEPOINT {name}')
+                    self._connection.execute(f'RELEASE SAVEPOINT {name}')
+            finally:
+                self._has_lexical_forms = self._lexical_undo[-1]
+                for cache, context, view in reversed(tuple(undo.values())):
+                    if view is _MISSING_CONTEXT_VIEW:
+                        dict.pop(cache, context, None)
+                    else:
+                        dict.__setitem__(cache, context, view)
             raise
         else:
-            self._connection.execute(f'RELEASE SAVEPOINT {name}')
             if len(self._context_view_undo) > 1:
                 parent = self._context_view_undo[-2]
                 for key, original in undo.items():
                     parent.setdefault(key, original)
         finally:
+            self._lexical_undo.pop()
             self._context_view_undo.pop()
             self._transaction_depth -= 1
 

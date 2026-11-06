@@ -8,6 +8,8 @@ from .turtle import _safe_iris
 
 class TriG12Serializer(Serializer):
     def serialize(self, stream=None, base=None, encoding=None, canonical=False, rdf_version="auto", mode="pretty", **kwargs):
+        dataset = hasattr(self.store, "quads")
+        default = getattr(getattr(self.store, "default_graph", None), "identifier", None)
         safe = _safe_iris(kwargs, True)
         if base is None:
             base = self.store.base
@@ -26,13 +28,15 @@ class TriG12Serializer(Serializer):
             use_text = text_output(stream, encoding, kwargs.get('text_output'))
             writer = TriGStreamingWriter(stream, encoding=encoding or "utf-8", rdf_version=stream_version,
                                          base=base, safe_iris=safe, text_output=use_text, canonical=canonical, default_graph_id=None)
-            for context in self.store.store.contexts():
+            contexts = self.store.store.contexts() if dataset else (self.store.identifier,)
+            for context in contexts:
                 if context != getattr(getattr(self.store, "default_graph", None), "identifier", None) and not self.store.store.__len__(context):
                     writer._write(_term(context, self.store.namespace_manager, canonical, base, safe) + ' {}\n')
-            for quad in self.store.quads():
+            quads = self.store.quads() if dataset else ((*triple, self.store.identifier) for triple in self.store)
+            for quad in quads:
                 subject, predicate, obj, graph = quad
                 graph = getattr(graph, 'identifier', graph)
-                quad = subject, predicate, obj, None if graph == self.store.default_graph.identifier else graph
+                quad = subject, predicate, obj, None if graph == default else graph
                 writer.add(quad)
             writer.close()
             return stream.getvalue() if capture else stream
@@ -56,12 +60,14 @@ class TriG12Serializer(Serializer):
         if manager._prefixes:
             lines.append("\n")
         groups = {}
-        for context in self.store.store.contexts():
+        contexts = self.store.store.contexts() if dataset else (self.store.identifier,)
+        for context in contexts:
             if context != getattr(getattr(self.store, "default_graph", None), "identifier", None):
                 groups.setdefault(context, [])
-        for subject, predicate, obj, graph in self.store.quads((None, None, None, None)):
+        quads = self.store.quads((None, None, None, None)) if dataset else ((*triple, self.store.identifier) for triple in self.store)
+        for subject, predicate, obj, graph in quads:
             graph = getattr(graph, 'identifier', graph)
-            graph = None if graph == self.store.default_graph.identifier else graph
+            graph = None if graph == default else graph
             groups.setdefault(graph, []).append((subject, predicate, obj))
         for graph in sorted(groups, key=lambda item: str(item)):
             triples = sorted(groups[graph], key=lambda triple: tuple(str(item) for item in triple))

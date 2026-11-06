@@ -712,6 +712,25 @@ serialization excludes parsing. Reports include repeated samples, median
 times, versions and revision. Memory figures are traced Python allocations,
 not process RSS.
 
+For larger NT/NQ/Turtle/TriG workloads, use fresh processes and RSS measurements:
+
+```bash
+python -m benchmarks.large_data --sizes 100000 1000000 --output benchmark-results.json
+```
+
+This manual suite covers parsing, writing, disk SQLite, eight SPO patterns,
+sorting and symmetric graph comparison. Reports include fixture hashes, limits,
+repeated samples and verification results. Timeouts cover the whole worker,
+including setup and verification. `--baseline previous.json` checks
+relative regressions on matching environments; calibrate its margin for the host.
+The manual Performance workflow also offers a separate 10-million streaming run.
+100-million runs require an environment with a suitable memory, disk and time budget.
+
+`parse_stream()` retains its worker/queue iterator. The faster experimental line
+iterator changes read-ahead and plugin behavior and remains outside the public API.
+Memory depends on tokens, nesting, blank-node labels and the sink; RDF/XML builds
+a tree. Short-record RSS guards do not establish a bound for arbitrary input.
+
 ## Tests
 
 Run the complete test suite:
@@ -720,7 +739,9 @@ Run the complete test suite:
 python -m pytest -q
 ```
 
-Tests cover formats, streaming, persistence and RDFLib 7.6.0 compatibility.
+Install `.[test]` for the suite, including bounded Hypothesis round-trip and
+store-parity properties. Tests also cover formats, streaming, persistence and
+RDFLib 7.6.0 compatibility.
 CI verifies Python 3.10 and 3.14; intermediate versions remain declared supported.
 README Python examples also run as tests.
 

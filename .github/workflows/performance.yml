@@ -1,0 +1,43 @@
+name: Performance measurements
+
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: Baseline or separate ten-million streaming workload
+        type: choice
+        options: [baseline, ten-million]
+        default: baseline
+
+permissions:
+  contents: read
+
+jobs:
+  measurements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install '.[test]'
+      - name: Baseline workloads
+        if: inputs.workload == 'baseline'
+        run: python -m benchmarks.large_data --sizes 100000 1000000 --output "${{ runner.temp }}/performance/large.json"
+      - name: Ten-million streaming workload
+        if: inputs.workload == 'ten-million'
+        run: python -m benchmarks.large_data --sizes 10000000 --operations parse --libraries stream --timeout 1800 --output "${{ runner.temp }}/performance/large.json"
+      - name: Iterator comparison
+        run: |
+          python benchmarks/line_iterator.py --format nt > "${{ runner.temp }}/performance/iterator-nt.json"
+          python benchmarks/line_iterator.py --format nquads > "${{ runner.temp }}/performance/iterator-nq.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-python-${{ matrix.python-version }}
+          path: ${{ runner.temp }}/performance/

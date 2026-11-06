@@ -198,7 +198,7 @@ rejection and instance-field inventory: [tests](tests/compatibility/test_s13_rev
 |---|---|
 | `parse_stream()` | Push/iterator parser |
 | Iterator resource cleanup | Cancellable queue delivery; bounded worker join on early close; caller-owned streams remain open |
-| Zero-thread line iterator | Benchmark prototype only; not enabled in the public API |
+| Zero-thread line iterator | Measured prototype; worker/queue API retained because read-ahead, producer thread and plugin behavior differ; [tests](tests/streaming/test_line_iterator_prototype.py) |
 | W3C reporting | Current and archived pinned fixtures, original fixture hashes, per-test diagnostics and reviewed issue explanations; comparison preserves repeated executions and detects changed regimes, types, recognized datatypes and action/result IRIs; latest refresh adds five passing NT version tests without hiding existing gaps; full RDF 1.2 conformance not established |
 | `convert()` | Streaming NT/NQ 1.1/1.2 conversion; explicit graph policies; rejects unsupported downgrade and same-file output; input/preflight failures do not truncate output |
 | `compare.isomorphic()` | Exact structural comparison, including nested triple terms and empty named graphs; independent blank-node components paired by structural invariants, with iterative connected matching; symmetric/cyclic/random structures checked against RDFLib's exact function; dataset bases, graph-view caches and namespace bindings are not changed |
@@ -207,7 +207,9 @@ rejection and instance-field inventory: [tests](tests/compatibility/test_s13_rev
 | `validate()` | Streaming validation; same input ownership contract as `count()` |
 | `external_sort()` | Stable external-memory sorting; versioned JSON runs, strict decoding and explicit handle cleanup; [tests](tests/streaming/test_s15_sort_records.py) |
 | `statement_key()` | Stable sorting key |
-| `benchmark_parse()` | Benchmark with peak RSS |
+| `benchmark_parse()` | In-process high-water delta; separate large-data benchmark uses fresh processes and RSS, with fixture hashes and failure reporting |
+| Generated round-trip properties | Bounded Hypothesis RDF 1.1/1.2 graphs/datasets, blank-node sharing, empty TriG graphs, interop and Memory/SQLite; [tests](tests/integration/test_streaming_properties.py) |
+| TriG 1.2 from a single Graph | Named graph retains its identifier in pretty/stream output; ordinary RDF meaning compared with RDFLib TriG output; [tests](tests/integration/test_streaming_properties.py) |
 | `semantics.entails()` | Legacy proof mode retained; decision mode adds datatype constraints and membership regions, guarded countermodels, vocabulary value aliases, IT congruence/injectivity, infinite-image cardinality checks and free-class countermodels for restricted constructor cycles and unconstrained predicates; syntax constructors unchanged; unknown decisions and resource limits stay distinct; general RDF/RDFS reasoning remains incomplete |
 | `semantics.entailment_closure()` | Optional finite RDF/RDFS axioms and rules; no automatic Graph inference; optional work budget (not a time/memory bound) |
 | `semantics.merge_datasets()` | Explicit Semantics §10 statement-labelled merge; standardizes blank nodes apart across inputs, preserves graph boundaries and nested-term sharing; input triples, graph views and bases stay unchanged; returns a new in-memory Dataset; empty named graphs omitted; no change to Dataset operators |
@@ -234,7 +236,7 @@ Legend: missing entries are not exposed or claimed as supported. Inherited membe
 | URIRef | `__neg__`, `__or__`, `__truediv__` | SPARQL property-path operators |
 | Graph | `__or__`, `__xor__`, `cbd`, `context_aware`, `default_union`, `formula_aware`, `print`, `query`, `toPython`, `update` | SPARQL query/update separately; graph convenience/algebra APIs incrementally |
 | Dataset | `__or__`, `__xor__`, `cbd`, `formula_aware`, `print`, `query`, `toPython`, `update` | SPARQL query/update separately; graph convenience/algebra APIs incrementally |
-| ConjunctiveGraph | `__or__`, `__xor__`, `cbd`, `identifier`, `namespace_manager`, `print`, `query`, `store`, `toPython`, `update` | SPARQL query/update separately; graph convenience/algebra APIs incrementally |
+| ConjunctiveGraph | `__or__`, `__xor__`, `cbd`, `print`, `query`, `toPython`, `update` | SPARQL query/update separately; graph convenience/algebra APIs incrementally |
 | NamespaceManager | `__contains__`, `compute_qname_strict`, `curie`, `expand_curie`, `qname_strict`, `reset` | Strict QName/CURIE and reset adapters |
 | Store | `bind`, `contexts`, `create`, `dispatcher`, `gc`, `namespace`, `namespaces`, `node_pickler`, `prefix`, `query`, `remove_graph`, `update` | Raw Store/plugin adapters; safe persistence retained |
 | Memory | `bind`, `create`, `dispatcher`, `gc`, `identifier`, `namespace`, `namespaces`, `node_pickler`, `prefix`, `query`, `remove_graph`, `update` | Raw Store/plugin adapters; safe persistence retained |

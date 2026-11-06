@@ -259,16 +259,19 @@ def worker(args):
             }
             for pattern in patterns
         ]
-        started = perf_counter()
-        counts = [sum(1 for _ in graph.triples(p)) for p in patterns]
-        elapsed = perf_counter() - started
+        counts, pattern_seconds = [], []
+        for pattern in patterns:
+            started = perf_counter()
+            counts.append(sum(1 for _ in graph.triples(pattern)))
+            pattern_seconds.append(perf_counter() - started)
+        elapsed = sum(pattern_seconds)
         peak = rss()
         assert counts == [len(rows) for rows in expected]
         for pattern, rows in zip(patterns, expected):
             assert set(graph.triples(pattern)) == rows
         result["patterns"] = [
-            {"bound": [v is not None for v in p], "matches": n}
-            for p, n in zip(patterns, counts)
+            {"bound": [v is not None for v in p], "matches": n, "seconds": seconds}
+            for p, n, seconds in zip(patterns, counts, pattern_seconds)
         ]
     elif args.operation == "sort":
         from rdfcore import (
@@ -394,6 +397,25 @@ def regression_checks(current, baseline, margin=0.25):
                 "passed": row["median_seconds"] <= limit,
             }
         )
+        if row['operation'] == 'query':
+            for bound in itertools.product((False, True), repeat=3):
+                def times(entry):
+                    values = []
+                    for sample in entry['samples']:
+                        matches = [pattern['seconds'] for pattern in sample.get('patterns', [])
+                                   if tuple(pattern['bound']) == bound]
+                        if len(matches) != 1 or not math.isfinite(matches[0]) or matches[0] <= 0:
+                            raise ValueError('baseline and current query samples require per-pattern timings')
+                        values.append(matches[0])
+                    return values
+                previous, measured = times(old), times(row)
+                center = statistics.median(previous)
+                noise = statistics.median(abs(value-center) for value in previous)
+                limit = center + max(6*noise, center*margin)
+                observed = statistics.median(measured)
+                checks.append({'case': list(key(row)), 'bound': list(bound),
+                               'limit_seconds': limit, 'median_seconds': observed,
+                               'passed': observed <= limit})
     return checks
 
 

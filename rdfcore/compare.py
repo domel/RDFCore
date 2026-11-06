@@ -114,8 +114,8 @@ def _component_match(left_quads, right_quads):
 def _quads(value):
     from .dataset import Dataset, ConjunctiveGraph
     if isinstance(value, (Dataset, ConjunctiveGraph)):
-        # Dataset.graph() deliberately follows RDFLib's base-reset behavior.
-        # Neither quads() nor graphs() is therefore a read-only snapshot API.
+        # Dataset.graphs() may register a missing default graph. Read the
+        # store directly rather than allocating/registering graph views.
         # Read existing store contexts directly, without creating graph views
         # or registering contexts as a side effect of comparison.
         default = value.default_graph.identifier

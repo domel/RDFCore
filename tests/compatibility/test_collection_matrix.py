@@ -11,8 +11,8 @@ import rdfcore
 import rdfcore.collection
 
 
-def observe(module, size, operation, key=0, shape="normal"):
-    graph = module.Graph()
+def observe(module, size, operation, key=0, shape="normal", store=None):
+    graph = module.Graph(**({'store': store} if store is not None else {}))
     head = module.URIRef("urn:list") if shape != "nil" else module.RDF.nil
     serial = count()
     factory = lambda: module.BNode("cell%d" % next(serial))

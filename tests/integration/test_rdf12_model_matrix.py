@@ -19,7 +19,7 @@ def test_triple_constructor_and_graph_reject_non_rdf_components(position, invali
     with pytest.raises(TypeError):
         TripleTerm(*triple)
     with pytest.raises(TypeError):
-        Graph().add(tuple(triple))
+        Graph().add(tuple(triple), validate=True)
 
 
 @pytest.mark.parametrize('invalid', [Literal('value'), TripleTerm(S, P, Literal('v'))])
@@ -30,7 +30,7 @@ def test_terms_in_illegal_subject_or_predicate_positions(position, invalid):
     with pytest.raises(TypeError):
         TripleTerm(*triple)
     with pytest.raises(TypeError):
-        Graph().add(tuple(triple))
+        Graph().add(tuple(triple), validate=True)
 
 
 def model():

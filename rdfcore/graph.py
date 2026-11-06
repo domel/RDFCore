@@ -7,51 +7,74 @@ from pathlib import PurePath
 from .exceptions import UniquenessError
 from .namespace import OWL, RDF, RDFS, XSD, NamespaceManager
 from .store import Memory, SQLiteStore
-from .term import BNode, Literal, Node, TripleTerm, URIRef
+from .term import BNode, Genid, RDFLibGenid, Literal, Node, TripleTerm, URIRef
 from .parser import create_input_source
 from .plugin import get as get_plugin
 from .parser import Parser
 from .serializer import Serializer
 
 
-class Graph:
+class Graph(Node):
     def __init__(self, store="default", identifier=None, namespace_manager=None, base=None, bind_namespaces="rdflib"):
-        self.store = store if hasattr(store, "triples") else Memory()
-        self.identifier = BNode() if identifier is None else identifier if isinstance(identifier, (URIRef, BNode)) else URIRef(identifier)
+        from .store import Store
+        if not isinstance(store, Store):
+            store = get_plugin(store, Store).getClass()()
+        self.store = store
+        if identifier and not isinstance(identifier, (URIRef, BNode)):
+            ' ' in identifier
+        self.identifier = BNode() if not identifier else identifier if isinstance(identifier, (URIRef, BNode)) else URIRef(identifier)
         self.base = base
-        self.namespace_manager = namespace_manager if namespace_manager is not None else NamespaceManager(self)
-        if namespace_manager is None and bind_namespaces == "rdflib":
-            for prefix, namespace in (("rdf", RDF), ("rdfs", RDFS), ("xsd", XSD), ("owl", OWL)):
-                self.namespace_manager.bind(prefix, namespace)
+        self._namespace_manager = namespace_manager
+        self._bind_namespaces = bind_namespaces
 
-    def add(self, triple):
-        self._assert_triple(triple)
-        self.store.add(triple, self.identifier)
+    @property
+    def namespace_manager(self):
+        if self._namespace_manager is None:
+            self._namespace_manager = NamespaceManager(self, bind_namespaces=self._bind_namespaces)
+        return self._namespace_manager
+
+    @namespace_manager.setter
+    def namespace_manager(self, manager):
+        self._namespace_manager = manager
+
+    def add(self, triple, *, validate=False):
+        subject, predicate, obj = triple
+        triple = subject, predicate, obj
+        if validate or any(isinstance(item, TripleTerm) or isinstance(item, Literal) and item.direction is not None for item in triple):
+            self._assert_triple(triple)
+        else:
+            subject, predicate, obj = triple
+            for label, item in zip(('Subject', 'Predicate', 'Object'), (subject, predicate, obj)):
+                assert isinstance(item, Node), '%s %s must be an rdflib term' % (label, item)
+        self.store.add(triple, self._store_graph_context())
         if hasattr(self.store, '_conjunctive_views'):
             self.store._conjunctive_views[self.identifier] = self
             self.store._conjunctive_contexts.setdefault(self.identifier, self)
         return self
 
     def addN(self, quads):
-        for subject, predicate, obj, context in quads:
-            if isinstance(context, Graph) and context.identifier is self.identifier:
-                if isinstance(obj, TripleTerm):
-                    self._assert_triple((subject, predicate, obj))
-                else:
-                    for term in (subject, predicate, obj):
-                        assert isinstance(term, Node), 'Term %s must be an rdflib term' % (term,)
-                self.store.add((subject, predicate, obj), self.identifier)
-                if hasattr(self.store, '_conjunctive_views'):
-                    self.store._conjunctive_views[self.identifier] = self
-                    self.store._conjunctive_contexts.setdefault(self.identifier, self)
+        def selected():
+            for subject, predicate, obj, context in quads:
+                if isinstance(context, Graph) and context.identifier is self.identifier:
+                    if any(isinstance(item, TripleTerm) or isinstance(item, Literal) and item.direction is not None
+                           for item in (subject, predicate, obj)):
+                        self._assert_triple((subject, predicate, obj))
+                    else:
+                        for item in (subject, predicate, obj):
+                            assert isinstance(item, Node), 'Term %s must be an rdflib term' % (item,)
+                    yield subject, predicate, obj, context
+        self.store.addN(selected())
         return self
 
+    def _store_graph_context(self):
+        return self.identifier if isinstance(self.store, (Memory, SQLiteStore)) else self
+
     def remove(self, triple):
-        self.store.remove(triple, self.identifier)
+        self.store.remove(triple, self._store_graph_context())
         return self
 
     def triples(self, triple):
-        for triple, _ in self.store.triples(triple, self.identifier):
+        for triple, _ in self.store.triples(triple, self._store_graph_context()):
             yield triple
 
     def _triples_in_context(self, pattern):
@@ -61,7 +84,7 @@ class Graph:
         return self.triples((None, None, None))
 
     def __len__(self):
-        return self.store.__len__(self.identifier)
+        return self.store.__len__(self._store_graph_context())
 
     def __eq__(self, other):
         return isinstance(other, Graph) and self.identifier == other.identifier
@@ -95,6 +118,10 @@ class Graph:
         raise TypeError('You can only index a graph by a single RDF term or a slice of RDF terms.')
 
     def subjects(self, predicate=None, object=None, unique=False):
+        if isinstance(object, list):
+            for selected in object:
+                yield from self.subjects(predicate, selected, unique)
+            return
         seen = set()
         for subject, _, _ in self.triples((None, predicate, object)):
             if not unique or subject not in seen:
@@ -206,7 +233,8 @@ class Graph:
 
     def triples_choices(self, triple, context=None):
         """RDFLib list choices, retaining duplicate results and empty wildcards."""
-        yield from self._choices(triple, self.triples)
+        for row, _ in self.store.triples_choices(triple, context=self._store_graph_context()):
+            yield row
 
     @staticmethod
     def _choices(triple, triples):
@@ -233,13 +261,13 @@ class Graph:
             return term.skolemize(authority=authority, basepath=basepath)
         if isinstance(term, URIRef) and not to_skolem:
             try:
-                return term.de_skolemize()
+                return (RDFLibGenid(term) if RDFLibGenid._is_rdflib_skolem(term) else Genid(term) if Genid._is_external_skolem(term) else term).de_skolemize()
             except Exception:
                 return term
         if isinstance(term, TripleTerm):
             return TripleTerm(
                 Graph._map_skolem_term(term.subject, to_skolem=to_skolem, authority=authority, basepath=basepath),
-                Graph._map_skolem_term(term.predicate, to_skolem=to_skolem, authority=authority, basepath=basepath),
+                term.predicate,
                 Graph._map_skolem_term(term.object, to_skolem=to_skolem, authority=authority, basepath=basepath),
             )
         return term
@@ -255,17 +283,21 @@ class Graph:
                 mapper = lambda value: self._map_selected_skolem_term(
                     value, bnode, to_skolem=True, authority=authority, basepath=basepath
                 )
-            result.add((mapper(subject), mapper(predicate), mapper(obj)))
+            result.add((mapper(subject), predicate, mapper(obj)))
         return result
 
     def de_skolemize(self, new_graph=None, uriref=None):
         result = Graph() if new_graph is None else new_graph
+        if uriref is not None and not isinstance(uriref, Genid):
+            from .rdf_version import required_rdf_version
+            if required_rdf_version(self) == '1.1':
+                return result
         for subject, predicate, obj in self:
             def mapper(value):
                 if uriref is None:
                     return self._map_skolem_term(value, to_skolem=False)
                 return self._map_selected_skolem_term(value, uriref, to_skolem=False)
-            result.add((mapper(subject), mapper(predicate), mapper(obj)))
+            result.add((mapper(subject), predicate, mapper(obj)))
         return result
 
     @staticmethod
@@ -273,12 +305,12 @@ class Graph:
         if term == selected:
             return (
                 term.skolemize(authority=authority, basepath=basepath)
-                if to_skolem else term.de_skolemize()
+                if to_skolem else Graph._map_skolem_term(term, to_skolem=False)
             )
         if isinstance(term, TripleTerm):
             return TripleTerm(
                 Graph._map_selected_skolem_term(term.subject, selected, to_skolem=to_skolem, authority=authority, basepath=basepath),
-                Graph._map_selected_skolem_term(term.predicate, selected, to_skolem=to_skolem, authority=authority, basepath=basepath),
+                term.predicate,
                 Graph._map_selected_skolem_term(term.object, selected, to_skolem=to_skolem, authority=authority, basepath=basepath),
             )
         return term
@@ -345,6 +377,8 @@ class Graph:
 
     def set(self, triple):
         subject, predicate, obj = triple
+        assert subject is not None, "s can't be None in .set([s,p,o]), as it would remove (*, p, *)"
+        assert predicate is not None, "p can't be None in .set([s,p,o]), as it would remove (s, *, *)"
         self.remove((subject, predicate, None))
         return self.add(triple)
 
@@ -352,7 +386,7 @@ class Graph:
         self.namespace_manager.bind(prefix, namespace, override, replace)
 
     def namespaces(self):
-        return self.namespace_manager.namespaces()
+        yield from self.namespace_manager.namespaces()
 
     def qname(self, uri):
         return self.namespace_manager.qname(uri)
@@ -524,8 +558,7 @@ class Graph:
     __mul__ = __and__
 
     def __iadd__(self, other):
-        for triple in other:
-            self.add(triple)
+        self.addN((subject, predicate, obj, self) for subject, predicate, obj in other)
         return self
 
     def __isub__(self, other):

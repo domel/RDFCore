@@ -67,7 +67,7 @@ class ClosedNamespace(Namespace):
 
 
 class NamespaceManager:
-    def __init__(self, graph=None):
+    def __init__(self, graph=None, bind_namespaces="rdflib"):
         self.graph = graph
         self._prefixes: dict[str, URIRef] = {}
         self._namespaces: dict[str, str] = {}
@@ -86,6 +86,18 @@ class NamespaceManager:
                 except AttributeError:
                     pass
             self._prefixes, self._namespaces, self._bound_namespaces = bindings
+        if graph is not None:
+            from ._namespace_bindings import CORE, RDFLIB
+            if bind_namespaces == 'cc':
+                raise NotImplementedError('prefix.cc namespace binding is unsupported')
+            if bind_namespaces not in ('rdflib', 'core', 'none'):
+                raise ValueError('unsupported namespace set')
+            if bind_namespaces == 'rdflib':
+                for prefix, namespace in RDFLIB.items():
+                    self.bind(prefix, namespace)
+            if bind_namespaces != 'none':
+                for prefix, namespace in CORE.items():
+                    self.bind(prefix, namespace)
 
     def bind(self, prefix: str, namespace, override: bool = True, replace: bool = False):
         namespace = str(namespace)
@@ -140,8 +152,9 @@ class NamespaceManager:
     def namespaces(self):
         return iter((prefix, namespace) for prefix, namespace in self._prefixes.items())
 
-    def store(self, namespace: str, prefix: str):
-        self.bind(prefix, namespace)
+    @property
+    def store(self):
+        return self.graph.store
 
     def qname(self, uri):
         prefix, _, local = self.compute_qname(uri)

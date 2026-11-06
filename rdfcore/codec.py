@@ -4,7 +4,7 @@ import io
 import json
 import pickle
 
-from .term import BNode, Literal, TripleTerm, URIRef, Variable
+from .term import BNode, Genid, RDFLibGenid, Literal, TripleTerm, URIRef, Variable
 
 
 def encode(term, *, canonical=True):
@@ -17,7 +17,7 @@ def encode(term, *, canonical=True):
                     str(value.datatype) if value.datatype is not None else None, value.direction]
         if isinstance(value, TripleTerm):
             return ['triple', *(pack(item) for item in value)]
-        for cls, tag in ((URIRef, 'uri'), (BNode, 'blank'), (Variable, 'variable')):
+        for cls, tag in ((RDFLibGenid, 'rdflib-genid'), (Genid, 'genid'), (URIRef, 'uri'), (BNode, 'blank'), (Variable, 'variable')):
             if isinstance(value, cls):
                 return [tag, str(value)]
         raise TypeError('unsupported stored RDF term')
@@ -31,7 +31,7 @@ def decode(data):
         tag, *parts = value
         if tag == 'none' and not parts:
             return None
-        classes = {'uri': URIRef, 'blank': BNode, 'variable': Variable}
+        classes = {'uri': URIRef, 'blank': BNode, 'variable': Variable, 'genid': Genid, 'rdflib-genid': RDFLibGenid}
         if tag in classes and len(parts) == 1 and isinstance(parts[0], str):
             return classes[tag](parts[0])
         if tag == 'literal' and len(parts) == 4:

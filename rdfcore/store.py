@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from contextlib import contextmanager
 import sqlite3
+from os import fsdecode, fspath
 from .codec import encode, decode, decode_legacy
 from .term import Literal, Node, TripleTerm
 
@@ -39,6 +40,13 @@ class Store:
     def _register_context(self, context):
         return None
 
+    def add_graph(self, graph):
+        if not self.graph_aware:
+            raise Exception('Graph-aware store required')
+        self._register_context(graph.identifier)
+        if hasattr(self, '_conjunctive_contexts'):
+            self._conjunctive_contexts.setdefault(graph.identifier, graph)
+
     def open(self, configuration=None, create=False):
         return None
 
@@ -63,7 +71,7 @@ class Store:
             native = isinstance(self, (Memory, SQLiteStore))
             identifier = getattr(context, 'identifier', context) if native else context
             self.add((subject, predicate, obj), identifier)
-            if native and hasattr(self, '_conjunctive_views'):
+            if native and hasattr(context, 'identifier') and hasattr(self, '_conjunctive_views'):
                 self._conjunctive_views[identifier] = context
                 self._conjunctive_contexts.setdefault(identifier, context)
 
@@ -81,6 +89,12 @@ class Store:
     def triples(self, triple_pattern, context=None):
         raise NotImplementedError
 
+    def triples_choices(self, triple, context=None):
+        from .graph import Graph
+        if isinstance(self, (Memory, SQLiteStore)):
+            context = getattr(context, 'identifier', context)
+        yield from Graph._choices(triple, lambda pattern: self.triples(pattern, context))
+
     def __len__(self, context=None):
         raise NotImplementedError
 
@@ -90,6 +104,8 @@ class Memory(Store):
     graph_aware = True
 
     def __init__(self, configuration=None):
+        self._conjunctive_views = {}
+        self._conjunctive_contexts = {}
         self._triples: set[tuple] = set()
         self._contexts: dict[object, set[tuple]] = defaultdict(set)
         self._known_contexts = {}
@@ -194,7 +210,7 @@ class SQLiteStore(Store):
 
     def open(self, configuration, create=False):
         from pathlib import Path
-        requested = str(configuration)
+        requested = fsdecode(fspath(configuration))
         same = requested == self.path or (requested != ':memory:' and self.path != ':memory:'
                                          and Path(requested).resolve() == Path(self.path).resolve())
         if not self._closed:
@@ -234,7 +250,9 @@ class SQLiteStore(Store):
         raise NotImplementedError('SQLiteStore destruction is unsupported; close the store before removing its file explicitly')
 
     def __init__(self, path=":memory:"):
-        self.path = str(path)
+        self._conjunctive_views = {}
+        self._conjunctive_contexts = {}
+        self.path = fsdecode(fspath(path))
         self._transaction_depth = 0
         self._connection = sqlite3.connect(self.path)
         self._closed = False

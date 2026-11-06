@@ -1,7 +1,7 @@
 """Resource convenience wrapper compatible with RDFLib's Resource API."""
 
 from .namespace import RDF
-from .term import BNode, URIRef
+from .term import BNode, Node, URIRef
 
 
 class Resource:
@@ -80,11 +80,11 @@ class Resource:
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            if item.step is not None:
+            if item.step:
                 raise TypeError("Resources fix the subject for slicing, and can only be sliced by predicate/object.")
             predicate, obj = item.start, item.stop
-            predicate = getattr(predicate, "identifier", predicate)
-            obj = getattr(obj, "identifier", obj)
+            predicate = predicate.identifier if isinstance(predicate, Resource) else predicate
+            obj = obj.identifier if isinstance(obj, Resource) else obj
             if predicate is None and obj is None:
                 return self.predicate_objects()
             if predicate is None:
@@ -92,7 +92,7 @@ class Resource:
             if obj is None:
                 return self.objects(predicate)
             return (self.identifier, predicate, obj) in self.graph
-        if isinstance(item, (URIRef, BNode)):
+        if isinstance(item, Node):
             return self.objects(item)
         raise TypeError("You can only index a resource by an RDF term or a slice of RDF terms")
 

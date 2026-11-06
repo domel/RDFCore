@@ -102,3 +102,18 @@ def test_sqlite_failed_reopen_keeps_data_and_other_files(tmp_path):
     assert triple in graph
     graph.close()
     graph.close()
+
+
+@pytest.mark.parametrize('configuration', [None, False, 0, object()])
+def test_sqlite_invalid_reopen_configuration_does_not_create_files(configuration, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / 'valid.db'
+    graph = rdfcore.Graph(store=rdfcore.SQLiteStore(path))
+    graph.close()
+    before = set(tmp_path.iterdir())
+    with pytest.raises(TypeError):
+        graph.open(configuration, create=True)
+    assert graph.store.path == str(path)
+    assert set(tmp_path.iterdir()) == before
+    assert graph.open(path) == 1
+    graph.close()

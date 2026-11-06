@@ -1,4 +1,5 @@
 import pytest
+from collections import Counter
 
 from rdfcore import ConjunctiveGraph, DATASET_DEFAULT_GRAPH_ID, BNode, Dataset, Graph, URIRef
 
@@ -15,10 +16,11 @@ def test_dataset_default_and_named_graphs():
     dataset.add((s, p, named_object, named))
     assert len(dataset.default_graph) == 1
     assert list(dataset.graph(named)) == [(s, p, named_object)]
-    assert list(dataset.quads((None, None, None, None))) == [
+    # Quad ordering is unspecified; keep exact terms, graph IDs and counts.
+    assert Counter(dataset.quads((None, None, None, None))) == Counter([
         (s, p, default_object, DATASET_DEFAULT_GRAPH_ID),
         (s, p, named_object, named),
-    ]
+    ])
 
 
 def test_dataset_default_union_and_remove_graph():

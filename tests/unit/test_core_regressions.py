@@ -33,7 +33,7 @@ def test_literal_copy_preserves_language():
 
 
 def test_graph_rejects_invalid_rdf_terms():
-    with pytest.raises(TypeError):
+    with pytest.raises(AssertionError, match='Subject'):
         Graph().add(("not-a-node", URIRef("http://example.org/p"), Literal("x")))
 
 

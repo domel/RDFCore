@@ -5,7 +5,8 @@ def test_bnode_skolemization_round_trips():
     blank = BNode("node")
     skolem = blank.skolemize()
     assert skolem == URIRef("https://rdflib.github.io/.well-known/genid/rdflib/node")
-    assert skolem.de_skolemize() == blank
+    from rdfcore.term import RDFLibGenid
+    assert RDFLibGenid(skolem).de_skolemize() == blank
 
 
 def test_graph_skolemization_maps_nested_triple_terms():

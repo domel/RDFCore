@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from abc import ABC, abstractmethod
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from base64 import b64decode, b64encode
 from binascii import Error as BinasciiError, unhexlify
@@ -21,11 +22,29 @@ _RDF_LANG_STRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString"
 _RDF_JSON = "http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON"
 
 
-class Node(str):
+class Node(ABC):
+    """Abstract RDF node, shared by identifiers and concrete terms."""
+    __slots__ = ()
+
+    @abstractmethod
+    def n3(self, namespace_manager=None):
+        raise NotImplementedError
+
+
+class Identifier(Node, str):
     """Base class for RDF terms represented as strings."""
 
+    def __new__(cls, value):
+        return str.__new__(cls, value)
+
+    def __repr__(self):
+        cls = type(self)
+        name = 'rdfcore.term.' + cls.__name__ if cls in (URIRef, BNode, Variable) else cls.__name__
+        return f'{name}({str.__repr__(self)})'
+
+    @abstractmethod
     def n3(self, namespace_manager=None) -> str:
-        return str(self)
+        raise NotImplementedError
 
     def __eq__(self, other):
         return type(self) is type(other) and str(self) == str(other)
@@ -68,8 +87,14 @@ class Node(str):
         return True if self.__gt__(other) else self == other
 
 
-Identifier = Node
-IdentifiedNode = Node
+class IdentifiedNode(Identifier):
+    """Base for identified, non-literal RDF nodes."""
+
+    def n3(self, namespace_manager=None):
+        raise NotImplementedError
+
+    def toPython(self):
+        return str(self)
 
 
 class URIRef(IdentifiedNode):
@@ -107,20 +132,33 @@ class URIRef(IdentifiedNode):
                 return namespace_manager.normalizeUri(self)
             except (AttributeError, KeyError):
                 pass
-        return f"<{_escape_iri(str(self))}>"
+        return f"<{self}>"
 
     def de_skolemize(self):
         """Convert an RDF 1.1 skolem URI back to a blank node."""
-        path = urlparse(str(self)).path
-        marker = "/.well-known/genid/"
-        if not path.startswith(marker):
-            raise Exception(f"<{self}> is not a skolem URI")
-        value = path.split(marker, 1)[1]
-        if value.startswith("rdflib/"):
-            value = value[len("rdflib/"):]
-        if not value:
-            raise Exception(f"<{self}> is not a skolem URI")
-        return BNode(value=value)
+        if isinstance(self, RDFLibGenid):
+            return BNode(urlparse(str(self)).path[len('/.well-known/genid/rdflib/'):])
+        if isinstance(self, Genid):
+            if str(self) not in _skolems:
+                _skolems[str(self)] = BNode()
+            return _skolems[str(self)]
+        raise Exception(f"<{self}> is not a skolem URI")
+
+
+_skolems = {}
+
+
+class Genid(URIRef):
+    @staticmethod
+    def _is_external_skolem(uri):
+        return urlparse(str(uri)).path.rfind('/.well-known/genid/') == 0
+
+
+class RDFLibGenid(Genid):
+    @staticmethod
+    def _is_rdflib_skolem(uri):
+        parsed = urlparse(str(uri))
+        return not (parsed.params or parsed.query or parsed.fragment) and parsed.path.rfind('/.well-known/genid/rdflib/') == 0
 
 
 class BNode(IdentifiedNode):
@@ -278,11 +316,13 @@ class Literal(Identifier):
                     and str(datatype) in _VALIDATED_DATATYPES
                 ):
                     ill_typed = False
-                if normalize:
+                if normalize and str(datatype) not in {_XSD + name for name in ('duration', 'dayTimeDuration', 'yearMonthDuration')}:
                     lexical = _normalize_lexical(lexical, datatype)
             except (ValueError, ArithmeticError):
                 ill_typed = True
                 value = None
+        if normalize and value is not None and not isinstance(lexical_or_value, Literal) and str(datatype) in {_XSD + name for name in ('duration', 'dayTimeDuration', 'yearMonthDuration')}:
+            lexical = _normalize_lexical(lexical, datatype)
         if (str(datatype) == _XSD + 'boolean'
                 and isinstance(lexical_or_value, str)
                 and not isinstance(lexical_or_value, Literal)):
@@ -326,8 +366,33 @@ class Literal(Identifier):
     def __ne__(self, other):
         return not self == other
 
+    def __repr__(self):
+        arguments = [str.__repr__(self)]
+        for name, value in (('lang', self.language), ('datatype', self.datatype), ('direction', self.direction)):
+            if value is not None:
+                arguments.append(name + '=' + repr(value))
+        name = 'rdfcore.term.Literal' if type(self) is Literal else type(self).__name__
+        return name + '(' + ', '.join(arguments) + ')'
+
     def n3(self, namespace_manager=None) -> str:
-        text = '"' + _escape_literal(str(self)) + '"'
+        encoded = str(self).replace('\\', '\\\\')
+        if '\n' in self:
+            encoded = encoded.replace('"""', '\\"\\"\\"')
+            if encoded.endswith('"') and not encoded.endswith('\\"'):
+                encoded = encoded[:-1] + '\\"'
+            text = '"""' + encoded.replace('\r', '\\r') + '"""'
+        else:
+            text = '"' + encoded.replace('"', '\\"').replace('\r', '\\r') + '"'
+        if str(self.datatype) in {_XSD + name for name in ('float', 'double', 'decimal')}:
+            import math
+            try:
+                number = float(self)
+                if math.isinf(number):
+                    text = text.replace('inf', 'INF').replace('Infinity', 'INF')
+                if math.isnan(number):
+                    text = text.replace('nan', 'NaN')
+            except ValueError:
+                warnings.warn(f'Serializing weird numerical {self!r}')
         if self.language is not None:
             suffix = "@" + self.language
             if self.direction is not None:
@@ -386,6 +451,14 @@ class Literal(Identifier):
     def neq(self, other):
         return not self.eq(other)
 
+    def __add__(self, other):
+        from ._literal_arithmetic import binary
+        return binary(self, other)
+
+    def __sub__(self, other):
+        from ._literal_arithmetic import binary
+        return binary(self, other, subtract=True)
+
     def _unary_numeric(self, operation):
         if not isinstance(self.value, (int, float)):
             raise TypeError(f'Not a number; {self!r}')
@@ -411,6 +484,9 @@ class Literal(Identifier):
 
 
 def _literal_parts(value):
+    from ._literal_arithmetic import Duration, format_duration
+    if isinstance(value, (Duration, timedelta)):
+        return value, format_duration(value), URIRef(_XSD + 'dayTimeDuration' if isinstance(value, timedelta) else _XSD + 'duration')
     if isinstance(value, bool):
         return value, ("true" if value else "false"), URIRef(_XSD + "boolean")
     if isinstance(value, int):
@@ -429,6 +505,9 @@ def _literal_parts(value):
 
 
 def _normalize_lexical(lexical, datatype):
+    from ._literal_arithmetic import DURATIONS, parse_duration, format_duration
+    if str(datatype) in DURATIONS:
+        return format_duration(parse_duration(lexical))
     if str(datatype) == _XSD + 'date':
         return _python_value(lexical, datatype).isoformat()
     if str(datatype) in {_XSD + 'dateTime', _XSD + 'time'}:
@@ -448,6 +527,9 @@ def _normalize_lexical(lexical, datatype):
 
 def _python_value(lexical, datatype):
     name = str(datatype)
+    from ._literal_arithmetic import DURATIONS, parse_duration
+    if name in DURATIONS:
+        return parse_duration(lexical)
     try:
         if name in _STRING_DATATYPES: return lexical
         if name == _RDF_JSON:
@@ -517,6 +599,7 @@ _INTEGER_BOUNDS = {
     _XSD + "unsignedByte": (0, 2**8 - 1),
 }
 _VALIDATED_DATATYPES = _STRING_DATATYPES | _INTEGER_DATATYPES | {
+    _XSD + 'duration', _XSD + 'dayTimeDuration', _XSD + 'yearMonthDuration',
     _XSD + "boolean",
     _XSD + "double",
     _XSD + "float",

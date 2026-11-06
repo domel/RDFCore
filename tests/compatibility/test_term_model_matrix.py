@@ -61,3 +61,23 @@ def test_term_set_and_dictionary_matrix(left, right):
         return (len({a, b}), b in {a}, {a: 'value'}.get(b),
                 original == hash(a), (a == b) == (b == a))
     assert observe(rdfcore) == observe(rdflib)
+
+
+def test_term_class_hierarchy_and_abstract_bases():
+    import inspect
+    observations = []
+    for module in (rdflib, rdfcore):
+        values = []
+        for name in ('Node', 'Identifier', 'IdentifiedNode', 'URIRef', 'BNode', 'Variable', 'Literal'):
+            cls = getattr(module.term, name)
+            values.append((name, tuple(base.__name__ for base in cls.__bases__), inspect.isabstract(cls)))
+        observations.append(values)
+        for name in ('Node', 'Identifier', 'IdentifiedNode'):
+            with pytest.raises(TypeError):
+                getattr(module.term, name)()
+    assert observations[0] == observations[1]
+
+
+def test_graph_class_hierarchy():
+    for name in ('Graph', 'ConjunctiveGraph', 'Dataset'):
+        assert tuple(base.__name__ for base in getattr(rdfcore, name).__bases__) == tuple(base.__name__ for base in getattr(rdflib, name).__bases__)

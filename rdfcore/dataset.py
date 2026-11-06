@@ -10,213 +10,21 @@ from .term import BNode, URIRef
 DATASET_DEFAULT_GRAPH_ID = URIRef("urn:x-rdflib:default")
 
 
-class Dataset(Graph):
-    def __init__(self, store="default", default_union=False, default_graph_base=None):
-        super().__init__(store=store, base=default_graph_base)
-        self.default_union = default_union
-        self.default_graph = Graph(store=self.store, identifier=DATASET_DEFAULT_GRAPH_ID,
-                                   namespace_manager=self.namespace_manager, base=default_graph_base)
-        self._graphs = {DATASET_DEFAULT_GRAPH_ID: self.default_graph}
-
-    def graph(self, identifier=None, base=None):
-        source_graph = identifier if isinstance(identifier, Graph) and not isinstance(identifier, Dataset) else None
-        identifier = BNode().skolemize() if identifier is None else identifier
-        identifier = getattr(identifier, "identifier", identifier)
-        if isinstance(identifier, str) and not isinstance(identifier, (URIRef, BNode)):
-            identifier = URIRef(identifier)
-        if not isinstance(identifier, (URIRef, BNode)):
-            raise TypeError("graph identifier must be a URIRef or BNode")
-        register = getattr(self.store, '_register_context', None)
-        if identifier == self.default_graph.identifier:
-            if register is not None:
-                register(identifier)
-            return self.default_graph
-        graph = self._graphs.get(identifier)
-        if graph is None:
-            graph = Graph(store=self.store, identifier=identifier, namespace_manager=self.namespace_manager, base=base)
-            self._graphs[identifier] = graph
-        else:
-            graph.base = base
-        if register is not None:
-            register(identifier)
-        if source_graph is not None:
-            for triple in source_graph:
-                graph.add(triple)
-        return graph
-
-    def get_graph(self, identifier):
-        """Return an existing graph; raise IndexError when it is absent."""
-        if identifier in self._graphs:
-            return self._graphs[identifier]
-        for context in self.store.contexts():
-            if context == identifier:
-                return self.graph(identifier)
-        raise IndexError("list index out of range")
-
-    def get_context(self, identifier, quoted=False, base=None):
-        """Return the graph view for an identifier, creating the view if needed."""
-        if isinstance(identifier, str) and not isinstance(identifier, (URIRef, BNode)):
-            identifier = URIRef(identifier)
-        return Graph(store=self.store, identifier=identifier,
-                     namespace_manager=self.namespace_manager, base=base)
-
-    def add_graph(self, g):
-        """Compatibility alias for :meth:`graph`."""
-        return self.graph(g)
-
-    def context_id(self, uri, context_id=None):
-        """Return a context URI using RDFLib's ``URI#context`` convention."""
-        uri = uri.split("#", 1)[0]
-        if context_id is None:
-            context_id = "#context"
-        return URIRef(context_id, base=uri)
-
-    def add(self, triple_or_quad):
-        triple = triple_or_quad
-        if len(triple) == 4:
-            subject, predicate, obj, graph = triple
-            self._assert_triple((subject, predicate, obj))
-            if graph is None:
-                self.store.add((subject, predicate, obj), None)
-            else:
-                self.graph(getattr(graph, "identifier", graph)).add((subject, predicate, obj))
-        else:
-            self.default_graph.add(triple)
-        return self
-
-    def addN(self, quads):
-        for subject, predicate, obj, graph in quads:
-            self.add((subject, predicate, obj, graph))
-        return self
-
-    def triples(self, triple_or_quad, context=None):
-        if len(triple_or_quad) == 4:
-            *pattern, selected = triple_or_quad
-        else:
-            pattern = triple_or_quad
-            selected = None
-        selected = context or selected
-        selected = getattr(selected, 'identifier', selected)
-        if self.default_union:
-            if selected == self.default_graph.identifier:
-                selected = None
-        elif selected is None:
-            selected = self.default_graph.identifier
-        for triple, _ in self.store.triples(tuple(pattern), selected):
-            yield triple
-
-    def __len__(self):
-        return self.store.__len__(None)
-
-    def triples_choices(self, triple, context=None):
-        if context is None:
-            selected = None if self.default_union else self.default_graph.identifier
-        elif isinstance(context, Graph):
-            selected = context.identifier
-        else:
-            if context and not isinstance(context, (URIRef, BNode)):
-                # RDFLib coerces through URIRef, whose URI validation requires
-                # an iterable value. Preserve that error before querying.
-                ' ' in context
-            selected = self.get_context(context or None).identifier
-        yield from self._choices(triple, lambda pattern: (row for row, _ in self.store.triples(pattern, selected)))
-
-    def __iter__(self):
-        return self.quads()
-
-    def _triples_in_context(self, pattern):
-        for triple, _ in self.store.triples(pattern, self.default_graph.identifier):
-            yield triple
-
-    def serialize(self, destination=None, format="trig", base=None, encoding=None, **args):
-        return super().serialize(destination=destination, format=format, base=base, encoding=encoding, **args)
-
-    def quads(self, quad=None):
-        pattern = (None, None, None, None) if quad is None else quad
-        if len(pattern) == 3:
-            pattern = (*pattern, None)
-        if len(pattern) != 4:
-            raise ValueError("quad pattern must contain four elements")
-        subject, predicate, obj, graph = pattern
-        contexts = (
-            list(dict.fromkeys(self.store.contexts()))
-            if graph is None
-            else [getattr(graph, "identifier", graph)]
-        )
-        for context in contexts:
-            actual_graph = self.graph(context)
-            for triple in actual_graph._triples_in_context((subject, predicate, obj)):
-                yield (*triple, context)
-
-    def graphs(self, triple=None):
-        seen = set()
-        for context in self.store.contexts(triple):
-            if context in seen:
-                continue
-            seen.add(context)
-            yield self.graph(context)
-        if self.default_graph.identifier not in seen:
-            yield self.default_graph
-
-    def remove(self, triple_or_quad):
-        pattern = triple_or_quad
-        if len(pattern) == 4:
-            subject, predicate, obj, graph = pattern
-            contexts = (
-                list(dict.fromkeys(self.store.contexts()))
-                if graph is None
-                else [getattr(graph, "identifier", graph)]
-            )
-            for context in contexts:
-                self.graph(context).remove((subject, predicate, obj))
-            return self
-        self.store.remove(pattern, None)
-        return self
-
-    def remove_graph(self, g):
-        identifier = getattr(g, "identifier", g)
-        if identifier == self.default_graph.identifier:
-            self.default_graph.remove((None, None, None))
-        else:
-            self.store.remove_context(identifier)
-            self._graphs.pop(identifier, None)
-        return self
-
-    def remove_context(self, context) -> None:
-        """Remove a context's triples, retaining the graph, as in RDFLib.
-
-        ``None`` selects the union. Context identifiers retain their term
-        types: a plain string is not an IRI. The return value is ``None``.
-        """
-        self.store.remove((None, None, None), context)
-
-    @property
-    def default_context(self):
-        warnings.warn("default_context is deprecated; use default_graph", DeprecationWarning, stacklevel=2)
-        return self.default_graph
-
-    def contexts(self, triple=None):
-        warnings.warn("contexts is deprecated; use graphs", DeprecationWarning, stacklevel=2)
-        yield from self.graphs(triple)
-
-
 class ConjunctiveGraph(Graph):
     # Dataset conveniences retained as RDFCore extensions; the class itself
     # follows RDFLib's Graph hierarchy and union-query contract.
-    graph = Dataset.graph
-    graphs = Dataset.graphs
-    context_id = Dataset.context_id
-    remove_context = Dataset.remove_context
-    remove_graph = Dataset.remove_graph
-    add_graph = Dataset.add_graph
-    _triples_in_context = Dataset._triples_in_context
 
     def contexts(self, triple=None):
         for context in self.store.contexts(triple):
             if isinstance(context, Graph):
                 yield context
             else:
-                yield getattr(self.store, '_conjunctive_contexts', {}).get(context, self.get_context(context))
+                yield self._context_view(context)
+
+    def _context_view(self, identifier, latest=False):
+        name = '_conjunctive_views' if latest else '_conjunctive_contexts'
+        cache = getattr(self.store, name, {})
+        return cache[identifier] if identifier in cache else self.get_context(identifier)
 
     def get_graph(self, identifier):
         return [graph for graph in self.contexts() if graph.identifier == identifier][0]
@@ -267,7 +75,7 @@ class ConjunctiveGraph(Graph):
         for triple, contexts in self.store.triples((subject, predicate, obj), identifier):
             if (isinstance(self.store, (Memory, SQLiteStore)) and isinstance(contexts, tuple)
                     and not any(isinstance(item, Graph) for item in contexts)):
-                contexts = (self.store._conjunctive_views.get(key, self.get_context(key))
+                contexts = (self._context_view(key, latest=True)
                             for key in self.store.contexts(triple))
             for selected in contexts:
                 yield (*triple, selected)
@@ -280,13 +88,7 @@ class ConjunctiveGraph(Graph):
         return self.store.__len__()
 
     def triples_choices(self, triple, context=None):
-        from .store import Memory, SQLiteStore
-        if isinstance(self.store, (Memory, SQLiteStore)):
-            yield from Dataset.triples_choices(self, triple, context)
-        else:
-            selected = self.default_context if context is None and not self.default_union else self._graph(context)
-            for row, _ in self.store.triples_choices(triple, context=selected):
-                yield row
+        yield from Dataset.triples_choices(self, triple, context)
 
     def _store_context(self, context):
         from .store import Memory, SQLiteStore
@@ -294,7 +96,9 @@ class ConjunctiveGraph(Graph):
 
     def _assert_nodes(self, subject, predicate, obj):
         from .term import Node, TripleTerm
-        if any(isinstance(term, TripleTerm) for term in (subject, predicate, obj)):
+        from .term import Literal
+        if any(isinstance(term, TripleTerm) or isinstance(term, Literal) and term.direction is not None
+               for term in (subject, predicate, obj)):
             self._assert_triple((subject, predicate, obj))
         else:
             for term in (subject, predicate, obj):
@@ -322,28 +126,6 @@ class ConjunctiveGraph(Graph):
         subject, predicate, obj, context = self._spoc(triple_or_quad)
         self.store.remove((subject, predicate, obj), self._store_context(context))
         return self
-
-    def __iadd__(self, other):
-        self.addN((subject, predicate, obj, self) for subject, predicate, obj in other)
-        return self
-
-    def open(self, configuration, create=False):
-        return self.store.open(configuration, create)
-
-    def commit(self):
-        self.store.commit()
-        return self
-
-    def rollback(self):
-        self.store.rollback()
-        return self
-
-    def destroy(self, configuration):
-        self.store.destroy(configuration)
-        return self
-
-    def close(self, commit_pending_transaction=False):
-        return self.store.close(commit_pending_transaction)
 
     def _close_parser_source(self, source, parser_class):
         from .plugins.parsers.rdfxml import RDFXMLParser
@@ -423,6 +205,155 @@ class ConjunctiveGraph(Graph):
     def default_context(self, value):
         self.default_graph = value
 
+
+
+
+class Dataset(ConjunctiveGraph):
+    def __init__(self, store="default", default_union=False, default_graph_base=None):
+        Graph.__init__(self, store=store)
+        assert self.store.context_aware, 'ConjunctiveGraph must be backed by a context aware store.'
+        if not self.store.graph_aware:
+            raise Exception('Dataset must be backed by a graph-aware store!')
+        self.context_aware = True
+        self.default_union = default_union
+        self.default_graph = Graph(store=self.store, identifier=DATASET_DEFAULT_GRAPH_ID,
+                                   base=default_graph_base)
+        self._graphs = {}
+
+    def graph(self, identifier=None, base=None):
+        if identifier is None:
+            self.bind('genid', 'https://rdflib.github.io/.well-known/genid/rdflib/', override=False)
+            identifier = BNode().skolemize()
+        source = identifier if isinstance(identifier, Graph) and not isinstance(identifier, (Dataset, ConjunctiveGraph)) else None
+        graph = self._graph(identifier)
+        if source is not None:
+            graph += source
+        graph.base = base
+        self.store.add_graph(graph)
+        self._graphs.setdefault(graph.identifier, graph)
+        return graph
+
+    def get_graph(self, identifier):
+        return ConjunctiveGraph.get_graph(self, identifier)
+
+    def get_context(self, identifier, quoted=False, base=None):
+        """Return the graph view for an identifier, creating the view if needed."""
+        if isinstance(identifier, str) and not isinstance(identifier, (URIRef, BNode)):
+            identifier = URIRef(identifier)
+        return Graph(store=self.store, identifier=identifier,
+                     namespace_manager=self.namespace_manager, base=base)
+
+    def add_graph(self, g):
+        """Compatibility alias for :meth:`graph`."""
+        return self.graph(g)
+
+    def context_id(self, uri, context_id=None):
+        """Return a context URI using RDFLib's ``URI#context`` convention."""
+        uri = uri.split("#", 1)[0]
+        if context_id is None:
+            context_id = "#context"
+        return URIRef(context_id, base=uri)
+
+    def add(self, triple_or_quad):
+        subject, predicate, obj, graph = ConjunctiveGraph._spoc(self, triple_or_quad, default=True)
+        ConjunctiveGraph._assert_nodes(self, subject, predicate, obj)
+        self.store.add((subject, predicate, obj), ConjunctiveGraph._store_context(self, graph))
+        if graph is not None and hasattr(self.store, '_conjunctive_views'):
+            self.store._conjunctive_views[graph.identifier] = graph
+            self.store._conjunctive_contexts.setdefault(graph.identifier, graph)
+        return self
+
+    def _graph(self, context):
+        return ConjunctiveGraph._graph(self, context)
+
+    def addN(self, quads):
+        for subject, predicate, obj, graph in quads:
+            ConjunctiveGraph._assert_nodes(self, subject, predicate, obj)
+            assert graph is not None, 'Context associated with %s %s %s is None!' % (subject, predicate, obj)
+            self.add((subject, predicate, obj, graph))
+        return self
+
+    def triples(self, triple_or_quad, context=None):
+        yield from ConjunctiveGraph.triples(self, triple_or_quad, context)
+
+    def __len__(self):
+        return self.store.__len__(None)
+
+    def triples_choices(self, triple, context=None):
+        selected = self.default_graph if context is None and not self.default_union else self._graph(context)
+        for row, _ in self.store.triples_choices(triple, context=self._store_context(selected)):
+            yield row
+
+    def __iter__(self):
+        return self.quads()
+
+    def _triples_in_context(self, pattern):
+        for triple, _ in self.store.triples(pattern, self.default_graph.identifier):
+            yield triple
+
+    def serialize(self, destination=None, format="trig", base=None, encoding=None, **args):
+        return super().serialize(destination=destination, format=format, base=base, encoding=encoding, **args)
+
+    def parse(self, source=None, publicID=None, format=None, location=None, file=None, data=None, **args):
+        from .streaming import BoundedReadStream
+        if isinstance(file, BoundedReadStream) and not hasattr(file, 'name') and source is None and location is None and data is None:
+            source, file = file, None
+        return super().parse(source=source, publicID=publicID, format=format,
+                             location=location, file=file, data=data, **args)
+
+    def quads(self, quad=None):
+        for subject, predicate, obj, graph in ConjunctiveGraph.quads(self, quad):
+            yield subject, predicate, obj, graph.identifier
+
+    def graphs(self, triple=None):
+        seen = set()
+        for graph in ConjunctiveGraph.contexts(self, triple):
+            seen.add(graph.identifier)
+            yield graph
+        if self.default_graph.identifier not in seen:
+            yield self.graph(self.default_graph.identifier)
+
+    def remove(self, triple_or_quad):
+        subject, predicate, obj, graph = ConjunctiveGraph._spoc(self, triple_or_quad)
+        self.store.remove((subject, predicate, obj), ConjunctiveGraph._store_context(self, graph))
+        return self
+
+    def remove_graph(self, g):
+        identifier = getattr(g, "identifier", g)
+        if identifier == self.default_graph.identifier:
+            self.default_graph.remove((None, None, None))
+        else:
+            self.store.remove_context(identifier)
+            self._graphs.pop(identifier, None)
+        return self
+
+    def remove_context(self, context) -> None:
+        """Remove a context's triples, retaining the graph, as in RDFLib.
+
+        ``None`` selects the union. Context identifiers retain their term
+        types: a plain string is not an IRI. The return value is ``None``.
+        """
+        self.store.remove((None, None, None), context)
+
+    @property
+    def default_context(self):
+        warnings.warn("default_context is deprecated; use default_graph", DeprecationWarning, stacklevel=2)
+        return self.default_graph
+
+    def contexts(self, triple=None):
+        warnings.warn("contexts is deprecated; use graphs", DeprecationWarning, stacklevel=2)
+        yield from self.graphs(triple)
+
+
+
+
+ConjunctiveGraph.graph = Dataset.graph
+ConjunctiveGraph.graphs = Dataset.graphs
+ConjunctiveGraph.context_id = Dataset.context_id
+ConjunctiveGraph.remove_context = Dataset.remove_context
+ConjunctiveGraph.remove_graph = Dataset.remove_graph
+ConjunctiveGraph.add_graph = Dataset.add_graph
+ConjunctiveGraph._triples_in_context = Dataset._triples_in_context
 
 class _ConjunctiveParseView(ConjunctiveGraph):
     """Internal parser target when the default context uses another store."""

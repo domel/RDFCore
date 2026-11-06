@@ -381,6 +381,9 @@ The operation snapshots its inputs and accepts `max_steps`; it is not streaming.
 Use `Graph` for one graph and `Dataset` for named graphs. For a union view,
 set `Dataset(default_union=True)`. The RDFLib-compatible `ConjunctiveGraph`
 also reads the union, but is deprecated; prefer `Dataset`.
+Ordinary `Graph.add()` follows RDFLib's permissive Node checks. Use
+`graph.add(triple, validate=True)` to enforce RDF term types and positions;
+triple terms and directional literals always receive these checks.
 Its `quads()` returns `Graph` objects as contexts; `Dataset.quads()` returns
 graph identifiers. `default_graph_base` sets the base of its default context.
 For `ConjunctiveGraph`, legacy N-Quads keeps context labels (except RDFLib's default sentinel), as in
@@ -571,6 +574,8 @@ use savepoints. Writes outside transactions commit immediately.
 `graph.rollback()` inside a SQLite transaction rolls back its current block;
 `graph.commit()` inside the block raises `RuntimeError` (leave the block to commit).
 SQLite store destruction is explicitly unsupported and never deletes a file.
+After closing, `graph.open(path, create=False)` reopens an existing SQLite
+store (`1`), or returns `-1` for a missing file; `create=True` permits creation.
 `store.add_many(triples, context=None)` consumes input lazily in one transaction
 and returns the number of input triples, including duplicates. Generator errors
 roll back triples and context registrations. These are RDFCore extensions.

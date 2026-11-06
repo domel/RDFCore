@@ -11,6 +11,8 @@ class TriG12Serializer(Serializer):
         safe = _safe_iris(kwargs, True)
         if base is None:
             base = self.store.base
+        if base is None:
+            base = getattr(getattr(self.store, 'default_graph', None), 'base', None)
         if mode == "stream":
             from ...streaming import TriGStreamingWriter
             from ...rdf_version import required_rdf_version

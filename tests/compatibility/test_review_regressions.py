@@ -83,6 +83,7 @@ def test_sqlite_retains_language_spelling_and_deduplicates(tmp_path, language):
 
 @pytest.mark.parametrize('failure', ['lookup', 'constructor'])
 def test_graph_parse_closes_owned_source_on_plugin_failure(failure):
+    graph = rdfcore.Graph()
     source = rdfcore.InputSource(file=BytesIO(), auto_close=True)
     class BrokenParser:
         def __init__(self, *args):
@@ -94,5 +95,5 @@ def test_graph_parse_closes_owned_source_on_plugin_failure(failure):
         with patch('rdfcore.graph.get_plugin', side_effect=RuntimeError('lookup failed') if failure == 'lookup' else None,
                    return_value=Plugin()):
             with pytest.raises(RuntimeError):
-                rdfcore.Graph().parse(data='', format='xml')
+                graph.parse(data='', format='xml')
     assert source.file.closed

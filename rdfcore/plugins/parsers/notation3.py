@@ -64,8 +64,7 @@ class TurtleParser(Parser):
 
     def _emit(self, statement):
         # RDFLib's legacy Turtle parser accepts generalized literal subjects.
-        # Insert only that legacy case directly; Graph.add remains strict and
-        # RDF 1.2 parsers continue through the validating sink.
+        # Keep that legacy case separate from normative parser checks.
         if not self.allow_rdf12 and isinstance(statement[0], Literal):
             from ...streaming import DatasetSink, GraphSink
 
@@ -116,7 +115,7 @@ class TurtleParser(Parser):
             self._last_subject_is_collection = True
             return self._collection()
         term = self._term("subject")
-        if getattr(self, '_strict', self.allow_rdf12) and not isinstance(term, (URIRef, BNode)):
+        if (self.allow_rdf12 or getattr(self, '_strict', False)) and not isinstance(term, (URIRef, BNode)):
             raise self._error('subject must be an IRI or blank node')
         return term
 
@@ -148,7 +147,10 @@ class TurtleParser(Parser):
     def _predicate(self):
         if self._accept("a"):
             return RDF.type
-        return self._term("predicate")
+        term = self._term("predicate")
+        if (self.allow_rdf12 or getattr(self, '_strict', False)) and not isinstance(term, URIRef):
+            raise self._error('predicate must be an IRI')
+        return term
 
     def _term(self, role):
         token = self._next()

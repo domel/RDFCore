@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from rdfcore import Literal, TripleTerm, URIRef, external_sort, statement_key
@@ -11,15 +9,18 @@ def triple(number):
 
 def test_external_sort_uses_runs_and_deduplicates(tmp_path):
     values = [triple(3), triple(1), triple(2), triple(1)]
-    assert list(external_sort(values, memory_budget=1, temp_dir=tmp_path, unique=True)) == [
-        triple(1), triple(2), triple(3)
-    ]
+    assert list(
+        external_sort(values, memory_budget=1, temp_dir=tmp_path, unique=True)
+    ) == [triple(1), triple(2), triple(3)]
     assert list(tmp_path.iterdir()) == []
 
 
 def test_external_sort_supports_quads_and_cleans_up_on_close(tmp_path):
     graph = URIRef("urn:g")
-    values = [(subject, predicate, obj, graph) for subject, predicate, obj in (triple(2), triple(1))]
+    values = [
+        (subject, predicate, obj, graph)
+        for subject, predicate, obj in (triple(2), triple(1))
+    ]
     result = external_sort(values, memory_budget=1, temp_dir=tmp_path)
     assert next(result) == values[1]
     result.close()
@@ -44,7 +45,9 @@ def test_external_sort_accepts_default_graph_quad():
 
 def test_external_sort_limits_open_runs_during_multi_pass_merge(tmp_path):
     values = [triple(number) for number in range(30, -1, -1)]
-    result = list(external_sort(values, memory_budget=1, temp_dir=tmp_path, max_open_runs=2))
+    result = list(
+        external_sort(values, memory_budget=1, temp_dir=tmp_path, max_open_runs=2)
+    )
     assert result == sorted(values, key=statement_key)
     assert list(tmp_path.iterdir()) == []
 
@@ -53,8 +56,9 @@ def test_external_sort_cleans_runs_after_source_failure(tmp_path):
     def broken():
         for i in range(5):
             yield triple(i)
-        raise RuntimeError('source failed')
-    with pytest.raises(RuntimeError, match='source failed'):
+        raise RuntimeError("source failed")
+
+    with pytest.raises(RuntimeError, match="source failed"):
         list(external_sort(broken(), memory_budget=1, temp_dir=tmp_path))
     assert list(tmp_path.iterdir()) == []
 

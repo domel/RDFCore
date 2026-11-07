@@ -7,7 +7,9 @@ from rdfcore.io import BoundedWriteStream, open_input, open_output
 def test_gzip_input_and_output_are_streaming_file_like_objects():
     payload = b'<urn:s> <urn:p> "o" .\n'
     compressed = gzip.compress(payload)
-    reader, owns_reader = open_input(BytesIO(compressed), compression="gz", buffer_size=3)
+    reader, owns_reader = open_input(
+        BytesIO(compressed), compression="gz", buffer_size=3
+    )
     assert reader.read() == payload
     assert not owns_reader
     reader.close()
@@ -24,6 +26,7 @@ def test_bounded_writer_limits_each_underlying_write():
     class Sink:
         def __init__(self):
             self.writes = []
+
         def write(self, data):
             self.writes.append(data)
             return len(data)
@@ -36,12 +39,14 @@ def test_bounded_writer_limits_each_underlying_write():
 
 def test_gzip_header_filling_keeps_underlying_reads_bounded():
     payload = b'<urn:s> <urn:p> "o" .\n'
+
     class ShortReader(BytesIO):
         def read(self, size=-1):
             assert 0 <= size <= 1
             return super().read(size)
+
     raw = ShortReader(gzip.compress(payload))
-    reader, owns = open_input(raw, compression='gz', buffer_size=1)
+    reader, owns = open_input(raw, compression="gz", buffer_size=1)
     try:
         assert reader.read() == payload
         assert not owns

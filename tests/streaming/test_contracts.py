@@ -2,7 +2,13 @@ from io import BytesIO, StringIO
 
 from rdfcore import Dataset, Graph, URIRef
 from rdfcore.pipeline import convert
-from rdfcore.streaming import BoundedReadStream, DatasetSink, GraphSink, NTStreamingWriter, parse_stream
+from rdfcore.streaming import (
+    BoundedReadStream,
+    DatasetSink,
+    GraphSink,
+    NTStreamingWriter,
+    parse_stream,
+)
 
 
 class RecordingSink:
@@ -49,12 +55,14 @@ def test_nt_streaming_writer_and_bounded_reader():
     output = StringIO()
     writer = NTStreamingWriter(output)
     writer.add((URIRef("urn:s"), URIRef("urn:p"), URIRef("urn:o")))
-    assert output.getvalue() == '<urn:s> <urn:p> <urn:o> .\n'
+    assert output.getvalue() == "<urn:s> <urn:p> <urn:o> .\n"
 
     bounded = BoundedReadStream(BytesIO(b"abcdef"), chunk_size=2)
     assert bounded.read(100) == b"ab"
     assert bounded.read(100) == b"cd"
-    assert BoundedReadStream(BytesIO(b"one\ntwo\n"), chunk_size=2).readline() == b"one\n"
+    assert (
+        BoundedReadStream(BytesIO(b"one\ntwo\n"), chunk_size=2).readline() == b"one\n"
+    )
 
 
 def test_nt_to_nt_convert_streams_directly_between_file_like_objects():

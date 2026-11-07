@@ -1,6 +1,6 @@
 import pytest
 
-from rdfcore import Dataset, Graph, Parser, Serializer, PluginException, URIRef
+from rdfcore import Dataset, Graph, Parser, Serializer, PluginException
 from rdfcore.plugin import plugins
 
 
@@ -8,10 +8,19 @@ def test_all_supported_aliases_are_registered_for_parser_and_serializer():
     parser_names = {plugin.name for plugin in plugins(Parser)}
     serializer_names = {plugin.name for plugin in plugins(Serializer)}
     expected = {
-        "nt", "ntriples", "nt11", "application/n-triples",
-        "nquads", "nq", "nq11", "application/n-quads",
-        "turtle", "ttl", "text/turtle",
-        "trig", "application/trig",
+        "nt",
+        "ntriples",
+        "nt11",
+        "application/n-triples",
+        "nquads",
+        "nq",
+        "nq11",
+        "application/n-quads",
+        "turtle",
+        "ttl",
+        "text/turtle",
+        "trig",
+        "application/trig",
     }
     assert expected <= parser_names
     assert expected <= serializer_names
@@ -20,7 +29,7 @@ def test_all_supported_aliases_are_registered_for_parser_and_serializer():
 
 
 def test_dataset_parse_and_serialize_are_integrated_for_nquads_and_trig():
-    source = '<http://e/s> <http://e/p> <http://e/o> <http://e/g> .\n'
+    source = "<http://e/s> <http://e/p> <http://e/o> <http://e/g> .\n"
     dataset = Dataset().parse(data=source, format="application/n-quads")
     assert dataset.serialize(format="application/n-quads")
     trig = dataset.serialize(format="application/trig")
@@ -36,6 +45,7 @@ def test_graph_parse_and_serialize_are_integrated_for_mime_aliases():
 
 def test_integration_preserves_public_exception_types():
     from xml.sax import SAXParseException
+
     with pytest.raises(SAXParseException):
         Graph().parse(data="", format="xml")
     with pytest.raises(PluginException):

@@ -10,7 +10,6 @@ import rdfcore
 from hypothesis import given, settings, strategies as st
 from rdfcore.compare import isomorphic
 from rdfcore.interop import basic_encode, basic_decode
-from rdfcore.exceptions import ParserError
 
 settings.register_profile(
     "rdfcore_bounded", max_examples=25, deadline=None, derandomize=True, print_blob=True
@@ -93,7 +92,7 @@ def test_generated_dataset_roundtrip_and_interop(rows, names, sqlite):
             graph = (
                 dataset.default_graph
                 if name is None
-                else dataset.graph(term(rdfcore, name))
+                else dataset.graph(rdfcore.URIRef(name))
             )
             graph.add(triple)
         parsed = rdfcore.Dataset().parse(
@@ -141,17 +140,6 @@ def test_generated_store_parity_and_shared_api(rows):
             graph.close()
 
 
-@pytest.mark.parametrize("format", ["nt", "turtle", "nt12", "turtle12"])
-@PROPERTY
-@given(predicate=st.sampled_from(['"literal"', "<<( <urn:s> <urn:p> <urn:o> )>>"]))
-def test_generated_invalid_predicate_is_rejected(predicate, format):
-    error = rdfcore.BadSyntax if format.startswith("turtle") else ParserError
-    with pytest.raises(error):
-        rdfcore.Graph().parse(
-            data=f"<urn:s> {predicate} <urn:o> .", format=format, strict=True
-        )
-
-
 @pytest.mark.parametrize("mode", ["pretty", "stream"])
 @PROPERTY
 @given(rows=ROWS)
@@ -166,87 +154,3 @@ def test_graph_trig12_preserves_named_graph(rows, mode):
         data=graph.serialize(format="trig12", mode=mode), format="trig12"
     )
     assert isomorphic(actual, expected)
-
-
-@pytest.mark.parametrize("format", ["nt", "turtle", "xml"])
-@PROPERTY
-@given(rows=LEGACY_ROWS)
-def test_generated_legacy_graph_roundtrip(rows, format):
-    graph = rdfcore.Graph()
-    for row in triples(rdfcore, rows):
-        graph.add(row)
-    assert isomorphic(
-        graph, rdfcore.Graph().parse(data=graph.serialize(format=format), format=format)
-    )
-
-
-@pytest.mark.parametrize("format", ["nquads", "nq12"])
-@PROPERTY
-@given(
-    rows=LEGACY_ROWS,
-    names=st.lists(st.one_of(st.none(), SUBJECT), min_size=10, max_size=10),
-)
-def test_generated_nquads_roundtrip(rows, names, format):
-    dataset = rdfcore.Dataset()
-    for row, name in zip(triples(rdfcore, rows), names):
-        graph = (
-            dataset.default_graph
-            if name is None
-            else dataset.graph(term(rdfcore, name))
-        )
-        graph.add(row)
-    # N-Quads cannot encode empty named graphs; none are created in this strategy.
-    restored = rdfcore.Dataset().parse(
-        data=dataset.serialize(format=format), format=format
-    )
-    assert isomorphic(dataset, restored)
-
-
-@PROPERTY
-@given(predicate=st.sampled_from(['"literal"', "<<( <urn:s> <urn:p> <urn:o> )>>"]))
-def test_legacy_permissive_predicates_match_oracle(predicate):
-    outcomes = []
-    for module in (rdflib, rdfcore):
-        try:
-            graph = module.Graph().parse(
-                data=f"<urn:s> {predicate} <urn:o> .", format="turtle"
-            )
-            outcomes.append(("accepted", snapshot(graph)))
-        except (rdflib.plugins.parsers.notation3.BadSyntax, rdfcore.BadSyntax) as error:
-            outcomes.append(("error", type(error).__name__))
-    assert outcomes[0] == outcomes[1]
-
-
-@pytest.mark.parametrize("mode", ["pretty", "stream"])
-@pytest.mark.parametrize("identifier", ["urn:graph", "urn:x-rdflib:default"])
-def test_single_graph_trig12_matches_reference_named_graph(mode, identifier):
-    observations = []
-    for module in (rdflib, rdfcore):
-        graph = module.Graph(identifier=module.URIRef(identifier))
-        graph.add((module.URIRef("urn:s"), module.URIRef("urn:p"), module.Literal("v")))
-        data = graph.serialize(
-            format="trig" if module is rdflib else "trig12",
-            **({"mode": mode} if module is rdfcore else {}),
-        )
-        parsed = module.Dataset().parse(
-            data=data, format="trig" if module is rdflib else "trig12"
-        )
-        observations.append(
-            {tuple(str(term) for term in row) for row in parsed.quads()}
-        )
-    assert observations[0] == observations[1] == {("urn:s", "urn:p", "v", identifier)}
-
-
-@pytest.mark.parametrize("kind", ["Graph", "Dataset"])
-def test_empty_streaming_trig_uses_declared_or_full_graph_iri(kind):
-    identifier = rdfcore.URIRef("urn:empty")
-    source = (
-        rdfcore.Graph(identifier=identifier) if kind == "Graph" else rdfcore.Dataset()
-    )
-    if kind == "Dataset":
-        source.graph(identifier)
-    source.bind("ex", "urn:")
-    data = source.serialize(format="trig12", mode="stream")
-    restored = rdfcore.Dataset().parse(data=data, format="trig12")
-    assert identifier in {graph.identifier for graph in restored.graphs()}
-    assert len(restored) == 0

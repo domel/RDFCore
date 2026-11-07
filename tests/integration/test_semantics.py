@@ -5,11 +5,13 @@ These are section-derived regressions, not a full W3C conformance run.
 
 import pytest
 
-from rdfcore import BNode, Dataset, Graph, Literal, RDF, RDFS, TripleTerm, URIRef, Variable
+from rdfcore import BNode, Dataset, Literal, RDF, RDFS, TripleTerm, URIRef, Variable
 from rdfcore.semantics import UnsupportedEntailment, entailment_closure, entails
 
 
-S, P, O, Q, C, D, E = map(URIRef, ("urn:s", "urn:p", "urn:o", "urn:q", "urn:C", "urn:D", "urn:E"))
+S, P, O, Q, C, D, E = map(
+    URIRef, ("urn:s", "urn:p", "urn:o", "urn:q", "urn:C", "urn:D", "urn:E")
+)
 
 
 def test_simple_empty_duplicates_and_direction():
@@ -40,14 +42,30 @@ def test_nested_transparency_and_global_blank_node_scope():
 
 def test_literals_preserve_lexical_identity_and_direction():
     integer = URIRef("http://www.w3.org/2001/XMLSchema#integer")
-    assert not entails([(S, P, Literal("01", datatype=integer, normalize=False))],
-                       [(S, P, Literal("1", datatype=integer, normalize=False))])
-    assert entails([(S, P, Literal("v"))],
-                   [(S, P, Literal("v", datatype=URIRef("http://www.w3.org/2001/XMLSchema#string")))])
-    assert entails([(S, P, TripleTerm(S, P, Literal("v", lang="en", direction="ltr")))],
-                   [(S, P, TripleTerm(S, P, Literal("v", lang="EN", direction="ltr")))])
-    assert not entails([(S, P, Literal("v", lang="en", direction="ltr"))],
-                       [(S, P, Literal("v", lang="en", direction="rtl"))])
+    assert not entails(
+        [(S, P, Literal("01", datatype=integer, normalize=False))],
+        [(S, P, Literal("1", datatype=integer, normalize=False))],
+    )
+    assert entails(
+        [(S, P, Literal("v"))],
+        [
+            (
+                S,
+                P,
+                Literal(
+                    "v", datatype=URIRef("http://www.w3.org/2001/XMLSchema#string")
+                ),
+            )
+        ],
+    )
+    assert entails(
+        [(S, P, TripleTerm(S, P, Literal("v", lang="en", direction="ltr")))],
+        [(S, P, TripleTerm(S, P, Literal("v", lang="EN", direction="ltr")))],
+    )
+    assert not entails(
+        [(S, P, Literal("v", lang="en", direction="ltr"))],
+        [(S, P, Literal("v", lang="en", direction="rtl"))],
+    )
 
 
 @pytest.mark.parametrize("regime", ["rdf", "rdfs"])
@@ -58,11 +76,15 @@ def test_rdf_property_proof_and_unknown_is_not_false(regime):
 
 
 def test_rdfs_fixed_point_domain_range_and_hierarchy():
-    source = [(P, RDFS.subPropertyOf, Q), (Q, RDFS.domain, C),
-              (Q, RDFS.range, D), (C, RDFS.subClassOf, D),
-              (D, RDFS.subClassOf, E), (S, P, O)]
-    expected = [(S, Q, O), (S, RDF.type, E), (O, RDF.type, E),
-                (C, RDFS.subClassOf, E)]
+    source = [
+        (P, RDFS.subPropertyOf, Q),
+        (Q, RDFS.domain, C),
+        (Q, RDFS.range, D),
+        (C, RDFS.subClassOf, D),
+        (D, RDFS.subClassOf, E),
+        (S, P, O),
+    ]
+    expected = [(S, Q, O), (S, RDF.type, E), (O, RDF.type, E), (C, RDFS.subClassOf, E)]
     assert entails(source, expected, regime="rdfs")
     assert not entails(source, expected)
     with pytest.raises(UnsupportedEntailment):
@@ -74,12 +96,19 @@ def test_rdfs_fixed_point_domain_range_and_hierarchy():
 
 def test_generalized_intermediates_support_blank_property_and_proposition():
     prop, value = BNode("prop"), BNode("value")
-    assert entails([(P, RDFS.subPropertyOf, prop), (prop, RDFS.domain, C), (S, P, O)],
-                   [(S, RDF.type, C)], regime="rdfs")
+    assert entails(
+        [(P, RDFS.subPropertyOf, prop), (prop, RDFS.domain, C), (S, P, O)],
+        [(S, RDF.type, C)],
+        regime="rdfs",
+    )
     term = TripleTerm(S, P, O)
     source = [(S, Q, term)]
-    assert entails(source, [(S, Q, value), (value, RDF.type, RDFS.Proposition)], regime="rdfs")
-    assert (term, RDF.type, RDFS.Proposition) in entailment_closure(source, regime="rdfs")
+    assert entails(
+        source, [(S, Q, value), (value, RDF.type, RDFS.Proposition)], regime="rdfs"
+    )
+    assert (term, RDF.type, RDFS.Proposition) in entailment_closure(
+        source, regime="rdfs"
+    )
     assert (S, P, O) not in entailment_closure(source, regime="rdfs")
 
 
@@ -95,9 +124,19 @@ def test_source_graph_is_unchanged_and_context_is_explicit():
         entails(dataset, [])
 
 
-@pytest.mark.parametrize("bad", [None, [(S, P)], [(S, P, O, C)], [(Literal("s"), P, O)],
-                                     [(S, BNode("p"), O)], [(S, P, Variable("x"))],
-                                     [(S, P, "object")], [(TripleTerm(S, P, O), P, O)]])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        None,
+        [(S, P)],
+        [(S, P, O, C)],
+        [(Literal("s"), P, O)],
+        [(S, BNode("p"), O)],
+        [(S, P, Variable("x"))],
+        [(S, P, "object")],
+        [(TripleTerm(S, P, O), P, O)],
+    ],
+)
 def test_invalid_graphs(bad):
     with pytest.raises(TypeError):
         entails(bad, [])
@@ -111,19 +150,25 @@ def test_invalid_regime_and_unsupported_datatypes_axioms_inconsistency():
     with pytest.raises(UnsupportedEntailment, match="datatype"):
         entails([], [], regime="rdf", datatypes={URIRef("urn:datatype")})
     assert entails([], [(RDF.nil, RDF.type, RDF.List)], regime="rdf")
-    bad = Literal("bad", datatype=URIRef("http://www.w3.org/2001/XMLSchema#integer"), normalize=False)
+    bad = Literal(
+        "bad",
+        datatype=URIRef("http://www.w3.org/2001/XMLSchema#integer"),
+        normalize=False,
+    )
     with pytest.raises(UnsupportedEntailment):
         entails([(S, P, TripleTerm(S, P, bad))], [(O, Q, C)], regime="rdf")
     assert entails([(S, P, bad)], [(S, P, bad)])
 
 
 def test_schema_axioms_and_container_vocabulary():
-    assert entails([], [(RDF.reifies, RDFS.range, RDFS.Proposition)], regime='rdfs')
-    assert entails([(S, RDF.reifies, O)], [(O, RDF.type, RDFS.Proposition)], regime='rdfs')
-    assert entails([], [(RDF['_273'], RDF.type, RDF.Property)], regime='rdf')
-    assert entails([], [(RDF['_273'], RDFS.subPropertyOf, RDFS.member)], regime='rdfs')
+    assert entails([], [(RDF.reifies, RDFS.range, RDFS.Proposition)], regime="rdfs")
+    assert entails(
+        [(S, RDF.reifies, O)], [(O, RDF.type, RDFS.Proposition)], regime="rdfs"
+    )
+    assert entails([], [(RDF["_273"], RDF.type, RDF.Property)], regime="rdf")
+    assert entails([], [(RDF["_273"], RDFS.subPropertyOf, RDFS.member)], regime="rdfs")
     with pytest.raises(UnsupportedEntailment):
-        entails([], [(RDF['_0'], RDF.type, RDF.Property)], regime='rdf')
+        entails([], [(RDF["_0"], RDF.type, RDF.Property)], regime="rdf")
     with pytest.raises(UnsupportedEntailment):
-        entails([], [(RDF['_01'], RDFS.subPropertyOf, RDFS.member)], regime='rdfs')
+        entails([], [(RDF["_01"], RDFS.subPropertyOf, RDFS.member)], regime="rdfs")
     assert not entails([], [(RDF.nil, RDF.type, RDF.List)])

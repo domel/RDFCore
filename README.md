@@ -733,7 +733,7 @@ a tree. Short-record RSS guards do not establish a bound for arbitrary input.
 
 ## Tests
 
-Run the complete test suite:
+Run the core test suite:
 
 ```bash
 python -m pytest -q
@@ -742,7 +742,8 @@ python -m pytest -q
 Install `.[test]` for the suite, including bounded Hypothesis round-trip and
 store-parity properties. Tests also cover formats, streaming, persistence and
 RDFLib 7.6.0 compatibility.
-CI verifies Python 3.10 and 3.14; intermediate versions remain declared supported.
+CI checks the core suite and a 70% coverage gate on Python 3.10 and 3.14.
+Intermediate versions remain declared supported; full W3C suites run separately.
 README Python examples also run as tests.
 
 ### Official W3C tests

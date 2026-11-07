@@ -18,7 +18,21 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
       - run: python -m pip install '.[test]'
-      - run: python -m pytest
+      - run: python -m coverage run --branch --source=rdfcore -m pytest
+      - run: python -m coverage report --fail-under=70
+      - name: Save coverage report
+        if: always()
+        run: python -m coverage json -o "${{ runner.temp }}/coverage.json"
+      - name: Require 70% line coverage
+        run: >-
+          python -c "import json, os; from pathlib import Path;
+          t=json.loads(Path(os.environ['RUNNER_TEMP'], 'coverage.json').read_text())['totals'];
+          assert t['covered_lines'] >= 0.7*t['num_statements'], 'Line coverage is below 70%'"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-python-${{ matrix.python-version }}
+          path: ${{ runner.temp }}/coverage.json
       - name: Record API inventory and scoped compatibility evidence
         run: python -m benchmarks.audit_api > "${{ runner.temp }}/api-inventory.json"
       - uses: actions/upload-artifact@v4

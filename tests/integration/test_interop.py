@@ -1,4 +1,4 @@
-from rdfcore import BNode, Graph, Literal, RDF, TripleTerm, URIRef
+from rdfcore import Graph, Literal, RDF, TripleTerm, URIRef
 from rdfcore.interop import basic_decode, basic_encode
 
 
@@ -7,7 +7,10 @@ def test_basic_encode_and_decode_round_trip():
     triple = TripleTerm(URIRef("http://e/a"), URIRef("http://e/b"), Literal("c"))
     graph.add((URIRef("http://e/s"), URIRef("http://e/p"), triple))
     encoded = basic_encode(graph)
-    assert any(predicate == RDF.type and obj == RDF.PropositionForm for _, predicate, obj in encoded)
+    assert any(
+        predicate == RDF.type and obj == RDF.PropositionForm
+        for _, predicate, obj in encoded
+    )
     decoded = basic_decode(encoded)
     assert set(decoded) == set(graph)
 

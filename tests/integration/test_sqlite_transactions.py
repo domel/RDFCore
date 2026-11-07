@@ -8,18 +8,29 @@ def triple(value):
 
 
 def test_transaction_commits_once_and_persists(tmp_path):
-    path = tmp_path / 'transactions.sqlite'
+    path = tmp_path / "transactions.sqlite"
     store = SQLiteStore(path)
     statements = []
     store._connection.set_trace_callback(statements.append)
-    with store.transaction():
-        store.add(triple('a'))
-        store.add(triple('b'))
-    assert sum(sql.startswith('RELEASE') for sql in statements) == 1
-    store.close()
+    reader = SQLiteStore(path)
+    try:
+        with store.transaction():
+            store.add(triple("a"))
+            store.add(triple("b"))
+            assert store._connection.in_transaction
+            assert len(reader) == 0
+        assert (
+            sum(sql == "RELEASE SAVEPOINT rdfcore_batch_0" for sql in statements) == 1
+        )
+        assert len(reader) == 2
+    finally:
+        reader.close()
+        store.close()
     reopened = SQLiteStore(path)
-    assert len(reopened) == 2
-    reopened.close()
+    try:
+        assert len(reopened) == 2
+    finally:
+        reopened.close()
 
 
 def test_failed_transaction_restores_removals():

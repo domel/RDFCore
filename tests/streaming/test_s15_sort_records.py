@@ -177,3 +177,20 @@ def test_merge_closes_all_handles_when_one_close_fails(tmp_path, monkeypatch):
     with pytest.raises(OSError, match="close failed"):
         list(sort._merged_records(paths))
     assert all(handle.closed for handle in handles)
+
+
+def test_sort_preserves_literal_native_values_and_flags():
+    from rdfcore import XSD
+
+    values = [
+        Literal(1),
+        Literal(True),
+        Literal("P1D", datatype=XSD.duration) - Literal("P1M", datatype=XSD.duration),
+    ]
+    for value in values:
+        restored = list(
+            external_sort([(URIRef("urn:s"), URIRef("urn:p"), value)], memory_budget=1)
+        )[0][2]
+        assert restored.ill_typed is value.ill_typed
+        assert type(restored.value) is type(value.value)
+        assert restored.value == value.value

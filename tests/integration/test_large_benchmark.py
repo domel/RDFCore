@@ -243,3 +243,14 @@ def test_other_operations_verify_results(tmp_path, operation, library):
     assert result["correctness_verified"] and result["seconds"] > 0
     if operation == "compare":
         assert result["work_units"] == 8 and result["statements_per_second"] is None
+
+
+def test_checkpoint_does_not_overwrite_preexisting_tmp_file(tmp_path):
+    from benchmarks.large_data import write_report
+
+    output = tmp_path / "report.json"
+    baseline = tmp_path / "report.json.tmp"
+    baseline.write_text("keep baseline")
+    write_report(output, {"results": []})
+    assert baseline.read_text() == "keep baseline"
+    assert json.loads(output.read_text()) == {"results": []}

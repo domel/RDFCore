@@ -100,3 +100,15 @@ def test_corrupt_compressed_input_closes_owned_file(monkeypatch, tmp_path, compr
     with pytest.raises(error):
         pipeline.count(tmp_path / "input", "nt", input_compression=compression)
     assert raw.closed
+
+
+def test_owned_input_closed_when_initial_read_fails(monkeypatch):
+    class Broken(BytesIO):
+        def read(self, *args):
+            raise OSError("initial read failed")
+
+    raw = Broken()
+    monkeypatch.setattr(io.Path, "open", lambda *args, **kwargs: raw)
+    with pytest.raises(OSError, match="initial read"):
+        io.open_input("data.nt")
+    assert raw.closed

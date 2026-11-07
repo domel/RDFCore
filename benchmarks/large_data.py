@@ -170,7 +170,7 @@ def worker(args):
                     ("URIRef", f"urn:p{index % 7}", None, None, None),
                     ("Literal", str(index), None, None, None),
                 )
-                if dataset and (args.format == "nq" or index % 4):
+                if dataset and index % 4:
                     context = (
                         ("URIRef", f"urn:g{index % 3}", None, None, None)
                         if index % 4

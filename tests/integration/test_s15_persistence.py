@@ -171,3 +171,51 @@ def test_constructor_rejects_foreign_schema_without_writes(tmp_path):
     with pytest.raises(ValueError, match="schema"):
         SQLiteStore(path)
     assert path.read_bytes() == original
+
+
+def test_automatic_rollback_blocks_remaining_outer_writes():
+    store = SQLiteStore()
+    key = bytes(store._encode(Literal("inner"))).hex()
+    store._connection.execute(
+        f"CREATE TRIGGER abort_write BEFORE INSERT ON triples WHEN NEW.o=X'{key}' BEGIN SELECT RAISE(ROLLBACK,'aborted'); END"
+    )
+
+    def row(value):
+        return URIRef("urn:s"), URIRef("urn:p"), Literal(value)
+
+    try:
+        with pytest.raises(RuntimeError, match="rolled back"):
+            with store.transaction():
+                store.add(row("outer"))
+                with pytest.raises(sqlite3.IntegrityError):
+                    with store.transaction():
+                        store.add(row("inner"))
+                store.add(row("after"))
+        assert len(store) == 0 and not store._connection.in_transaction
+        assert store._transaction_depth == 0
+        store.add(row("recovered"))
+        assert len(store) == 1
+    finally:
+        store.close()
+
+
+def test_rejected_single_add_does_not_leave_spelling_metadata():
+    store = SQLiteStore()
+    s, p, g = map(URIRef, ("urn:s", "urn:p", "urn:g"))
+    try:
+        store._connection.execute(
+            "CREATE TRIGGER deny BEFORE INSERT ON triples BEGIN SELECT RAISE(ABORT,'denied'); END"
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            store.add((s, p, Literal("v", lang="EN")), g)
+        assert (
+            store._connection.execute("SELECT COUNT(*) FROM lexical_forms").fetchone()[
+                0
+            ]
+            == 0
+        )
+        store._connection.execute("DROP TRIGGER deny")
+        store.add((s, p, Literal("v", lang="en")), g)
+        assert next(store.triples((None, None, None), g))[0][2].language == "en"
+    finally:
+        store.close()

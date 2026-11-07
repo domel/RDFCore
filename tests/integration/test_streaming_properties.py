@@ -235,3 +235,18 @@ def test_single_graph_trig12_matches_reference_named_graph(mode, identifier):
             {tuple(str(term) for term in row) for row in parsed.quads()}
         )
     assert observations[0] == observations[1] == {("urn:s", "urn:p", "v", identifier)}
+
+
+@pytest.mark.parametrize("kind", ["Graph", "Dataset"])
+def test_empty_streaming_trig_uses_declared_or_full_graph_iri(kind):
+    identifier = rdfcore.URIRef("urn:empty")
+    source = (
+        rdfcore.Graph(identifier=identifier) if kind == "Graph" else rdfcore.Dataset()
+    )
+    if kind == "Dataset":
+        source.graph(identifier)
+    source.bind("ex", "urn:")
+    data = source.serialize(format="trig12", mode="stream")
+    restored = rdfcore.Dataset().parse(data=data, format="trig12")
+    assert identifier in {graph.identifier for graph in restored.graphs()}
+    assert len(restored) == 0

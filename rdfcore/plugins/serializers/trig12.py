@@ -16,7 +16,7 @@ class TriG12Serializer(Serializer):
         if base is None:
             base = getattr(getattr(self.store, 'default_graph', None), 'base', None)
         if mode == "stream":
-            from ...streaming import TriGStreamingWriter
+            from ...streaming import TriGStreamingWriter, _turtle_term
             from ...rdf_version import required_rdf_version
             stream_version = required_rdf_version(self.store) if rdf_version == 'auto' else rdf_version
             if stream is None:
@@ -31,7 +31,7 @@ class TriG12Serializer(Serializer):
             contexts = self.store.store.contexts() if dataset else (self.store.identifier,)
             for context in contexts:
                 if context != getattr(getattr(self.store, "default_graph", None), "identifier", None) and not self.store.store.__len__(context):
-                    writer._write(_term(context, None, canonical, base, safe) + ' {}\n')
+                    writer._write(_turtle_term(context, base, safe, canonical) + ' {}\n')
             quads = self.store.quads() if dataset else ((*triple, self.store.identifier) for triple in self.store)
             for quad in quads:
                 subject, predicate, obj, graph = quad

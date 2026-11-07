@@ -6,7 +6,8 @@ It requires Python 3.10+ and has no runtime dependencies.
 
 ## Installation
 
-Install from a local checkout:
+Download a wheel from [GitHub Releases](https://github.com/domel/RDFCore/releases),
+or install from a local checkout:
 
 ```bash
 python -m pip install .
@@ -808,22 +809,23 @@ Typing is still partial: CI checks annotated code; the package does not ship `py
 
 ## Release preparation
 
-The current `0.1.0.dev0` build is a development version. It includes selected
+Version `1.0.0` stabilizes the documented RDFCore API. It includes selected
 RDFLib-compatible APIs and partial RDF 1.2 support; see the comparison and W3C
-results above for limitations.
+results above for limitations. It does not claim complete RDFLib parity or
+complete RDF 1.2 conformance.
 
 Run **Release candidate checks** manually on the intended revision. It runs
 core tests, wheel/sdist installation on all three platforms, and both pinned
 W3C snapshots. The `release-candidate-<revision>` artifact records the revision
-and job outcomes. Passing these jobs still requires review of API compatibility
-and all normative RDF 1.2 obligations before declaring 1.0.
+and job outcomes. Review those results against the documented release scope
+before approving a release. Known conformance failures remain visible.
 
 Candidate `6f312b4` passed [core and package CI](https://github.com/domel/RDFCore/actions/runs/42389113607)
 on Python 3.10/3.14, Linux, Windows and macOS. Its
 [release gate](https://github.com/domel/RDFCore/actions/runs/42389232350)
 failed with the 23 RDF/XML cases listed above. The project owner accepted these
 known results for this milestone; the recorded failures remain unchanged.
-This acceptance does not certify full RDF 1.2 conformance or authorize publication.
+This acceptance does not certify full RDF 1.2 conformance.
 
 For an approved release, update `pyproject.toml` and `rdfcore.__version__`
 together, record changes and remaining limitations, then build with

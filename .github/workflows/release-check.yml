@@ -32,7 +32,7 @@ jobs:
               'automated_checks_passed': all(os.environ[key] == 'success'
                   for key in ('CORE_RESULT', 'W3C_RESULT')),
               'release_approved': False,
-              'remaining_gate': 'Review RDFLib scope and all normative RDF 1.2 obligations before 1.0.',
+              'remaining_gate': 'Review the documented API scope and explicitly accept known conformance limitations before publication.',
           }
           Path('candidate.json').write_text(json.dumps(result, indent=2) + '\n')
           PY

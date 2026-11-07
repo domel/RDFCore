@@ -120,5 +120,14 @@ def test_serializer_round_trip_is_semantically_stable():
     graph.add((URIRef("http://e/s"), URIRef("http://e/p"), Literal("o")))
     for format_name in ("nt", "turtle"):
         encoded = graph.serialize(format=format_name)
+        oracle = UpstreamGraph().parse(data=encoded, format=format_name)
+        expected = UpstreamGraph().add(
+            (
+                UpstreamURIRef("http://e/s"),
+                UpstreamURIRef("http://e/p"),
+                UpstreamLiteral("o"),
+            )
+        )
+        assert set(oracle) == set(expected)
         decoded = Graph().parse(data=encoded, format=format_name)
         assert set(decoded) == set(graph)

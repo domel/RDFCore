@@ -45,3 +45,19 @@ def test_normative_audit_identifies_current_and_historical_evidence(monkeypatch)
                 assert plan["regression"] is None
                 assert plan["regression_status"] == "unverified"
                 assert plan["historical_regression"]
+
+
+def test_evidence_resolves_only_collected_tests():
+    from tests.w3c.evidence import regression_evidence
+
+    helper = "tests/integration/test_roundtrip_properties.py::snapshot"
+    assert regression_evidence("history", helper)["verification_status"] == "unverified"
+    group = "tests/integration/test_rdflib_differential.py::test_four_rdf11_formats_match_upstream_statements"
+    assert (
+        regression_evidence("history", group)["verification_status"]
+        == "core-regression"
+    )
+    assert (
+        regression_evidence("history", group + "[missing-case]")["verification_status"]
+        == "unverified"
+    )

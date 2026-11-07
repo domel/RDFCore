@@ -30,7 +30,7 @@ Numbered links point to tests; support is limited to their scope. [API inventory
 | `Variable` | Yes | Partial | Selected term behavior. |
 | `TripleTerm` | No | Partial | RDF 1.2 only. |
 | `Namespace` | Yes | Partial | Unverified behavior. [1](benchmarks/audit_api.py) |
-| RDF vocabulary registry | Yes | Partial | Shared names + RDF 1.2 additions. [1](tests/compatibility/test_schema_registry.py) |
+| RDF vocabulary registry | Yes | Yes | Shared names + RDF 1.2 additions. [1](tests/compatibility/test_schema_registry.py) |
 | `NamespaceManager` | Yes | Partial | [1](tests/compatibility/test_graph_api.py) |
 | `Parser` | Yes | Partial | Unverified base API. [1](benchmarks/audit_api.py) |
 | `Serializer` | Yes | Partial | Unverified base API. [1](benchmarks/audit_api.py) |

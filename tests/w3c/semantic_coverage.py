@@ -127,7 +127,7 @@ def coverage_report(suites):
                          implementation='rdfcore/semantics.py; rdfcore/_schema_reasoning.py',
                          checks=list(SCHEMA_CHECKS[n]),
                          evidence=('tests/w3c/semantic_requirements.py::run_probe' if SCHEMA_CHECKS[n]
-                                   else 'tests/compatibility/test_schema_registry.py::test_registry_presence_does_not_add_external_reasoning_rules'),
+                                   else 'tests/compatibility/test_schema_registry.py::test_registry_names_and_iris_match_reference_and_rdf12'),
                          evidence_kind='report-probe' if SCHEMA_CHECKS[n] else 'core-regression',
                          limitation='Vocabulary/rule evidence does not establish all arbitrary schema interactions.')
                     for n, name in SCHEMA_SECTIONS.items()]

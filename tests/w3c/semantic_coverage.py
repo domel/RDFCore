@@ -126,8 +126,9 @@ def coverage_report(suites):
                          reference=_schema_reference(n, name),
                          implementation='rdfcore/semantics.py; rdfcore/_schema_reasoning.py',
                          checks=list(SCHEMA_CHECKS[n]),
-                         evidence=('tests/w3c/test_semantic_requirements.py' if SCHEMA_CHECKS[n]
-                                   else 'tests/compatibility/test_schema_registry.py'),
+                         evidence=('tests/w3c/semantic_requirements.py::run_probe' if SCHEMA_CHECKS[n]
+                                   else 'tests/compatibility/test_schema_registry.py::test_registry_presence_does_not_add_external_reasoning_rules'),
+                         evidence_kind='report-probe' if SCHEMA_CHECKS[n] else 'core-regression',
                          limitation='Vocabulary/rule evidence does not establish all arbitrary schema interactions.')
                     for n, name in SCHEMA_SECTIONS.items()]
     blockers = [
@@ -137,7 +138,8 @@ def coverage_report(suites):
     blockers.extend('Incomplete normative obligation: ' + r['id']
                     for r in audit['obligations'] if r['status'] == 'partial')
     conditions = [dict(run_probe(p), reference=SEMANTICS + '#' + p.section,
-                       evidence='tests/w3c/test_semantic_requirements.py',
+                       evidence='tests/w3c/semantic_requirements.py::run_probe',
+                       evidence_kind='report-probe',
                        coverage='example consequence; not a completeness proof') for p in ALL_PROBES]
     return {
         'reviewed': '2026-10-24', 'schema_reference': SCHEMA,

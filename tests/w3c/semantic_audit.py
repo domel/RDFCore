@@ -5,6 +5,14 @@ Reviewed 2026-10-24 against Semantics CRD 2026-09-24 and Schema WD
 outcome of the review; it does not infer completeness from passing examples.
 """
 
+from .evidence import regression_evidence
+
+_CURRENT_REGRESSIONS = {
+    'simple-entailment': 'tests/integration/test_semantics.py::test_simple_empty_duplicates_and_direction',
+    'existential-mapping': 'tests/integration/test_semantics.py::test_homomorphism_is_consistent_and_not_injective',
+    'dataset-merge': 'tests/integration/test_semantic_dataset_merge.py::test_merge_standardizes_apart_and_preserves_sharing_inside_each_dataset',
+}
+
 SEMANTICS = 'https://www.w3.org/TR/2026/CRD-rdf12-semantics-20260924/'
 
 # The obligation names summarize separate formal conditions, not paragraphs
@@ -127,7 +135,8 @@ _OBLIGATIONS = (
 
 def audit_report():
     obligations = [dict(id=name, reference=SEMANTICS + '#' + section,
-                        requirement=requirement, evidence=evidence, status=status,
+                        requirement=requirement, status=status,
+                        **regression_evidence(evidence, _CURRENT_REGRESSIONS.get(name)),
                         implementation='rdfcore/semantics.py; rdfcore/_schema_reasoning.py; rdfcore/_datatype_reasoning.py; rdfcore/_alias_reasoning.py; rdfcore/_term_models.py',
                         reason=('No standard dataset entailment regime is selected; callers select a graph.'
                                 if status == 'not-applicable-with-reason' else
@@ -146,9 +155,9 @@ def audit_report():
                     dict(reference=SEMANTICS + '#x7-2-datatype-entailment',
                          issue='The prose reverses the implication between stronger and weaker recognized datatype sets.',
                          resolution='Use the preceding all-D-interpretations definition; recognizing more datatypes strengthens entailment.',
-                         evidence='tests/w3c/test_semantic_audit.py::test_recognition_strengthens_entailment'),
+                         **regression_evidence('tests/w3c/test_semantic_audit.py::test_recognition_strengthens_entailment')),
                     dict(reference=SEMANTICS + '#x9-2-rdfs-entailment',
                          issue='A prose implication from RDFS entailment to RDF entailment conflicts with the formal definitions and its following example.',
                          resolution='Use the all-interpretations definitions: RDF entailment implies RDFS entailment, not conversely.',
-                         evidence='tests/w3c/test_semantic_audit.py::test_rdfs_strengthens_rdf_entailment'),
+                         **regression_evidence('tests/w3c/test_semantic_audit.py::test_rdfs_strengthens_rdf_entailment')),
                 ])

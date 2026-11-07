@@ -20,7 +20,7 @@ Numbered links point to tests; support is limited to their scope. [API inventory
 | `Graph` | Yes | Yes | [1](tests/compatibility/test_graph_api.py) |
 | `Dataset` | Yes | Partial | [1](tests/compatibility/test_dataset_signatures.py) |
 | `ConjunctiveGraph` | Yes | Partial | Inherited API gaps. |
-| ConjunctiveGraph dispatch and lifecycle | Store/parser overrides | Yes | Store/parser overrides. [1](tests/compatibility/test_conjunctive_dispatch.py) |
+| ConjunctiveGraph dispatch and lifecycle | Store/parser overrides | Yes | Store/parser overrides. [1](tests/compatibility/test_conjunctive_dispatch.py) [2](tests/compatibility/test_conjunctive_graph.py) |
 | `Store` | Yes | Partial | Unverified protocol. [1](benchmarks/audit_api.py) |
 | `Memory` | Yes | Yes | Graph API; raw Store partial. [1](tests/integration/test_store_parity.py) |
 | Disk-backed store | Store-dependent | Yes: SQLiteStore | SQLite; raw Store partial. [1](tests/integration/test_store_parity.py) |
@@ -144,11 +144,11 @@ Numbered links point to tests; support is limited to their scope. [API inventory
 | --- | ---: | ---: | --- |
 | N-Triples 1.1 | Yes | Yes | [1](tests/integration/test_rdflib_differential.py) |
 | N-Triples 1.2 | No | Yes | [1](tests/formats/test_canonical_contracts.py) |
-| N-Quads 1.1 | Yes | Yes | [1](tests/integration/test_rdflib_differential.py) |
+| N-Quads 1.1 | Yes | Yes | [1](tests/compatibility/test_conjunctive_formats.py) |
 | N-Quads 1.2 | No | Yes | [1](tests/formats/test_canonical_contracts.py) |
 | Turtle 1.1 | Yes | Yes | [1](tests/integration/test_rdflib_differential.py) |
 | Turtle 1.2 | No | Yes | [1](tests/formats/test_canonical_contracts.py) |
-| TriG 1.1 | Yes | Yes | [1](tests/integration/test_rdflib_differential.py) |
+| TriG 1.1 | Yes | Yes | [1](tests/compatibility/test_conjunctive_formats.py) |
 | TriG 1.2 | No | Yes | [1](tests/formats/test_canonical_contracts.py) |
 | RDF/XML 1.1 | Yes | Partial: `xml`, `rdfxml` | Selected round trips; no byte parity. |
 | RDF/XML 1.1 encoding argument | UTF-8 only | Partial | Legacy UTF-8 behavior. |

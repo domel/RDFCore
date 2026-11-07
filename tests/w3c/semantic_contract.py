@@ -148,7 +148,7 @@ for suffix, left, right, expected in (
 
 
 def semantic_plan(identifier, document=None):
-    """Link a reviewed case to a requirement, executable regression and route."""
+    """Link a reviewed case to its requirement, historical regression and implementation."""
     for prefix, catalogue, reference in (
         (BASE+'rdf11/rdf-mt/manifest.ttl#', SEMANTIC_11, SEM11),
         (BASE+'rdf12/rdf-semantics#', SEMANTIC_12, SEM12),
@@ -159,6 +159,7 @@ def semantic_plan(identifier, document=None):
                 task, anchor, requirement = catalogue[name]
                 return dict(task=task, reference=(document or reference)+'#'+anchor,
                             requirement=requirement,
-                            regression='tests/w3c/test_semantics_contract.py::test_case['+name+']',
+                            regression=None, regression_status='unverified',
+                            historical_regression='tests/w3c/test_semantics_contract.py::test_case['+name+']',
                             implementation=CASES[name].implementation)
     return None

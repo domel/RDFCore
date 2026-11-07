@@ -22,3 +22,32 @@ def test_sort_preserves_literal_native_values_and_flags():
         assert restored.ill_typed is value.ill_typed
         assert type(restored.value) is type(value.value)
         assert restored.value == value.value
+
+
+def test_invalid_sort_records_never_execute_pickle(tmp_path):
+    import io
+    import pickle
+    import pytest
+
+    marker = tmp_path / "executed"
+
+    class Hostile:
+        def __reduce__(self):
+            return eval, (
+                f"__import__('pathlib').Path({str(marker)!r}).write_text('bad')",
+            )
+
+    hostile = pickle.dumps(Hostile())
+    framed_hostile = b"RCR2" + len(hostile).to_bytes(8, "big") + hostile
+    for payload in (
+        b"not a run",
+        b"RCR2",
+        b"RCR2" + (2**63).to_bytes(8, "big"),
+        hostile,
+        framed_hostile,
+    ):
+        try:
+            with pytest.raises(ValueError):
+                sort._read_record(io.BytesIO(payload))
+        finally:
+            assert not marker.exists(), "Untrusted sort record executed Python code"

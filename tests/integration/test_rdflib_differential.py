@@ -85,17 +85,34 @@ def test_graph_and_dataset_api_smoke_matrix():
         ("trig", '@prefix e: <http://e/> . e:g { e:s e:p "o" . }\n'),
     ],
 )
-def test_four_rdf11_formats_match_upstream_graph_cardinality(format_name, document):
+def test_four_rdf11_formats_match_upstream_statements(format_name, document):
+    document += (
+        '<http://e/s> <http://e/language> "hello"@EN .\n'
+        '<http://e/s> <http://e/typed> "01"^^'
+        "<http://www.w3.org/2001/XMLSchema#integer> .\n"
+    )
     ours = (Dataset() if format_name in ("nquads", "trig") else Graph()).parse(
         data=document, format=format_name
     )
     upstream = (
         UpstreamDataset() if format_name in ("nquads", "trig") else UpstreamGraph()
     ).parse(data=document, format=format_name)
-    if format_name in ("nquads", "trig"):
-        assert len(list(ours.quads())) == len(list(upstream.quads()))
-    else:
-        assert len(ours) == len(upstream)
+
+    def term(value):
+        datatype = getattr(value, "datatype", None)
+        return (
+            type(value).__name__,
+            str(value),
+            None if datatype is None else str(datatype),
+            getattr(value, "language", None),
+        )
+
+    def statements(graph):
+        if format_name in ("nquads", "trig"):
+            return {tuple(term(value) for value in row) for row in graph.quads()}
+        return {tuple(term(value) for value in row) for row in graph}
+
+    assert statements(ours) == statements(upstream)
 
 
 def test_serializer_round_trip_is_semantically_stable():

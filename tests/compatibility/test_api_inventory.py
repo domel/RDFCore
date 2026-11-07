@@ -36,7 +36,10 @@ def test_scoped_evidence_paths_and_public_green_rows_are_explicit():
         if not line.startswith('|'):
             continue
         cells = [value.strip() for value in line.strip('|').split('|')]
-        if len(cells) >= 4 and any('✅' in value for value in cells[2:-1]):
+        if len(cells) >= 4 and any(
+            '✅' in value or value == 'Yes' or value.startswith('Yes:')
+            for value in cells[2:-1]
+        ):
             paths = re.findall(r'\]\((tests/[^)]+)\)', cells[-1])
             assert paths, line
             assert all(Path(path).is_file() for path in paths)

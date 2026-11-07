@@ -784,3 +784,20 @@ python -m tests.w3c.audit --current conformance-results.json --output .w3c/audit
 The separate W3C workflow runs weekly, on relevant pull requests and release
 tags, or manually. It uploads reports and snapshot comparisons even on failure.
 A green local pytest run is not a conformance certificate.
+
+## API stability and versions
+
+The reviewed API is recorded in `tests/unit/public_api.json`: root exports and
+callable signatures, including Store and ConjunctiveGraph. Format names and MIME
+profiles are documented above; compatibility tests remain the behavioral contract.
+The CLI provides `convert`, `count` and `validate`.
+
+Versions follow `MAJOR.MINOR.PATCH`. During 0.x, minor releases may change the API;
+patch releases preserve it. From 1.0, incompatible changes require a major release.
+Deprecations will identify a replacement and removal version, with at least one
+minor release of notice. No removals are currently scheduled.
+
+Parser errors use `ParserError` or syntax-specific exceptions; store and plugin
+failures use `StoreException` and `PluginException`. Invalid arguments can raise
+`TypeError` or `ValueError`; compatibility APIs retain RDFLib-specific errors.
+Typing is still partial: the package does not ship `py.typed`.

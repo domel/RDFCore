@@ -136,8 +136,13 @@ def open_input(source, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZE):
         owns = True
     else:
         raise TypeError("source must be a path or readable file-like object")
-    bounded = (_CompressionReadStream if kind in ('gz', 'bz2', 'xz') else BoundedReadStream)(raw, buffer_size)
-    return _codec_stream(bounded, raw, owns, kind, 'rb')
+    try:
+        bounded = (_CompressionReadStream if kind in ('gz', 'bz2', 'xz') else BoundedReadStream)(raw, buffer_size)
+        return _codec_stream(bounded, raw, owns, kind, 'rb')
+    except BaseException:
+        if owns:
+            raw.close()
+        raise
 
 
 def open_output(destination, *, compression=None, buffer_size=DEFAULT_BUFFER_SIZE):

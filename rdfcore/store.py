@@ -265,6 +265,7 @@ class SQLiteStore(Store):
         self._connection.commit()
 
     def rollback(self):
+        self._check_transaction()
         if self._transaction_depth:
             name = f'rdfcore_batch_{self._transaction_depth - 1}'
             self._connection.execute(f'ROLLBACK TO SAVEPOINT {name}')
@@ -287,6 +288,7 @@ class SQLiteStore(Store):
         self._conjunctive_contexts = _ContextViews(self)
         self.path = fsdecode(fspath(path))
         self._transaction_depth = 0
+        self._transaction_aborted = False
         self._connection = sqlite3.connect(self.path)
         self._closed = False
         try:
@@ -399,9 +401,15 @@ class SQLiteStore(Store):
             'AND t.o=lexical_forms.o AND (lexical_forms.context=? OR t.context=lexical_forms.context))',
             (*values, none))
 
+    def _check_transaction(self):
+        if self._transaction_depth and (self._transaction_aborted or not self._connection.in_transaction):
+            self._transaction_aborted = True
+            raise RuntimeError('active transaction was rolled back by SQLite')
+
     @contextmanager
     def transaction(self):
         """Atomically apply a group of writes, with nested savepoints."""
+        self._check_transaction()
         name = f'rdfcore_batch_{self._transaction_depth}'
         self._connection.execute(f'SAVEPOINT {name}')
         self._transaction_depth += 1
@@ -413,10 +421,15 @@ class SQLiteStore(Store):
         self._context_view_undo.append(undo)
         try:
             yield self
+            self._check_transaction()
             self._connection.execute(f'RELEASE SAVEPOINT {name}')
         except BaseException:
             try:
-                if self._connection.in_transaction:
+                if not self._connection.in_transaction:
+                    self._transaction_aborted = True
+                elif self._transaction_aborted:
+                    self._connection.rollback()
+                else:
                     self._connection.execute(f'ROLLBACK TO SAVEPOINT {name}')
                     self._connection.execute(f'RELEASE SAVEPOINT {name}')
             finally:
@@ -436,6 +449,8 @@ class SQLiteStore(Store):
             self._lexical_undo.pop()
             self._context_view_undo.pop()
             self._transaction_depth -= 1
+            if not self._transaction_depth:
+                self._transaction_aborted = False
 
     def add_many(self, triples, context=None):
         """Insert an iterable atomically; return the number of input triples."""
@@ -466,21 +481,24 @@ class SQLiteStore(Store):
         return count
 
     def add(self, triple, context=None, quoted=False):
-        terms = tuple(triple)
-        values = tuple(self._encode(item) for item in (*terms, context))
-        self._remember_lexical_forms(terms, values)
-        self._connection.execute("INSERT OR IGNORE INTO triples VALUES (?, ?, ?, ?)", values)
-        self._register_context(context, commit=False)
-        self._commit_if_needed()
+        # A caught single-write failure must not leave spelling metadata behind.
+        with self.transaction():
+            terms = tuple(triple)
+            values = tuple(self._encode(item) for item in (*terms, context))
+            self._remember_lexical_forms(terms, values)
+            self._connection.execute("INSERT OR IGNORE INTO triples VALUES (?, ?, ?, ?)", values)
+            self._register_context(context, commit=False)
         return triple
 
     def _register_context(self, context, *, commit=True):
+        self._check_transaction()
         if context is not None:
             self._connection.execute('INSERT OR IGNORE INTO graph_contexts VALUES (?)', (self._encode(context),))
             if commit:
                 self._commit_if_needed()
 
     def remove(self, triple, context=None):
+        self._check_transaction()
         original_context = context
         context = _context_identifier(context)
         pattern = tuple(triple)

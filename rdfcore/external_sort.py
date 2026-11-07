@@ -126,15 +126,15 @@ def _write_run(records, temp_dir):
 
 
 def _encode_record(statement):
-    payload = b'[' + b','.join(encode(term, canonical=False) for term in statement) + b']'
-    return b'RCR1' + struct.pack('>Q', len(payload)) + payload
+    payload = b'[' + b','.join(encode(term, canonical=False, preserve_state=True) for term in statement) + b']'
+    return b'RCR2' + struct.pack('>Q', len(payload)) + payload
 
 
 def _read_record(handle):
     header = handle.read(12)
     if not header:
         return None
-    if len(header) != 12 or header[:4] != b'RCR1':
+    if len(header) != 12 or header[:4] != b'RCR2':
         raise ValueError('invalid external sort record version or header')
     size = struct.unpack('>Q', header[4:])[0]
     position = handle.tell()

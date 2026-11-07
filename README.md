@@ -636,7 +636,7 @@ finally:
 
 `external_sort()` writes temporary runs and merges them in passes;
 `max_open_runs` limits open runs per pass. Runs use length-prefixed, versioned
-JSON records, with no pickle loading. Invalid or truncated records raise errors.
+JSON records (RCR2), retaining literal value state and `ill_typed`, with no pickle loading. Invalid or truncated records raise errors.
 Its budget approximates encoded run size,
 not total RSS; one oversized statement can exceed it. Decoding retains the
 current record in memory, so untrusted file size still matters.

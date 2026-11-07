@@ -14,8 +14,8 @@ sort = importlib.import_module("rdfcore.external_sort")
     "payload",
     [
         b"not a run",
-        b"RCR1",
-        b"RCR1" + (2**63).to_bytes(8, "big"),
+        b"RCR2",
+        b"RCR2" + (2**63).to_bytes(8, "big"),
         pickle.dumps(("foreign",)),
     ],
 )
@@ -33,7 +33,7 @@ def test_spills_do_not_contain_pickle_and_preserve_spelling(tmp_path):
     first = next(result)
     assert first[2].object.language == "EN"
     assert statement_key(first) == statement_key(values[0])
-    assert all(path.read_bytes().startswith(b"RCR1") for path in tmp_path.iterdir())
+    assert all(path.read_bytes().startswith(b"RCR2") for path in tmp_path.iterdir())
     result.close()
     assert not list(tmp_path.iterdir())
 

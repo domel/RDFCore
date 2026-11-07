@@ -205,7 +205,7 @@ rejection and instance-field inventory: [tests](tests/compatibility/test_s13_rev
 | Interoperability graph identity | `basic_encode`, `basic_decode` and explicit downgrade retain empty named graphs without resetting input graph bases; fresh nodes avoid nested and graph-name collisions; incomplete, ambiguous, cyclic or hybrid forms raise explicit errors; informative Interop DNOTE 2026-07-23 mapping, not entailment preservation |
 | `count()` | Streaming count; owned input and decompression layers closed on success/error; caller input remains open |
 | `validate()` | Streaming validation; same input ownership contract as `count()` |
-| `external_sort()` | Stable external-memory sorting; versioned JSON runs, strict decoding and explicit handle cleanup; [tests](tests/streaming/test_s15_sort_records.py) |
+| `external_sort()` | Stable external-memory sorting; versioned JSON runs preserving literal state, strict decoding and explicit handle cleanup; [tests](tests/streaming/test_s15_sort_records.py) |
 | `statement_key()` | Stable sorting key |
 | `benchmark_parse()` | In-process high-water delta; separate large-data benchmark uses fresh processes and RSS, with fixture hashes and failure reporting |
 | Generated round-trip properties | Bounded Hypothesis RDF 1.1/1.2 graphs/datasets, blank-node sharing, empty TriG graphs, interop and Memory/SQLite; [tests](tests/integration/test_streaming_properties.py) |

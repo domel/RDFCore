@@ -129,19 +129,33 @@ def worker(args):
     peak = 0
     if args.operation == "parse":
         if args.library == "stream":
+
             class FingerprintSink:
                 amount = 0
                 fingerprint = 0
 
                 def add(self, statement):
                     signature = tuple(
-                        (type(term).__name__, str(term),
-                         str(term.datatype) if getattr(term, 'datatype', None) is not None else None,
-                         getattr(term, 'language', None), getattr(term, 'direction', None))
-                        if term is not None else None for term in statement)
+                        (
+                            type(term).__name__,
+                            str(term),
+                            str(term.datatype)
+                            if getattr(term, "datatype", None) is not None
+                            else None,
+                            getattr(term, "language", None),
+                            getattr(term, "direction", None),
+                        )
+                        if term is not None
+                        else None
+                        for term in statement
+                    )
                     self.amount += 1
-                    self.fingerprint += int.from_bytes(hashlib.blake2b(
-                        repr(signature).encode(), digest_size=16).digest(), 'big')
+                    self.fingerprint += int.from_bytes(
+                        hashlib.blake2b(
+                            repr(signature).encode(), digest_size=16
+                        ).digest(),
+                        "big",
+                    )
 
             sink = FingerprintSink()
             started = perf_counter()
@@ -151,17 +165,27 @@ def worker(args):
             assert sink.amount == args.size
             expected = 0
             for index in range(args.size):
-                signature = (('URIRef', f'urn:s{index}', None, None, None),
-                             ('URIRef', f'urn:p{index%7}', None, None, None),
-                             ('Literal', str(index), None, None, None))
-                if dataset and (args.format == 'nq' or index%4):
-                    context = ('URIRef', f'urn:g{index%3}', None, None, None) if index%4 else None
+                signature = (
+                    ("URIRef", f"urn:s{index}", None, None, None),
+                    ("URIRef", f"urn:p{index % 7}", None, None, None),
+                    ("Literal", str(index), None, None, None),
+                )
+                if dataset and (args.format == "nq" or index % 4):
+                    context = (
+                        ("URIRef", f"urn:g{index % 3}", None, None, None)
+                        if index % 4
+                        else None
+                    )
                     signature = (*signature, context)
-                expected += int.from_bytes(hashlib.blake2b(
-                    repr(signature).encode(), digest_size=16).digest(), 'big')
+                expected += int.from_bytes(
+                    hashlib.blake2b(repr(signature).encode(), digest_size=16).digest(),
+                    "big",
+                )
             assert sink.fingerprint == expected
-            result['timing_includes'] = 'parsing and bounded semantic fingerprint sink'
-            result['verification'] = 'exact count and aggregate 128-bit semantic fingerprints'
+            result["timing_includes"] = "parsing and bounded semantic fingerprint sink"
+            result["verification"] = (
+                "exact count and aggregate 128-bit semantic fingerprints"
+            )
             graph = None
         else:
             graph = module.Dataset() if dataset else module.Graph()
@@ -346,9 +370,21 @@ def worker(args):
 
 def write_report(path, report):
     """Keep the last complete checkpoint readable if a run is interrupted."""
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(report, indent=2) + "\n")
-    temporary.replace(path)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=path.name + ".",
+        suffix=".tmp",
+        delete=False,
+    ) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(json.dumps(report, indent=2) + "\n")
+            stream.close()
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def regression_checks(current, baseline, margin=0.25):
@@ -397,25 +433,42 @@ def regression_checks(current, baseline, margin=0.25):
                 "passed": row["median_seconds"] <= limit,
             }
         )
-        if row['operation'] == 'query':
+        if row["operation"] == "query":
             for bound in itertools.product((False, True), repeat=3):
+
                 def times(entry):
                     values = []
-                    for sample in entry['samples']:
-                        matches = [pattern['seconds'] for pattern in sample.get('patterns', [])
-                                   if tuple(pattern['bound']) == bound]
-                        if len(matches) != 1 or not math.isfinite(matches[0]) or matches[0] <= 0:
-                            raise ValueError('baseline and current query samples require per-pattern timings')
+                    for sample in entry["samples"]:
+                        matches = [
+                            pattern["seconds"]
+                            for pattern in sample.get("patterns", [])
+                            if tuple(pattern["bound"]) == bound
+                        ]
+                        if (
+                            len(matches) != 1
+                            or not math.isfinite(matches[0])
+                            or matches[0] <= 0
+                        ):
+                            raise ValueError(
+                                "baseline and current query samples require per-pattern timings"
+                            )
                         values.append(matches[0])
                     return values
+
                 previous, measured = times(old), times(row)
                 center = statistics.median(previous)
-                noise = statistics.median(abs(value-center) for value in previous)
-                limit = center + max(6*noise, center*margin)
+                noise = statistics.median(abs(value - center) for value in previous)
+                limit = center + max(6 * noise, center * margin)
                 observed = statistics.median(measured)
-                checks.append({'case': list(key(row)), 'bound': list(bound),
-                               'limit_seconds': limit, 'median_seconds': observed,
-                               'passed': observed <= limit})
+                checks.append(
+                    {
+                        "case": list(key(row)),
+                        "bound": list(bound),
+                        "limit_seconds": limit,
+                        "median_seconds": observed,
+                        "passed": observed <= limit,
+                    }
+                )
     return checks
 
 
@@ -471,7 +524,7 @@ def main():
         if args.output.exists() and args.baseline.exists():
             same = same or os.path.samefile(args.baseline, args.output)
         if same:
-            parser.error('baseline and output must refer to different files')
+            parser.error("baseline and output must refer to different files")
         baseline = json.loads(args.baseline.read_text())
     import rdflib
 

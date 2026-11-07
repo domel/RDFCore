@@ -18,12 +18,21 @@ _NO_GRAPH = object()
 
 @runtime_checkable
 class TripleSink(Protocol):
-    def add(self, triple): ...
+    def add(
+        self,
+        triple: tuple[URIRef | BNode, URIRef, URIRef | BNode | Literal | TripleTerm],
+    ) -> object: ...
 
 
 @runtime_checkable
 class QuadSink(Protocol):
-    def add(self, quad): ...
+    def add(
+        self,
+        quad: tuple[
+            URIRef | BNode, URIRef, URIRef | BNode | Literal | TripleTerm,
+            URIRef | BNode | None,
+        ],
+    ) -> object: ...
 
 
 class FilterSink:

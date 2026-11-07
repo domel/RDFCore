@@ -1,0 +1,260 @@
+{
+  "Parser": {
+    "application/n-quads": [
+      "application/n-quads",
+      null
+    ],
+    "application/n-quads; version=1.1": [
+      "nquads",
+      "1.1"
+    ],
+    "application/n-quads; version=1.2": [
+      "nq12",
+      "1.2"
+    ],
+    "application/n-quads; version=1.2-basic": [
+      "nq12",
+      "1.2-basic"
+    ],
+    "application/n-triples": [
+      "application/n-triples",
+      null
+    ],
+    "application/n-triples; version=1.1": [
+      "nt",
+      "1.1"
+    ],
+    "application/n-triples; version=1.2": [
+      "nt12",
+      "1.2"
+    ],
+    "application/n-triples; version=1.2-basic": [
+      "nt12",
+      "1.2-basic"
+    ],
+    "application/rdf+xml": [
+      "application/rdf+xml",
+      null
+    ],
+    "application/rdf+xml; version=1.1": [
+      "xml",
+      "1.1"
+    ],
+    "application/rdf+xml; version=1.2": [
+      "xml12",
+      "1.2"
+    ],
+    "application/rdf+xml; version=1.2-basic": [
+      "xml12",
+      "1.2-basic"
+    ],
+    "application/trig": [
+      "application/trig",
+      null
+    ],
+    "application/trig; version=1.1": [
+      "trig",
+      "1.1"
+    ],
+    "application/trig; version=1.2": [
+      "trig12",
+      "1.2"
+    ],
+    "application/trig; version=1.2-basic": [
+      "trig12",
+      "1.2-basic"
+    ],
+    "nq": "rdfcore.plugins.parsers.nquads.NQuadsParser",
+    "nq11": "rdfcore.plugins.parsers.nquads.NQuadsParser",
+    "nq12": "rdfcore.plugins.parsers.nquads12.NQuads12Parser",
+    "nquads": "rdfcore.plugins.parsers.nquads.NQuadsParser",
+    "nt": "rdfcore.plugins.parsers.ntriples.NTParser",
+    "nt11": "rdfcore.plugins.parsers.ntriples.NTParser",
+    "nt12": "rdfcore.plugins.parsers.ntriples.NT12Parser",
+    "ntriples": "rdfcore.plugins.parsers.ntriples.NTParser",
+    "rdfxml": "rdfcore.plugins.parsers.rdfxml.RDFXMLParser",
+    "text/turtle": [
+      "text/turtle",
+      null
+    ],
+    "text/turtle; version=1.1": [
+      "turtle",
+      "1.1"
+    ],
+    "text/turtle; version=1.2": [
+      "turtle12",
+      "1.2"
+    ],
+    "text/turtle; version=1.2-basic": [
+      "turtle12",
+      "1.2-basic"
+    ],
+    "trig": "rdfcore.plugins.parsers.trig.TriGParser",
+    "trig11": "rdfcore.plugins.parsers.trig.TriGParser",
+    "trig12": "rdfcore.plugins.parsers.trig12.TriG12Parser",
+    "ttl": "rdfcore.plugins.parsers.notation3.TurtleParser",
+    "turtle": "rdfcore.plugins.parsers.notation3.TurtleParser",
+    "turtle11": "rdfcore.plugins.parsers.notation3.TurtleParser",
+    "turtle12": "rdfcore.plugins.parsers.turtle12.Turtle12Parser",
+    "xml": "rdfcore.plugins.parsers.rdfxml.RDFXMLParser",
+    "xml12": "rdfcore.plugins.parsers.rdfxml.RDFXML12Parser",
+    "xmlrdf12": "rdfcore.plugins.parsers.rdfxml.RDFXML12Parser"
+  },
+  "Serializer": {
+    "application/n-quads": [
+      "application/n-quads",
+      null
+    ],
+    "application/n-quads; version=1.1": [
+      "nquads",
+      "1.1"
+    ],
+    "application/n-quads; version=1.2": [
+      "nq12",
+      "1.2"
+    ],
+    "application/n-quads; version=1.2-basic": [
+      "nq12",
+      "1.2-basic"
+    ],
+    "application/n-triples": [
+      "application/n-triples",
+      null
+    ],
+    "application/n-triples; version=1.1": [
+      "nt",
+      "1.1"
+    ],
+    "application/n-triples; version=1.2": [
+      "nt12",
+      "1.2"
+    ],
+    "application/n-triples; version=1.2-basic": [
+      "nt12",
+      "1.2-basic"
+    ],
+    "application/rdf+xml": [
+      "application/rdf+xml",
+      null
+    ],
+    "application/rdf+xml; version=1.1": [
+      "xml",
+      "1.1"
+    ],
+    "application/rdf+xml; version=1.2": [
+      "xml12",
+      "1.2"
+    ],
+    "application/rdf+xml; version=1.2-basic": [
+      "xml12",
+      "1.2-basic"
+    ],
+    "application/trig": [
+      "application/trig",
+      null
+    ],
+    "application/trig; version=1.1": [
+      "trig",
+      "1.1"
+    ],
+    "application/trig; version=1.2": [
+      "trig12",
+      "1.2"
+    ],
+    "application/trig; version=1.2-basic": [
+      "trig12",
+      "1.2-basic"
+    ],
+    "nq": "rdfcore.plugins.serializers.nquads.NQuadsSerializer",
+    "nq11": "rdfcore.plugins.serializers.nquads.NQuadsSerializer",
+    "nq12": "rdfcore.plugins.serializers.nq12.NQuads12Serializer",
+    "nquads": "rdfcore.plugins.serializers.nquads.NQuadsSerializer",
+    "nt": "rdfcore.plugins.serializers.nt.NTSerializer",
+    "nt11": "rdfcore.plugins.serializers.nt.NT11Serializer",
+    "nt12": "rdfcore.plugins.serializers.nt12.NT12Serializer",
+    "ntriples": "rdfcore.plugins.serializers.nt.NTSerializer",
+    "rdfxml": "rdfcore.plugins.serializers.rdfxml.XMLSerializer",
+    "text/turtle": [
+      "text/turtle",
+      null
+    ],
+    "text/turtle; version=1.1": [
+      "turtle",
+      "1.1"
+    ],
+    "text/turtle; version=1.2": [
+      "turtle12",
+      "1.2"
+    ],
+    "text/turtle; version=1.2-basic": [
+      "turtle12",
+      "1.2-basic"
+    ],
+    "trig": "rdfcore.plugins.serializers.trig.TriGSerializer",
+    "trig11": "rdfcore.plugins.serializers.trig.TriGSerializer",
+    "trig12": "rdfcore.plugins.serializers.trig12.TriG12Serializer",
+    "ttl": "rdfcore.plugins.serializers.turtle.TurtleSerializer",
+    "turtle": "rdfcore.plugins.serializers.turtle.TurtleSerializer",
+    "turtle11": "rdfcore.plugins.serializers.turtle.TurtleSerializer",
+    "turtle12": "rdfcore.plugins.serializers.turtle12.Turtle12Serializer",
+    "xml": "rdfcore.plugins.serializers.rdfxml.XMLSerializer",
+    "xml12": "rdfcore.plugins.serializers.rdfxml.XML12Serializer",
+    "xmlrdf12": "rdfcore.plugins.serializers.rdfxml.XML12Serializer"
+  },
+  "Store": {
+    "Memory": "rdfcore.store.Memory",
+    "default": "rdfcore.store.Memory"
+  },
+  "classes": {
+    "ConjunctiveGraph": [
+      "rdfcore.graph.Graph"
+    ],
+    "Dataset": [
+      "rdfcore.dataset.ConjunctiveGraph"
+    ],
+    "Graph": [
+      "rdfcore.term.Node"
+    ],
+    "Memory": [
+      "rdfcore.store.Store"
+    ],
+    "SQLiteStore": [
+      "rdfcore.store.Store"
+    ],
+    "Store": [
+      "builtins.object"
+    ]
+  },
+  "exceptions": {
+    "BadSyntax": [
+      "builtins.SyntaxError"
+    ],
+    "CompValueException": [
+      "builtins.Exception"
+    ],
+    "Error": [
+      "builtins.Exception"
+    ],
+    "ModificationException": [
+      "rdfcore.exceptions.Error"
+    ],
+    "ObjectTypeError": [
+      "rdfcore.exceptions.Error"
+    ],
+    "ParseError": [
+      "rdfcore.exceptions.Error"
+    ],
+    "ParserError": [
+      "rdfcore.exceptions.Error"
+    ],
+    "PluginException": [
+      "rdfcore.exceptions.Error"
+    ],
+    "StoreException": [
+      "rdfcore.exceptions.Error"
+    ],
+    "UniquenessError": [
+      "rdfcore.exceptions.Error"
+    ]
+  }
+}

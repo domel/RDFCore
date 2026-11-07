@@ -14,6 +14,9 @@ import warnings
 from urllib.parse import urldefrag, urljoin, urlparse
 from uuid import uuid4
 from types import GeneratorType
+from typing import Any
+
+from . import literal_order as _literal_order
 
 NORMALIZE_LITERALS = True
 
@@ -145,7 +148,7 @@ class URIRef(IdentifiedNode):
         raise Exception(f"<{self}> is not a skolem URI")
 
 
-_skolems = {}
+_skolems: dict[str, BNode] = {}
 
 
 class Genid(URIRef):
@@ -250,7 +253,17 @@ class TripleTerm:
 
 
 class Literal(Identifier):
-    from .literal_order import literal_lt as __lt__, literal_gt as __gt__, literal_le as __le__, literal_ge as __ge__, literal_bool as __bool__
+    language: str | None
+    datatype: URIRef | None
+    direction: str | None
+    value: Any
+    ill_typed: bool | None
+
+    __lt__ = _literal_order.literal_lt
+    __gt__ = _literal_order.literal_gt
+    __le__ = _literal_order.literal_le
+    __ge__ = _literal_order.literal_ge
+    __bool__ = _literal_order.literal_bool
 
     def __setattr__(self, name, value):
         if name in {'language', 'datatype', 'direction', 'value', 'ill_typed'} and hasattr(self, name):

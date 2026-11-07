@@ -1,0 +1,94 @@
+{
+  "convert": [
+    {
+      "choices": null,
+      "default": "-",
+      "dest": "input",
+      "flags": [],
+      "nargs": "?",
+      "required": false
+    },
+    {
+      "choices": null,
+      "default": "-",
+      "dest": "output",
+      "flags": [],
+      "nargs": "?",
+      "required": false
+    },
+    {
+      "choices": null,
+      "default": null,
+      "dest": "input_format",
+      "flags": [
+        "--from"
+      ],
+      "nargs": null,
+      "required": true
+    },
+    {
+      "choices": null,
+      "default": null,
+      "dest": "output_format",
+      "flags": [
+        "--to"
+      ],
+      "nargs": null,
+      "required": true
+    },
+    {
+      "choices": [
+        "strict",
+        "default",
+        "union"
+      ],
+      "default": "strict",
+      "dest": "dataset_policy",
+      "flags": [
+        "--dataset-policy"
+      ],
+      "nargs": null,
+      "required": false
+    }
+  ],
+  "count": [
+    {
+      "choices": null,
+      "default": "-",
+      "dest": "input",
+      "flags": [],
+      "nargs": "?",
+      "required": false
+    },
+    {
+      "choices": null,
+      "default": null,
+      "dest": "format",
+      "flags": [
+        "--format"
+      ],
+      "nargs": null,
+      "required": true
+    }
+  ],
+  "validate": [
+    {
+      "choices": null,
+      "default": "-",
+      "dest": "input",
+      "flags": [],
+      "nargs": "?",
+      "required": false
+    },
+    {
+      "choices": null,
+      "default": null,
+      "dest": "format",
+      "flags": [
+        "--format"
+      ],
+      "nargs": null,
+      "required": true
+    }
+  ]
+}

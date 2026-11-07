@@ -788,9 +788,11 @@ A green local pytest run is not a conformance certificate.
 ## API stability and versions
 
 The reviewed API is recorded in `tests/unit/public_api.json`: root exports and
-callable signatures, including Store and ConjunctiveGraph. Format names and MIME
-profiles are documented above; compatibility tests remain the behavioral contract.
-The CLI provides `convert`, `count` and `validate`.
+callable signatures, including Store and ConjunctiveGraph.
+`tests/unit/public_dispatch.json` records built-in aliases, MIME profiles, class
+bases and exception inheritance. Compatibility tests remain the behavioral contract.
+The CLI provides `convert`, `count` and `validate`; its options are recorded in
+`tests/unit/public_cli.json`.
 
 Versions follow `MAJOR.MINOR.PATCH`. During 0.x, minor releases may change the API;
 patch releases preserve it. From 1.0, incompatible changes require a major release.

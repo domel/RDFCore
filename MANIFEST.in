@@ -1,0 +1,8 @@
+exclude AGENTS.md spec.md
+prune .w3c
+prune .github
+prune .pytest_cache
+prune .hypothesis
+global-exclude __pycache__ *.py[cod] *.sqlite *.sqlite-shm *.sqlite-wal
+prune tests
+prune benchmarks

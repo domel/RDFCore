@@ -818,6 +818,11 @@ W3C snapshots. The `release-candidate-<revision>` artifact records the revision
 and job outcomes. Passing these jobs still requires review of API compatibility
 and all normative RDF 1.2 obligations before declaring 1.0.
 
+Candidate `6f312b4` passed [core and package CI](https://github.com/domel/RDFCore/actions/runs/42389113607)
+on Python 3.10/3.14, Linux, Windows and macOS. Its
+[release gate](https://github.com/domel/RDFCore/actions/runs/42389232350)
+failed with the 23 RDF/XML cases listed above; release approval remains open.
+
 For an approved release, update `pyproject.toml` and `rdfcore.__version__`
 together, record changes and remaining limitations, then build with
 `python -m build` and validate with `python -m twine check dist/*`. Inspect the

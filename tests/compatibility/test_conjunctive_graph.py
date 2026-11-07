@@ -101,3 +101,24 @@ def test_store_parity_and_reopen(sqlite, tmp_path):
     expected.remove_context(rdflib.URIRef("urn:default"))
     assert normalized(graph.quads()) == normalized(expected.quads())
     graph.close()
+
+
+def test_default_context_assignment_matches_reference():
+    for module in (rdflib, rdfcore):
+        for kind in ('ConjunctiveGraph', 'Dataset'):
+            graph = getattr(module, kind)()
+            original_store = graph.store
+            target = module.Graph(identifier=module.URIRef('urn:replacement'))
+            for value in (target, None, 0, 'raw'):
+                if kind == 'Dataset':
+                    with pytest.warns(DeprecationWarning):
+                        graph.default_context = value
+                    with pytest.warns(DeprecationWarning):
+                        assert graph.default_context is value
+                else:
+                    graph.default_context = value
+                    assert graph.default_context is value
+                if kind == 'Dataset':
+                    assert graph.default_graph is value
+                    assert {str(g.identifier) for g in graph.graphs()} == {'urn:x-rdflib:default'}
+                assert graph.store is original_store

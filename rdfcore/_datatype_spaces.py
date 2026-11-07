@@ -7,6 +7,8 @@ though their lexical mappings differ. XSD primitive spaces remain disjoint.
 """
 
 import json
+from fractions import Fraction
+from typing import cast
 from base64 import b64encode
 
 from .datatypes import (
@@ -45,7 +47,7 @@ def contains(value: DatatypeValue, datatype) -> bool:
     space = families(datatype)
     name = datatype.removeprefix(XSD)
     if value.family == 'temporal':
-        fields = value.key
+        fields = cast(tuple[object, ...], value.key)
         kind = {tuple(field is not None for field in fields[:6]): kind for kind, fields in (
             ('dateTime', (1, 1, 1, 1, 1, 1)), ('date', (1, 1, 1, None, None, None)),
             ('time', (None, None, None, 1, 1, 1)), ('gYear', (1, None, None, None, None, None)),
@@ -59,17 +61,18 @@ def contains(value: DatatypeValue, datatype) -> bool:
     if value.family == 'numeric':
         if datatype in _INTEGER_DATATYPES:
             lower, upper = _INTEGER_BOUNDS.get(datatype, (None, None))
-            return (value.key.denominator == 1
-                    and (lower is None or value.key >= lower)
-                    and (upper is None or value.key <= upper))
+            numeric = cast(Fraction, value.key)
+            return (numeric.denominator == 1
+                    and (lower is None or numeric >= lower)
+                    and (upper is None or numeric <= upper))
         return True
     if value.family in {'string', 'anyURI'} and datatype != RDF+'JSON':
         try:
-            return lexical_value(value.key, datatype) == value
+            return lexical_value(cast(str, value.key), datatype) == value
         except InvalidLexicalForm:
             return False
     if value.family == 'duration':
-        months, seconds = value.key
+        months, seconds = cast(tuple[int, Fraction], value.key)
         return ((name != 'yearMonthDuration' or seconds == 0)
                 and (name != 'dayTimeDuration' or months == 0))
     return True

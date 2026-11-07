@@ -112,6 +112,7 @@ This module is a partial facility, not a full RDF 1.2 conformance claim.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import cast as _cast
 from collections import defaultdict
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -643,7 +644,7 @@ def entails(
         if mode == 'decide':
             recognized = _recognition(regime, datatypes)
             source = _snapshot(premise)
-            target = None if conclusion is False else _snapshot(conclusion)
+            target = None if conclusion is False else _snapshot(_cast(Iterable[Triple], conclusion))
             _literal_syntax(source)
             if target is not None:
                 _literal_syntax(target)
@@ -652,7 +653,7 @@ def entails(
                 return _decide(source, target, regime, recognized)
             finally:
                 _recognized.reset(token)
-        source, target = _snapshot(premise), _snapshot(conclusion)
+        source, target = _snapshot(premise), _snapshot(_cast(Iterable[Triple], conclusion))
         if _homomorphism(_closure(source, regime, target), target):
             return True
         if regime == "simple":

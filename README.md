@@ -803,4 +803,28 @@ minor release of notice. No removals are currently scheduled.
 Parser errors use `ParserError` or syntax-specific exceptions; store and plugin
 failures use `StoreException` and `PluginException`. Invalid arguments can raise
 `TypeError` or `ValueError`; compatibility APIs retain RDFLib-specific errors.
-Typing is still partial: the package does not ship `py.typed`.
+Typing is still partial: CI checks annotated code; the package does not ship `py.typed`.
+
+
+## Release preparation
+
+The current `0.1.0.dev0` build is a development version. It includes selected
+RDFLib-compatible APIs and partial RDF 1.2 support; see the comparison and W3C
+results above for limitations.
+
+Run **Release candidate checks** manually on the intended revision. It runs
+core tests, wheel/sdist installation on all three platforms, and both pinned
+W3C snapshots. The `release-candidate-<revision>` artifact records the revision
+and job outcomes. Passing these jobs still requires review of API compatibility
+and all normative RDF 1.2 obligations before declaring 1.0.
+
+For an approved release, update `pyproject.toml` and `rdfcore.__version__`
+together, record changes and remaining limitations, then build with
+`python -m build` and validate with `python -m twine check dist/*`. Inspect the
+installed artifacts before creating the matching `v<version>` tag. Publish the
+exact reviewed artifacts to PyPI with `python -m twine upload dist/*` only after
+release approval. The workflow does not publish packages automatically.
+
+If a published version is faulty, yank that version on PyPI and release a new
+patch version. Retain its tag and artifacts so installed versions remain
+traceable; never replace an existing release with different bytes.

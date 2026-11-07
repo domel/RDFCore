@@ -16,13 +16,13 @@ _DAY = r'(?P<day>[0-9]{2})'
 _CLOCK = r'(?P<hour>[0-9]{2}):(?P<minute>[0-9]{2}):(?P<second>[0-9]{2}(?:\.[0-9]+)?)'
 _ZONE = r'(?P<zone>Z|[+-][0-9]{2}:[0-9]{2})?'
 _DATE = _YEAR+'-'+_MONTH+'-'+_DAY
-_PATTERNS = {
+_PATTERN_SOURCES = {
     'dateTime': _DATE+'T'+_CLOCK, 'dateTimeStamp': _DATE+'T'+_CLOCK,
     'date': _DATE, 'time': _CLOCK, 'gYear': _YEAR,
     'gYearMonth': _YEAR+'-'+_MONTH, 'gMonth': '--'+_MONTH,
     'gDay': '---'+_DAY, 'gMonthDay': '--'+_MONTH+'-'+_DAY,
 }
-_PATTERNS = {name: re.compile(pattern+_ZONE) for name, pattern in _PATTERNS.items()}
+_PATTERNS = {name: re.compile(pattern+_ZONE) for name, pattern in _PATTERN_SOURCES.items()}
 _DURATION = re.compile(
     r'(?P<sign>-)?P(?:(?P<year>[0-9]+)Y)?(?:(?P<month>[0-9]+)M)?'
     r'(?:(?P<day>[0-9]+)D)?(?:T(?:(?P<hour>[0-9]+)H)?'

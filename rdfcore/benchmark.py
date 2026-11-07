@@ -5,6 +5,9 @@ from __future__ import annotations
 import os
 import platform
 import time
+from types import ModuleType
+
+resource: ModuleType | None
 
 try:
     import resource

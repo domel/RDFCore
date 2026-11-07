@@ -23,7 +23,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "rdflib==7.6.0", "html5rdf==1.2.1", "hypothesis>=6.100,<7", "coverage>=7.16,<8"]
+test = ["pytest", "rdflib==7.6.0", "html5rdf==1.2.1", "hypothesis>=6.100,<7", "coverage>=7.16,<8", "mypy==2.4.1"]
 html = ["html5rdf>=1.2.1,<2"]
 
 [project.urls]
@@ -39,3 +39,8 @@ include = ["rdfcore*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.mypy]
+python_version = "3.10"
+follow_imports = "silent"
+ignore_missing_imports = true

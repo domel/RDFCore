@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+import typing as _typing
 
 from .graph import Graph
 from .term import BNode, URIRef
@@ -13,6 +14,15 @@ DATASET_DEFAULT_GRAPH_ID = URIRef("urn:x-rdflib:default")
 class ConjunctiveGraph(Graph):
     # Dataset conveniences retained as RDFCore extensions; the class itself
     # follows RDFLib's Graph hierarchy and union-query contract.
+
+    if _typing.TYPE_CHECKING:
+        # These extension methods are attached below after Dataset is defined.
+        def graph(self, identifier=None, base=None) -> Graph: ...
+        def graphs(self, triple=None) -> _typing.Iterator[Graph]: ...
+        def context_id(self, uri, context_id=None) -> URIRef: ...
+        def remove_context(self, context) -> None: ...
+        def remove_graph(self, g) -> ConjunctiveGraph: ...
+        def add_graph(self, g) -> Graph: ...
 
     def contexts(self, triple=None):
         for context in self.store.contexts(triple):
@@ -306,8 +316,9 @@ class Dataset(ConjunctiveGraph):
         for graph in ConjunctiveGraph.contexts(self, triple):
             seen.add(graph.identifier)
             yield graph
-        if self.default_graph.identifier not in seen:
-            yield self.graph(self.default_graph.identifier)
+        default_id = DATASET_DEFAULT_GRAPH_ID if isinstance(self, Dataset) else self.default_graph.identifier
+        if default_id not in seen:
+            yield self.graph(default_id)
 
     def remove(self, triple_or_quad):
         subject, predicate, obj, graph = ConjunctiveGraph._spoc(self, triple_or_quad)
@@ -336,6 +347,12 @@ class Dataset(ConjunctiveGraph):
         warnings.warn("default_context is deprecated; use default_graph", DeprecationWarning, stacklevel=2)
         return self.default_graph
 
+    @default_context.setter
+    def default_context(self, value):
+        warnings.warn("Dataset.default_context is deprecated, use Dataset.default_graph instead.",
+                      DeprecationWarning, stacklevel=2)
+        self.default_graph = value
+
     def contexts(self, triple=None):
         warnings.warn("contexts is deprecated; use graphs", DeprecationWarning, stacklevel=2)
         yield from self.graphs(triple)
@@ -343,13 +360,9 @@ class Dataset(ConjunctiveGraph):
 
 
 
-ConjunctiveGraph.graph = Dataset.graph
-ConjunctiveGraph.graphs = Dataset.graphs
-ConjunctiveGraph.context_id = Dataset.context_id
-ConjunctiveGraph.remove_context = Dataset.remove_context
-ConjunctiveGraph.remove_graph = Dataset.remove_graph
-ConjunctiveGraph.add_graph = Dataset.add_graph
-ConjunctiveGraph._triples_in_context = Dataset._triples_in_context
+for _method in ('graph', 'graphs', 'context_id', 'remove_context', 'remove_graph',
+                'add_graph', '_triples_in_context'):
+    setattr(ConjunctiveGraph, _method, getattr(Dataset, _method))
 
 class _ConjunctiveParseView(ConjunctiveGraph):
     """Internal parser target when the default context uses another store."""

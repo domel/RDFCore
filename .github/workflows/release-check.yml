@@ -1,0 +1,44 @@
+name: Release candidate checks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-and-package:
+    uses: ./.github/workflows/ci.yml
+  conformance:
+    uses: ./.github/workflows/conformance.yml
+  candidate:
+    if: always()
+    needs: [core-and-package, conformance]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record candidate acceptance
+        env:
+          REVISION: ${{ github.sha }}
+          CORE_RESULT: ${{ needs.core-and-package.result }}
+          W3C_RESULT: ${{ needs.conformance.result }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          result = {
+              'revision': os.environ['REVISION'],
+              'core_and_package': os.environ['CORE_RESULT'],
+              'conformance': os.environ['W3C_RESULT'],
+              'automated_checks_passed': all(os.environ[key] == 'success'
+                  for key in ('CORE_RESULT', 'W3C_RESULT')),
+              'release_approved': False,
+              'remaining_gate': 'Review RDFLib scope and all normative RDF 1.2 obligations before 1.0.',
+          }
+          Path('candidate.json').write_text(json.dumps(result, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: candidate.json
+      - name: Enforce acceptance
+        run: python -c "import json; assert json.load(open('candidate.json'))['automated_checks_passed'], 'Candidate checks failed; inspect core/package and W3C reports'"

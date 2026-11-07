@@ -36,7 +36,7 @@ class Namespace(str):
 
 class DefinedNamespace(Namespace):
     _NS = ""
-    _TERMS = frozenset()
+    _TERMS: frozenset[str] = frozenset()
 
     def __init__(self, name: str | None = None):
         super().__init__(name if name is not None else self._NS)

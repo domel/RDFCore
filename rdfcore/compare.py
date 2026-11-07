@@ -26,7 +26,7 @@ def isomorphic(left, right) -> bool:
     left_parts, right_parts = _components(left_quads), _components(right_quads)
     if Counter(key for key, _ in left_parts) != Counter(key for key, _ in right_parts):
         return False
-    available = {}
+    available: dict[tuple, list[list[tuple]]] = {}
     for key, rows in right_parts:
         available.setdefault(key, []).append(rows)
     # Blank-node components are independent. Greedily pair isomorphic

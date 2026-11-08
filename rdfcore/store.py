@@ -328,8 +328,8 @@ class SQLiteStore(Store):
         self._connection.execute("CREATE INDEX IF NOT EXISTS triples_pos ON triples (p, o, s)")
         self._connection.execute("CREATE INDEX IF NOT EXISTS triples_osp ON triples (o, s, p)")
         self._connection.execute("CREATE INDEX IF NOT EXISTS triples_context ON triples (context)")
-        # Optional spelling metadata leaves the version-one identity codec and
-        # indexes unchanged. Older databases have canonical spellings only.
+        # Optional spelling/diagnostic metadata leaves the identity codec and
+        # indexes unchanged. Lost metadata in older databases is unrecoverable.
         self._connection.execute('CREATE TABLE IF NOT EXISTS lexical_forms ('
             's BLOB, p BLOB, o BLOB, context BLOB, lex_s BLOB, lex_p BLOB, lex_o BLOB, '
             'PRIMARY KEY(s,p,o,context))')
@@ -362,13 +362,15 @@ class SQLiteStore(Store):
             self._connection.commit()
 
     def _remember_lexical_forms(self, triple, values, *, table='triples'):
-        def needs_spelling(term):
+        def needs_metadata(term):
             if isinstance(term, Literal):
-                return bool(term.language and term.language != term.language.lower())
-            return isinstance(term, TripleTerm) and any(needs_spelling(item) for item in term)
-        if len(triple) != 3 or not any(needs_spelling(term) for term in triple):
+                return (bool(term.language and term.language != term.language.lower())
+                        or (term.datatype is not None
+                            and term.ill_typed != decode(encode(term)).ill_typed))
+            return isinstance(term, TripleTerm) and any(needs_metadata(item) for item in term)
+        if len(triple) != 3 or not any(needs_metadata(term) for term in triple):
             return
-        display = tuple(encode(term, canonical=False) for term in triple)
+        display = tuple(encode(term, canonical=False, preserve_diagnostics=True) for term in triple)
         none = self._encode(None)
         scopes = [values[3]] if values[3] == none else [values[3], none]
         for scope in scopes:
@@ -566,7 +568,10 @@ class SQLiteStore(Store):
             values.append(self._encode(None))
         else:
             query = f"SELECT {columns} FROM triples AS t{join} WHERE {where}"
-            values.insert(0, self._encode(context))
+            # RDFLib's selective queries use global term indexes; a fully
+            # unbound context scan retains that context's first spelling/state.
+            metadata_context = None if any(term is not None for term in triple_pattern) else context
+            values.insert(0, self._encode(metadata_context))
         cursor = self._connection.execute(query, values)
         for row in cursor:
             subject, predicate, obj = row[:3]

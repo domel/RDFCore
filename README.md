@@ -601,7 +601,9 @@ The storage codec allows up to 128 nested term levels. The legacy allowlist does
 not bound pickle memory use; migrate only trusted legacy files. Back up existing
 databases before migration.
 Language tags compare case-insensitively while metadata retains their first
-spelling per context and union. Spelling lost by older releases is unrecoverable.
+spelling per context and union. Newly written data also retains literal
+diagnostics (`ill_typed`), with query behavior matching RDFLib. Spelling or
+diagnostics lost by older releases cannot be recovered.
 
 For legacy RDF 1.1 dataset output without `dataset_policy`, RDFLib's format-specific
 projection applies: N-Triples includes its quads as triple statements, while

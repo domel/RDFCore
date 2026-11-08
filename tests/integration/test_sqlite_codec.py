@@ -223,3 +223,70 @@ def test_union_deduplicates_identity_before_joining_spellings():
         assert "FROM (SELECT DISTINCT" in query
     finally:
         store.close()
+
+
+def test_literal_diagnostics_follow_rdflib_query_and_context_selection(tmp_path):
+    import rdflib
+    import rdfcore
+    for native_first in (True, False):
+        snapshots = []
+        for module, backend in ((rdflib, None), (rdfcore, rdfcore.Memory()),
+                                (rdfcore, rdfcore.SQLiteStore(tmp_path / f'diagnostic-{native_first}.sqlite'))):
+            dataset = module.Dataset(**({'store': backend} if backend is not None else {}))
+            s, p, name = (module.URIRef('urn:' + value) for value in ('s', 'p', 'g'))
+            first = module.Literal(1) if native_first else module.Literal('1', datatype=module.XSD.integer)
+            second = module.Literal('1', datatype=module.XSD.integer) if native_first else module.Literal(1)
+            def snapshot(ds):
+                ds.default_union = True
+                return (next(ds.default_graph.objects(s, p)).ill_typed,
+                        next(ds.graph(name).objects(s, p)).ill_typed,
+                        next(ds.graph(name).objects()).ill_typed,
+                        next(ds.objects(s, p)).ill_typed, len(ds))
+            try:
+                dataset.default_graph.add((s, p, first)).add((s, p, second))
+                dataset.graph(name).add((s, p, second)).add((s, p, first))
+                current = snapshot(dataset)
+                snapshots.append(current)
+            finally:
+                dataset.close()
+            if isinstance(backend, rdfcore.SQLiteStore):
+                reopened = rdfcore.Dataset(store=rdfcore.SQLiteStore(tmp_path / f'diagnostic-{native_first}.sqlite'))
+                try:
+                    assert snapshot(reopened) == current
+                finally:
+                    reopened.close()
+        assert snapshots[0] == snapshots[1] == snapshots[2]
+
+
+def test_literal_diagnostic_metadata_rollback_removal_and_nested_terms():
+    import rdfcore
+    store = rdfcore.SQLiteStore()
+    graph = rdfcore.Graph(store=store)
+    s, p = rdfcore.URIRef('urn:s'), rdfcore.URIRef('urn:p')
+    try:
+        with pytest.raises(RuntimeError):
+            with store.transaction():
+                graph.add((s, p, rdfcore.Literal(1)))
+                raise RuntimeError('abort')
+        graph.add((s, p, rdfcore.Literal('1', datatype=rdfcore.XSD.integer)))
+        assert next(graph.objects()).ill_typed is False
+        graph.remove((None, None, None))
+        graph.add((s, p, rdfcore.Literal(1)))
+        assert next(graph.objects()).ill_typed is None
+        graph.remove((None, None, None))
+        nested = rdfcore.TripleTerm(s, p, rdfcore.Literal(True))
+        graph.add((s, p, nested))
+        restored = next(graph.objects())
+        assert restored == nested
+        assert restored.object.ill_typed is None
+        graph.remove((None, None, None))
+        deep = rdfcore.Literal(1)
+        for _ in range(128):
+            deep = rdfcore.TripleTerm(s, p, deep)
+        graph.add((s, p, deep))
+        restored = next(graph.objects())
+        for _ in range(128):
+            restored = restored.object
+        assert restored.ill_typed is None
+    finally:
+        store.close()

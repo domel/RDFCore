@@ -38,7 +38,7 @@ def load_json(data):
         raise ValueError("invalid stored RDF JSON") from error
 
 
-def encode(term, *, canonical=True, preserve_state=False):
+def encode(term, *, canonical=True, preserve_state=False, preserve_diagnostics=False):
     from .graph import Graph
 
     def pack(value, depth=0):
@@ -61,12 +61,12 @@ def encode(term, *, canonical=True, preserve_state=False):
                 str(value.datatype) if value.datatype is not None else None,
                 value.direction,
             ]
-            if preserve_state:
+            if preserve_state or preserve_diagnostics:
                 return [
                     "literal-state",
                     parts,
                     value.ill_typed,
-                    _pack_native(value.value),
+                    ["lexical"] if preserve_diagnostics else _pack_native(value.value),
                 ]
             return parts
         if isinstance(value, TripleTerm):
@@ -99,7 +99,9 @@ def decode_value(value):
         if not isinstance(tag, str):
             raise ValueError("invalid stored RDF tag")
         if tag == "literal-state" and len(parts) == 3:
-            literal = unpack(parts[0], depth + 1)
+            if not isinstance(parts[0], list) or not parts[0] or parts[0][0] != "literal":
+                raise ValueError("invalid stored literal state")
+            literal = unpack(parts[0], depth)
             if not isinstance(literal, Literal) or not (
                 parts[1] is None or type(parts[1]) is bool
             ):

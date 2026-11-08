@@ -823,10 +823,10 @@ For a stream passed as `source=`, supply `format=` explicitly, as in RDFLib.
 
 ## Release preparation
 
-Version `1.0.1` fixes local input base resolution in `Graph.parse()` and
-rejects directional literals in the RDF 1.1 NT/NQ streaming writers instead
-of discarding their direction. Use explicit RDF 1.2 serializers for these
-literals. The documented conformance limitations remain unchanged.
+Version `1.0.2` fixes format detection for `.nq` paths and named files,
+graph subclasses and union namespace bindings, SQLite removal patterns,
+native literal values and persisted literal diagnostics. The documented
+RDFLib and RDF 1.2 conformance limitations remain unchanged.
 
 Version `1.0.0` stabilizes the documented RDFCore API. It includes selected
 RDFLib-compatible APIs and partial RDF 1.2 support; see the comparison and W3C

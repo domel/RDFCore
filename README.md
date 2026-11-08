@@ -807,6 +807,9 @@ failures use `StoreException` and `PluginException`. Invalid arguments can raise
 Typing is still partial: CI checks annotated code; the package does not ship `py.typed`.
 
 
+For automatic format detection, pass a path or a named stream with `file=`.
+For a stream passed as `source=`, supply `format=` explicitly, as in RDFLib.
+
 ## Release preparation
 
 Version `1.0.1` fixes local input base resolution in `Graph.parse()` and

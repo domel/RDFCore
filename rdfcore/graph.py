@@ -435,7 +435,10 @@ class Graph(Node):
             from .rdf_version import validate_rdf_version
             validate_rdf_version(args["rdf_version"])
         if format is None:
-            format = _format_from_location(location or source)
+            candidate = location if location is not None else file if file is not None else source
+            if source is not None and hasattr(source, "read"):
+                candidate = None
+            format = _format_from_location(candidate)
         source = create_input_source(source, publicID, location, file, data,
                                      None if automatic_format else format, **args)
         parser_class = None
@@ -594,7 +597,8 @@ class _DatasetProjection(Graph):
 
 def _format_from_location(location):
     if location is not None:
+        location = getattr(location, "name", location)
         name = str(location).lower().split("?", 1)[0]
         suffix = name.rsplit(".", 1)[-1] if "." in name else ""
-        return {"ttl": "turtle", "turtle": "turtle", "nt": "nt", "ntriples": "ntriples", "nquads": "nquads", "trig": "trig", "rdf": "xml", "xml": "xml"}.get(suffix, "turtle")
+        return {"ttl": "turtle", "turtle": "turtle", "nt": "nt", "ntriples": "ntriples", "nq": "nquads", "nquads": "nquads", "trig": "trig", "rdf": "xml", "xml": "xml"}.get(suffix, "turtle")
     return "turtle"

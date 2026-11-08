@@ -102,7 +102,7 @@ Numbered links point to tests; support is limited to their scope. [API inventory
 | `BNode.skolemize()` | Yes | Yes | [1](tests/compatibility/test_graph_api.py) |
 | `URIRef.de_skolemize()` | Yes | Yes | [1](tests/compatibility/test_graph_api.py) |
 | `Literal.n3()` | Yes | Partial | - |
-| `Literal.toPython()` | Yes | Partial | - |
+| `Literal.toPython()` | Yes | Partial | Native objects retained. [1](tests/compatibility/test_literal_native_values.py) |
 | `Literal.normalize()` | Yes | Partial | - |
 | `Literal.datatype` | Yes | Partial | - |
 | `Literal.language` | Yes | Partial | - |

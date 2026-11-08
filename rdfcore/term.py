@@ -515,7 +515,8 @@ def _literal_parts(value):
         return value, value.isoformat(), URIRef(_XSD + "date")
     if isinstance(value, time):
         return value, value.isoformat(), URIRef(_XSD + "time")
-    return str(value), str(value), None
+    native = str(value) if isinstance(value, (str, bytes)) else value
+    return native, str(value), None
 
 
 def _normalize_lexical(lexical, datatype):

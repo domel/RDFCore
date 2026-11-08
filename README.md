@@ -151,7 +151,10 @@ copying a JSON literal rebuilds its Python value from the lexical form.
 ### Explicit datatype values
 
 `rdfcore.datatypes` validates lexical forms separately from RDFLib-compatible
-`Literal.toPython()`. Use `normalize=False` to preserve constructor input,
+`Literal.toPython()`. For otherwise unmapped Python objects, the constructor
+retains the original object as the native value, separately from its lexical form.
+This object identity is an in-memory property; SQLite persists RDF terms.
+Use `normalize=False` to preserve constructor input,
 or `lexical_value(text, datatype)` to bypass normalization entirely,
 including whitespace handling for `normalizedString` and `token`.
 

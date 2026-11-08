@@ -823,6 +823,11 @@ For a stream passed as `source=`, supply `format=` explicitly, as in RDFLib.
 
 ## Release preparation
 
+Version `1.0.3` preserves RDFLib’s first equal literal representation in
+predicate-only queries, including language spelling and `ill_typed`, for Memory
+and persistent SQLite stores. Existing databases retain available metadata;
+representations already lost by older releases cannot be recovered.
+
 Version `1.0.2` fixes format detection for `.nq` paths and named files,
 graph subclasses and union namespace bindings, SQLite removal patterns,
 native literal values and persisted literal diagnostics. The documented

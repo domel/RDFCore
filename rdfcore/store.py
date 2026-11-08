@@ -134,11 +134,14 @@ class Memory(Store):
         self._known_contexts = {}
         self._sp = defaultdict(set)
         self._po = defaultdict(set)
+        # RDFLib retains predicate/object keys even after their last subject is removed.
+        self._predicate_objects = {}
         self._os = defaultdict(set)
 
     def add(self, triple, context=None, quoted=False):
         subject, predicate, obj = triple
         self._register_context(context)
+        self._predicate_objects.setdefault((predicate, obj), obj)
         if triple in self._triples:
             self._contexts[context].add(triple)
             return triple
@@ -199,6 +202,8 @@ class Memory(Store):
         candidates = tuple(candidates)
         for triple in candidates:
             if all(value is None or value == actual for value, actual in zip(triple_pattern, triple)):
+                if subject is None and predicate is not None and obj is None:
+                    triple = (triple[0], predicate, self._predicate_objects[(predicate, triple[2])])
                 yield triple, (context,) if context is not None else ()
 
     def contexts(self, triple=None):
@@ -333,6 +338,10 @@ class SQLiteStore(Store):
         self._connection.execute('CREATE TABLE IF NOT EXISTS lexical_forms ('
             's BLOB, p BLOB, o BLOB, context BLOB, lex_s BLOB, lex_p BLOB, lex_o BLOB, '
             'PRIMARY KEY(s,p,o,context))')
+        initialize_predicate_objects = not self._connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='predicate_objects'").fetchone()
+        self._connection.execute('CREATE TABLE IF NOT EXISTS predicate_objects ('
+            'p BLOB, o BLOB, lex_o BLOB NOT NULL, PRIMARY KEY(p,o))')
         self._has_lexical_forms = bool(self._connection.execute('SELECT 1 FROM lexical_forms LIMIT 1').fetchone())
         if version == 0:
             self._connection.execute('CREATE TEMP TABLE migrated (s BLOB, p BLOB, o BLOB, context BLOB, PRIMARY KEY(s,p,o,context))')
@@ -346,6 +355,12 @@ class SQLiteStore(Store):
             self._connection.execute('INSERT INTO triples SELECT * FROM migrated')
             self._connection.execute('DROP TABLE migrated')
             self._connection.execute('PRAGMA user_version=1')
+        if initialize_predicate_objects:
+            self._connection.execute(
+                'INSERT OR IGNORE INTO predicate_objects '
+                'SELECT t.p,t.o,COALESCE(f.lex_o,t.o) FROM triples AS t '
+                'LEFT JOIN lexical_forms AS f ON f.s=t.s AND f.p=t.p AND f.o=t.o AND f.context=? '
+                'ORDER BY t.rowid', (self._encode(None),))
         self._connection.execute('CREATE TABLE IF NOT EXISTS graph_contexts (context BLOB NOT NULL PRIMARY KEY)')
         self._connection.execute('INSERT OR IGNORE INTO graph_contexts SELECT DISTINCT context FROM triples')
 
@@ -362,6 +377,10 @@ class SQLiteStore(Store):
             self._connection.commit()
 
     def _remember_lexical_forms(self, triple, values, *, table='triples'):
+        if len(triple) == 3:
+            self._connection.execute(
+                'INSERT OR IGNORE INTO predicate_objects VALUES (?,?,?)',
+                (values[1], values[2], encode(triple[2], canonical=False, preserve_diagnostics=True)))
         def needs_metadata(term):
             if isinstance(term, Literal):
                 return (bool(term.language and term.language != term.language.lower())
@@ -559,7 +578,11 @@ class SQLiteStore(Store):
         columns = "t.s, t.p, t.o, t.context" if context is not None else "t.s, t.p, t.o"
         # Join in the same read statement: another connection may have added
         # spelling metadata since this store was opened.
-        columns += ', f.lex_s, f.lex_p, f.lex_o'
+        predicate_scan = (triple_pattern[0] is None and triple_pattern[1] is not None
+                          and triple_pattern[2] is None)
+        object_display = ('COALESCE((SELECT i.lex_o FROM predicate_objects AS i '
+                          'WHERE i.p=t.p AND i.o=t.o),f.lex_o)' if predicate_scan else 'f.lex_o')
+        columns += ', f.lex_s, f.lex_p, ' + object_display
         join = ' LEFT JOIN lexical_forms AS f ON f.s=t.s AND f.p=t.p AND f.o=t.o AND f.context=?'
         if context is None:
             # Deduplicate the indexed identity columns first. DISTINCT over

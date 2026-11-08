@@ -106,7 +106,7 @@ Numbered links point to tests; support is limited to their scope. [API inventory
 | `Literal.normalize()` | Yes | Partial | - |
 | `Literal.datatype` | Yes | Partial | - |
 | `Literal.language` | Yes | Partial | - |
-| `Literal.ill_typed` | Yes | Partial | SQLite diagnostics retained. [1](tests/integration/test_sqlite_codec.py) |
+| `Literal.ill_typed` | Yes | Partial | SQLite diagnostics retained; predicate index state preserved. [1](tests/integration/test_sqlite_codec.py) |
 | `rdf:JSON` datatype | No | Yes | RDF 1.2 only. [1](tests/formats/test_rdf_json.py) |
 | `Literal.direction` | No | Partial | RDF 1.2 only. |
 | `TripleTerm` | No | Partial | RDF 1.2 only. |

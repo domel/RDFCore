@@ -537,7 +537,12 @@ class Graph(Node):
         return self if destination is not None else result
 
     def __add__(self, other):
-        result = Graph()
+        try:
+            result = type(self)()
+        except TypeError:
+            result = Graph()
+        for prefix, namespace in set(list(self.namespaces()) + list(other.namespaces())):
+            result.bind(prefix, namespace)
         for triple in self:
             result.add(triple)
         for triple in other:
@@ -545,16 +550,22 @@ class Graph(Node):
         return result
 
     def __sub__(self, other):
-        result = Graph()
+        try:
+            result = type(self)()
+        except TypeError:
+            result = Graph()
         for triple in self:
             if triple not in other:
                 result.add(triple)
         return result
 
     def __and__(self, other):
-        result = Graph()
-        for triple in self:
-            if triple in other:
+        try:
+            result = type(self)()
+        except TypeError:
+            result = Graph()
+        for triple in other:
+            if triple in self:
                 result.add(triple)
         return result
 

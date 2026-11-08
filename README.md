@@ -379,6 +379,9 @@ The operation snapshots its inputs and accepts `max_steps`; it is not streaming.
 
 ## Graphs and datasets
 
+Graph set operations (`+`, `-`, `&`, `*`) preserve the graph subclass where
+its constructor permits; union also carries namespace bindings from both inputs.
+
 Use `Graph` for one graph and `Dataset` for named graphs. For a union view,
 set `Dataset(default_union=True)`. The RDFLib-compatible `ConjunctiveGraph`
 also reads the union, but is deprecated; prefer `Dataset`.

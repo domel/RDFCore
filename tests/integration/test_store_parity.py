@@ -70,3 +70,43 @@ def test_sqlite_reopen_matches_language_identity(tmp_path):
     reopened.remove(equal_triple)
     assert len(reopened) == 0
     reopened.close()
+
+
+@pytest.mark.parametrize('backend', ['memory', 'sqlite'])
+@pytest.mark.parametrize('selection', ['default', 'named', 'union'])
+def test_remove_unmatched_scalars_matches_rdflib(tmp_path, backend, selection):
+    def exercise(module, store=None):
+        dataset = module.Dataset(**({'store': store} if store is not None else {}))
+        s, p, o, name = (module.URIRef('urn:' + x) for x in ('s', 'p', 'o', 'g'))
+        triple = (s, p, o)
+        def records():
+            return sorted(tuple((type(t).__name__, str(t)) for t in row) for row in dataset.quads())
+        try:
+            for populated in (False, True):
+                if populated:
+                    dataset.add(triple).add(triple)
+                    dataset.graph(name).add(triple)
+                before = records()
+                for value in ('other', 7, True, 1.5):
+                    for slot in range(3):
+                        pattern = [None, None, None]
+                        pattern[slot] = value
+                        if selection == 'union':
+                            result = dataset.remove(tuple(pattern))
+                            assert result is dataset
+                        else:
+                            graph = dataset.default_graph if selection == 'default' else dataset.graph(name)
+                            assert graph.remove(tuple(pattern)) is graph
+                        assert records() == before
+            return records()
+        finally:
+            dataset.close()
+    path = tmp_path / 'scalar-patterns.sqlite'
+    store = rdfcore.Memory() if backend == 'memory' else rdfcore.SQLiteStore(path)
+    assert exercise(rdfcore, store) == exercise(rdflib)
+    if backend == 'sqlite':
+        reopened = rdfcore.SQLiteStore(path)
+        try:
+            assert len(reopened) == 1
+        finally:
+            reopened.close()

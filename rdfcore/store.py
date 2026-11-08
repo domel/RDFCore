@@ -508,6 +508,9 @@ class SQLiteStore(Store):
             if pattern == (None, None, None):
                 _check_removed_context(original_context)
             return
+        if any(value is not None and (type(value) is str or isinstance(value, (bool, int, float)))
+               for value in pattern):
+            return
         clauses, values = [], []
         for column, value in zip(("s", "p", "o"), pattern):
             if value is not None:

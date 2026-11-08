@@ -588,6 +588,9 @@ Opening an unrelated SQLite schema raises `ValueError` without initializing it.
 Rollback restores both statements and cached graph views. Generalized graph nodes
 are persisted as graph references by identifier, without copying their contents.
 
+SQLite removal patterns containing plain strings or numbers match no RDF terms,
+as in Memory and RDFLib.
+
 SQLite uses a versioned JSON term codec. Older databases migrate transactionally
 through a restricted legacy reader; failed decoding preserves existing data.
 Unknown versions are rejected. Failed migration preserves the original schema and rows.

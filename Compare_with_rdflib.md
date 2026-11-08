@@ -44,7 +44,7 @@ Numbered links point to tests; support is limited to their scope. [API inventory
 
 | Method | RDFLib | RDFCore | Notes / tests |
 | --- | ---: | ---: | --- |
-| `add`, `addN`, `remove` | Yes | Yes | [1](tests/compatibility/test_graph_api.py) |
+| `add`, `addN`, `remove` | Yes | Yes | [1](tests/compatibility/test_graph_api.py) [2](tests/integration/test_store_parity.py) |
 | `triples` | Yes | Yes | [1](tests/compatibility/test_graph_api.py) |
 | `graph[term]`, `graph[s:p:o]` | Yes | Yes | No SPARQL paths. [1](tests/compatibility/test_graph_api.py) [2](tests/compatibility/test_graph_slicing.py) |
 | `subjects`, `predicates`, `objects` | Yes | Yes | [1](tests/compatibility/test_graph_api.py) [2](tests/compatibility/test_graph_slicing.py) |

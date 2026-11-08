@@ -113,8 +113,15 @@ def create_input_source(source=None, publicID=None, location=None, file=None, da
             else:
                 path = Path(location)
             file = path.open("rb")
+        if not publicID:
+            publicID = path.absolute().as_uri()
         result = InputSource(data=data, location=location, file=file, publicID=publicID, auto_close=True)
         return result
+    if not publicID:
+        name = getattr(file, 'name', None)
+        publicID = (Path(name).absolute().as_uri()
+                    if isinstance(name, (str, PurePath))
+                    else Path.cwd().as_uri() + '/')
     return InputSource(data=data, location=location, file=file, publicID=publicID)
 
 

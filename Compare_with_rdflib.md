@@ -53,7 +53,7 @@ Numbered links point to tests; support is limited to their scope. [API inventory
 | `subject_objects` | Yes | Yes | [1](tests/compatibility/test_graph_api.py) [2](tests/compatibility/test_graph_slicing.py) |
 | `value` | Yes | Partial | Selected selectors; uniqueness diagnostics. |
 | `set` | Yes | Yes | [1](tests/compatibility/test_graph_api.py) |
-| `parse` | Yes | Yes | [1](tests/integration/test_rdflib_differential.py) |
+| `parse` | Yes | Yes | [1](tests/integration/test_rdflib_differential.py) [2](tests/compatibility/test_local_input_and_legacy_writers.py) |
 | `serialize` | Yes | Yes | Format-specific projection; explicit dataset policies. [1](tests/integration/test_rdflib_differential.py) |
 | `bind`, `namespaces`, `qname` | Yes | Partial | [1](tests/compatibility/test_graph_api.py) |
 | `compute_qname`, `absolutize` | Yes | Partial | [1](tests/compatibility/test_graph_api.py) |
@@ -216,8 +216,8 @@ Numbered links point to tests; support is limited to their scope. [API inventory
 | `MapSink` | Statement transform. |
 | `GraphSink` | Graph adapter. |
 | `DatasetSink` | Dataset adapter. |
-| `NTStreamingWriter` | N-Triples writer. |
-| `NQStreamingWriter` | N-Quads writer. |
+| `NTStreamingWriter` | N-Triples 1.1; rejects directional literals. |
+| `NQStreamingWriter` | N-Quads 1.1; rejects directional literals. |
 | `TurtleStreamingWriter` | Turtle writer. |
 | `TriGStreamingWriter` | TriG writer. |
 | `SQLiteStore` | Disk store. |

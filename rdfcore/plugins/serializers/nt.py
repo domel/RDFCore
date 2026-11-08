@@ -44,6 +44,8 @@ def _term(term, canonical=False):
     if isinstance(term, BNode):
         return "_:" + str(term)
     if isinstance(term, Literal):
+        if term.direction is not None:
+            raise ValueError("directional literals require an RDF 1.2 serializer")
         value = '"' + _escape_literal(str(term)) + '"'
         if term.language is not None:
             language = term.language.lower() if canonical else term.language

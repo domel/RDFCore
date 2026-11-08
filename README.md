@@ -809,6 +809,11 @@ Typing is still partial: CI checks annotated code; the package does not ship `py
 
 ## Release preparation
 
+Version `1.0.1` fixes local input base resolution in `Graph.parse()` and
+rejects directional literals in the RDF 1.1 NT/NQ streaming writers instead
+of discarding their direction. Use explicit RDF 1.2 serializers for these
+literals. The documented conformance limitations remain unchanged.
+
 Version `1.0.0` stabilizes the documented RDFCore API. It includes selected
 RDFLib-compatible APIs and partial RDF 1.2 support; see the comparison and W3C
 results above for limitations. It does not claim complete RDFLib parity or
